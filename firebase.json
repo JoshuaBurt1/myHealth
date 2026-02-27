@@ -1,0 +1,40 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "squarehexagon-holdings",
+          "appId": "1:702841156351:android:56f027565811e10c6d52ca",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "squarehexagon-holdings",
+          "configurations": {
+            "android": "1:702841156351:android:56f027565811e10c6d52ca",
+            "ios": "1:702841156351:ios:e09312dd47f8c8f56d52ca",
+            "macos": "1:702841156351:ios:e09312dd47f8c8f56d52ca",
+            "web": "1:702841156351:web:b105027698de92b56d52ca",
+            "windows": "1:702841156351:web:77e0675bc869bda96d52ca"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "target": "health-site",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

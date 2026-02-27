@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "702841156351",
+    "project_id": "squarehexagon-holdings",
+    "storage_bucket": "squarehexagon-holdings.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702841156351:android:56f027565811e10c6d52ca",
+        "android_client_info": {
+          "package_name": "com.example.my_health_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "702841156351-28u6bar82g96trp3nje8ro14m7nrn885.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIoPm-MUXFF4SCqvxpXrCcRpuTflX3rT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "702841156351-28u6bar82g96trp3nje8ro14m7nrn885.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "squarehexagon-holdings"
+  },
+  "targets": {
+    "squarehexagon-holdings": {
+      "hosting": {
+        "health-site": [
+          "myHealth196"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
