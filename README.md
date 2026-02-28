@@ -1,4 +1,4 @@
-# Grids
+# myHealth
 
 Personal health tracker and community data repository.
 
