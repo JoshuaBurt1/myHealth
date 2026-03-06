@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Loader2, Plus, Minus, Search } from 'lucide-react';
+import { Loader2, Plus, Minus, Search, History } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
 import CartScreen from './CartScreen';
+import { Link } from 'react-router-dom';
 
 interface StoreItem {
   id: string;
@@ -119,9 +120,20 @@ const StoreScreen: React.FC = () => {
   return (
     <div className={`flex flex-col lg:flex-row gap-6 p-4 bg-slate-50 min-h-screen ${!user ? 'justify-center' : ''}`}>
       <div className={`flex-1 ${!user ? 'max-w-4xl w-full mx-auto' : ''}`}>
-        <header className={`mb-8 ${!user ? 'text-center' : ''}`}>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
-          <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
+        <header className={`mb-8 flex justify-between items-start ${!user ? 'text-center' : ''}`}>
+          <div>
+            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
+            <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
+          </div>
+          {user && (
+            <Link 
+              to="/orders" 
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <History size={18} />
+              Orders
+            </Link>
+          )}
         </header>
 
         {/* Search Bar */}

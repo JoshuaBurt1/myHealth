@@ -8,11 +8,13 @@ import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import Navbar from './components/Navbar';
 import HomeScreen from './screens/HomeScreen';
 import StoreScreen from './screens/StoreScreen';
-import CartScreen from './screens/CartScreen';
 import ForumScreen from './screens/ForumScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import CartScreen from './screens/CartScreen';
+import PaymentScreen from './screens/PaymentScreen';
+import OrderHistoryScreen from './screens/OrderHistoryScreen';
 
 function AppContent({ user }: { user: User | null }) {
   const { requestPermission } = useGlobalSteps();
@@ -26,14 +28,12 @@ function AppContent({ user }: { user: User | null }) {
       <main className="max-w-6xl mx-auto p-4">
         <Routes>
           <Route index element={<HomeScreen />} />
+          
           <Route path="store" element={<StoreScreen />} />
-          
-          {/* Protected Cart Route */}
-          <Route 
-            path="cart" 
-            element={user ? <CartScreen /> : <Navigate to="/login" replace />} 
-          />
-          
+          <Route path="orders" element={user ? <OrderHistoryScreen /> : <Navigate to="/login" replace />} />
+          <Route path="cart" element={user ? <CartScreen /> : <Navigate to="/login" replace />} />
+          <Route path="payment" element={user ? <PaymentScreen /> : <Navigate to="/login" replace />} />
+
           <Route path="forum" element={<ForumScreen />} />
           <Route path="login" element={<LoginScreen />} />
           <Route path="register" element={<RegisterScreen />} />
@@ -53,7 +53,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const paypalOptions = {
-    clientId: import.meta.env.PAYPAL_CLIENT_ID,
+    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
     currency: "USD",
     intent: "capture"
   };
