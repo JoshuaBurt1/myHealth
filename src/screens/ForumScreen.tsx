@@ -15,7 +15,7 @@ type ModalMode = "post" | "poll" | "petition";
 interface TabItem {
   id: ModalMode;
   label: string;
-  icon: React.ReactNode; // Replaced JSX.Element
+  icon: React.ReactNode;
 }
 
 const tabs: TabItem[] = [
@@ -24,43 +24,15 @@ const tabs: TabItem[] = [
   { id: 'petition', label: 'Petition', icon: <FileText size={16} /> }
 ];
 
-interface Reply {
-  id: string;
-  content: string;
-  authorId: string;
-  authorName: string;
-  createdAt: any; 
-  lastUpdated?: any;
-  fullPath: string;
-  parentId: string;
-  rootPostId: string;
-  level: number;
-  isDeleted?: boolean;
-  likes?: string[];
-  dislikes?: string[];
-}
+interface Reply { id: string; content: string; authorId: string; authorName: string; createdAt: any; lastUpdated?: any; fullPath: string;
+  parentId: string; rootPostId: string; level: number; isDeleted?: boolean; likes?: string[]; islikes?: string[]; dislikes?: string[]; }
 
 interface PollOption {
-  text: string;
-  votes: number;
-}
+  text: string; votes: number; }
 
-interface Post {
-  id: string;
-  title?: string;
-  content: string;
-  authorId: string;
-  authorName: string;
-  createdAt: any;
-  lastUpdated?: any;
-  type?: 'post' | 'poll' | 'petition';
-  options?: PollOption[];
-  userVotes?: Record<string, number>;
-  likes?: string[];
-  dislikes?: string[];
-  signatures?: string[];
-  replyCount?: number;
-}
+interface Post { id: string; title?: string; content: string; authorId: string; authorName: string; createdAt: any; lastUpdated?: any;
+  type?: 'post' | 'poll' | 'petition'; options?: PollOption[]; userVotes?: Record<string, number>; likes?: string[]; dislikes?: string[];
+  signatures?: string[]; replyCount?: number; }
 
 const LEVEL_COLORS = ['border-indigo-200', 'border-blue-300', 'border-sky-300', 'border-cyan-200'];
 
