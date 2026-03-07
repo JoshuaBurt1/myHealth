@@ -10,6 +10,20 @@ import {
   ThumbsUp, ThumbsDown, CornerDownRight, FileText, Edit3 
 } from 'lucide-react';
 
+type ModalMode = "post" | "poll" | "petition";
+
+interface TabItem {
+  id: ModalMode;
+  label: string;
+  icon: React.ReactNode; // Replaced JSX.Element
+}
+
+const tabs: TabItem[] = [
+  { id: 'post', label: 'Post', icon: <Type size={16} /> },
+  { id: 'poll', label: 'Poll', icon: <BarChart2 size={16} /> },
+  { id: 'petition', label: 'Petition', icon: <FileText size={16} /> }
+];
+
 interface Reply {
   id: string;
   content: string;
@@ -302,7 +316,7 @@ const ForumScreen: React.FC = () => {
   
   const [postTitle, setPostTitle] = useState(''); // New Title state
   const [newPostContent, setNewPostContent] = useState('');
-  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollContent, setPollContent] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
   const navigate = useNavigate();
@@ -349,10 +363,14 @@ const ForumScreen: React.FC = () => {
           type: 'post',
         });
       } else if (modalMode === 'poll') {
-        if (!pollQuestion.trim() || pollOptions.some(opt => !opt.trim())) return alert("Fill all poll fields.");
+        if (!pollContent.trim() || pollOptions.some(opt => !opt.trim())) {
+            return alert("Please provide a question and fill all option fields.");
+        }
+        
         await addDoc(collection(db, 'myHealth_posts'), {
           ...commonData,
-          content: pollQuestion,
+          title: postTitle,
+          content: pollContent,
           type: 'poll',
           options: pollOptions.map(text => ({ text, votes: 0 })),
           userVotes: {} 
@@ -364,7 +382,7 @@ const ForumScreen: React.FC = () => {
           title: postTitle,
           content: newPostContent,
           type: 'petition',
-          signatures: [], // Initialize empty signatures array
+          signatures: [],
         });
       }
 
@@ -502,7 +520,7 @@ const ForumScreen: React.FC = () => {
   const resetModal = () => {
     setPostTitle('');
     setNewPostContent('');
-    setPollQuestion('');
+    setPollContent('');
     setPollOptions(['', '']);
     setIsModalOpen(false);
     setModalMode('post');
@@ -517,286 +535,248 @@ const ForumScreen: React.FC = () => {
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto p-4 pb-24">
-      <h1 className="text-2xl font-bold mb-6 text-slate-800">Community Forum</h1>
+  <div className="max-w-2xl mx-auto p-4 pb-24">
+    <h1 className="text-2xl font-bold mb-6 text-slate-800">Community Forum</h1>
 
-      <div className="space-y-4">
-        {posts.map((post) => {
-          const userSelectedOption = post.userVotes?.[user?.uid || ''];
-          const totalVotes = post.options?.reduce((acc, curr) => acc + curr.votes, 0) || 0;
+    <div className="space-y-4">
+      {posts.map((post) => {
+        const userId = user?.uid || '';
+        const isAuthor = userId === post.authorId;
+        const isExpanded = expandedPosts[post.id];
+        
+        // Unified State Helpers
+        const hasLiked = post.likes?.includes(userId);
+        const hasDisliked = post.dislikes?.includes(userId);
+        const hasSigned = post.signatures?.includes(userId);
+        const userSelectedOption = post.userVotes?.[userId];
+        const totalVotes = post.options?.reduce((acc, curr) => acc + curr.votes, 0) || 0;
 
-          const hasLiked = post.likes?.includes(user?.uid || '');
-          const hasDisliked = post.dislikes?.includes(user?.uid || '');
-          const hasSigned = post.signatures?.includes(user?.uid || '');
-          const isExpanded = expandedPosts[post.id];
+        return (
+          <div key={post.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex gap-4">
+            {/* 1. Avatar */}
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 shrink-0 mt-1">
+              <User size={20} />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              {/* 2. Header: Author & Delete */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="text-xs flex flex-wrap items-center gap-1">
+                  <span className="font-bold text-slate-400">By </span>
+                  <button 
+                    onClick={() => navigate(`/profile/${post.authorId}`)} 
+                    className="font-bold text-indigo-400 hover:text-indigo-600 hover:underline transition-all"
+                  >
+                    {post.authorName}
+                  </button>
+                  <span className="font-bold text-slate-400 ml-1">
+                    • {post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000).toLocaleString() : '...'}
+                  </span>
+                </div>
+                {isAuthor && (
+                  <button onClick={() => handleDelete(post.id)} className="text-red-300 hover:text-red-500 transition-colors">
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
 
-          return (
-            <div key={post.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex gap-4">
-              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 shrink-0 mt-1">
-                <User size={20} />
+              {/* 3. Common Body: Title & Content (Used by Posts, Polls, and Petitions) */}
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-gray-900 leading-tight">
+                  {post.title}
+                </h2>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {post.content}
+                </p>
               </div>
               
-              <div className="flex-1 min-w-0">
-                {/* Author Info Moved to Top */}
-                <div className="flex items-start justify-between mb-2">
-                  <div className="text-xs flex flex-wrap items-center gap-1">
-                    <span className="font-bold text-slate-400">By </span>
-                    <button 
-                      onClick={() => navigate(`/profile/${post.authorId}`)} 
-                      className="font-bold text-indigo-400 hover:text-indigo-600 hover:underline transition-all"
-                    >
-                      {post.authorName}
-                    </button>
-                    <span className="font-bold text-slate-400 ml-1">
-                      • {post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000).toLocaleString() : '...'}
-                    </span>
-                  </div>
-
-                  {user?.uid === post.authorId && (
-                    <button onClick={() => handleDelete(post.id)} className="text-red-300 hover:text-red-500 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  )}
+              {/* 4. Type-Specific Logic */}
+              
+              {/* Poll UI */}
+              {post.type === 'poll' && post.options && (
+                <div className="space-y-2 my-4">
+                  {post.options.map((opt, idx) => {
+                    const pct = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
+                    const isSelected = userSelectedOption === idx;
+                    return (
+                      <button key={idx} onClick={() => handleVote(post.id, idx)}
+                        className={`relative w-full text-left p-3 rounded-xl border transition-all duration-300 overflow-hidden group
+                          ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-300 hover:border-indigo-400'}`}
+                      >
+                        <div className={`absolute inset-0 transition-all duration-700 ${isSelected ? 'bg-indigo-300/40' : 'bg-indigo-300/20'}`} style={{ width: `${pct}%` }} />
+                        <div className="relative flex justify-between items-center text-sm font-bold">
+                          <span className={isSelected ? 'text-indigo-950' : 'text-slate-800'}>{opt.text}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[11px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-900'}`}>{pct}%</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1">
+                    {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+                  </p>
                 </div>
+              )}
 
-                {/* Title & Post Content */}
-                {post.title && (
-                  <h2 className="text-xl font-semibold text-gray-900">{post.title}</h2>
-                )}
-                
-                <p className="text-sm text-gray-600 leading-relaxed">{post.content}</p>
-                
-                {/* Poll Options */}
-                {post.type === 'poll' && post.options && (
-                  <div className="space-y-2 my-4">
-                    {post.options.map((opt, idx) => {
-                      const percentage = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
-                      const isSelected = userSelectedOption === idx;
-                      
-                      return (
-                        <button key={idx} onClick={() => handleVote(post.id, idx)}
-                          className={`relative w-full text-left p-3 rounded-xl border transition-all duration-300 overflow-hidden group
-                            ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-300 hover:border-indigo-400'}`}
-                        >
-                          <div 
-                            className={`absolute inset-0 transition-all duration-700 ease-out 
-                              ${isSelected ? 'bg-indigo-300/40' : 'bg-indigo-300/20'}`} 
-                            style={{ width: `${percentage}%` }}
-                          />
-                          
-                          <div className="relative flex justify-between items-center text-sm">
-                            <span className={`drop-shadow-sm ${isSelected ? 'font-black text-indigo-950' : 'text-slate-800 font-bold'}`}>
-                              {opt.text}
-                            </span>
-                            <span className={`
-                              ${isSelected ? 'text-white bg-indigo-600' : 'text-indigo-900 bg-indigo-100'} 
-                              font-black tabular-nums px-2.5 py-1 rounded-lg shadow-md border border-indigo-600/20
-                            `}>
-                              {percentage}%
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    <div className="flex justify-between items-center px-1">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                        {totalVotes} total {totalVotes === 1 ? 'vote' : 'votes'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Petition Action Bar */}
-                {post.type === 'petition' && (
-                  <div className="my-4 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-center justify-between shadow-sm">
-                    <div className="flex flex-col">
-                       <div className="flex items-center gap-2 mt-1">
-                          <Edit3 size={18} className="text-amber-600" />
-                          <span className="font-black text-amber-900 text-lg">{post.signatures?.length || 0} Signatures</span>
-                       </div>
-                    </div>
-                    <button
-                      onClick={() => handleSignPetition(post.id, post.signatures)}
-                      className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center gap-2
-                        ${hasSigned 
-                          ? 'bg-amber-200 text-amber-800 hover:bg-amber-300' 
-                          : 'bg-amber-500 text-white hover:bg-amber-600 hover:scale-105'}`}
-                    >
-                      {hasSigned ? 'Signed ✓' : 'Add Signature'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Engagement Bar */}
-                <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
-                  <button 
-                    onClick={() => handleReaction(post, 'like')}
-                    className={`flex items-center gap-1 text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-500'}`}
+              {/* Petition UI */}
+              {post.type === 'petition' && (
+                <div className="my-4 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-center justify-between">
+                  <span className="font-black text-amber-900 text-lg flex items-center gap-2">
+                    <Edit3 size={18} /> {post.signatures?.length || 0} Signatures
+                  </span>
+                  <button
+                    onClick={() => handleSignPetition(post.id, post.signatures)}
+                    className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${hasSigned ? 'bg-amber-200 text-amber-800' : 'bg-amber-500 text-white hover:scale-105'}`}
                   >
-                    <ThumbsUp size={16} className={hasLiked ? 'fill-indigo-600' : ''} />
-                    {post.likes?.length || 0}
+                    {hasSigned ? 'Signed ✓' : 'Add Signature'}
                   </button>
-                  
-                  <button 
-                    onClick={() => handleReaction(post, 'dislike')}
-                    className={`flex items-center gap-1 text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400 hover:text-red-400'}`}
-                  >
-                    <ThumbsDown size={16} className={hasDisliked ? 'fill-red-500' : ''} />
-                    {post.dislikes?.length || 0}
-                  </button>
-
-                  <div className="ml-auto flex items-center gap-3 text-xs font-bold">
-                    <button 
-                      onClick={() => toggleReplies(post.id)} 
-                      className="text-slate-400 hover:text-indigo-500 transition-colors"
-                    >
-                      {isExpanded ? 'Hide Replies' : `View Replies (${post.replyCount || 0})`}
-                    </button>
-                    
-                    <span className="text-slate-300">|</span>
-                    
-                    <button 
-                      onClick={() => {
-                        setReplyingTo(replyingTo === post.id ? null : post.id);
-                        if (!isExpanded && replyingTo !== post.id) toggleReplies(post.id);
-                      }} 
-                      className="text-slate-400 hover:text-indigo-500 transition-colors flex items-center gap-1"
-                    >
-                      <Plus size={14}/> Add Reply
-                    </button>
-                  </div>
                 </div>
+              )}
 
-                {/* Top-Level Reply Input */}
-                {replyingTo === post.id && (
-                  <div className="flex gap-2 mt-3 mb-2">
-                    <input 
-                      autoFocus
-                      type="text"
-                      className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400"
-                      placeholder="Write a reply to the post..."
-                      value={replyContent}
-                      onChange={(e) => setReplyContent(e.target.value)}
-                    />
-                    <button 
-                      onClick={() => handleAddRootReply(post.id)} 
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors"
-                    >
-                      Post
-                    </button>
-                    <button 
-                      onClick={() => { setReplyingTo(null); setReplyContent(''); }} 
-                      className="text-slate-400 hover:text-slate-600 p-2"
-                    >
-                      <X size={16}/>
-                    </button>
-                  </div>
-                )}
+              {/* 5. Engagement Bar */}
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
+                <button onClick={() => handleReaction(post, 'like')} className={`flex items-center gap-1 text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400'}`}>
+                  <ThumbsUp size={16} className={hasLiked ? 'fill-indigo-600' : ''} /> {post.likes?.length || 0}
+                </button>
+                <button onClick={() => handleReaction(post, 'dislike')} className={`flex items-center gap-1 text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400'}`}>
+                  <ThumbsDown size={16} className={hasDisliked ? 'fill-red-500' : ''} /> {post.dislikes?.length || 0}
+                </button>
 
-                {/* Render the Tree of Replies ONLY if expanded */}
-                {isExpanded && (
-                  <div className="mt-3 w-full animate-in fade-in slide-in-from-top-2 duration-300">
-                    <PostReplies postId={post.id} />
-                  </div>
-                )}
-
+                <div className="ml-auto flex items-center gap-3 text-xs font-bold text-slate-400">
+                  <button onClick={() => toggleReplies(post.id)} className="hover:text-indigo-500">
+                    {isExpanded ? 'Hide Replies' : `Replies (${post.replyCount || 0})`}
+                  </button>
+                  <span>|</span>
+                  <button onClick={() => { setReplyingTo(replyingTo === post.id ? null : post.id); if (!isExpanded) toggleReplies(post.id); }} className="hover:text-indigo-500 flex items-center gap-1">
+                    <Plus size={14}/> Add Reply
+                  </button>
+                </div>
               </div>
+
+              {/* 6. Reply Input & List */}
+              {replyingTo === post.id && (
+                <div className="flex gap-2 mt-3 animate-in fade-in zoom-in-95 duration-200">
+                  <input autoFocus className="flex-1 bg-slate-100 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Write a reply..." value={replyContent} onChange={(e) => setReplyContent(e.target.value)} />
+                  <button onClick={() => handleAddRootReply(post.id)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Post</button>
+                  <button onClick={() => { setReplyingTo(null); setReplyContent(''); }}><X size={16} className="text-slate-400" /></button>
+                </div>
+              )}
+
+              {isExpanded && <div className="mt-3"><PostReplies postId={post.id} /></div>}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
+    </div>
 
       <button onClick={() => setIsModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform z-40">
         <MessageSquarePlus size={24} />
       </button>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 relative shadow-2xl">
-            {/* Modal Mode Tabs */}
-            <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-2xl">
-              <button 
-                onClick={() => setModalMode('post')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${modalMode === 'post' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                <Type size={16} /> Post
-              </button>
-              <button 
-                onClick={() => setModalMode('poll')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${modalMode === 'poll' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                <BarChart2 size={16} /> Poll
-              </button>
-              <button 
-                onClick={() => setModalMode('petition')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${modalMode === 'petition' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                <FileText size={16} /> Petition
-              </button>
-            </div>
-
-            {/* Modal Content Logic */}
-            {modalMode === 'post' || modalMode === 'petition' ? (
-              <div className="space-y-3">
-                <input 
-                  autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-bold text-slate-800"
-                  placeholder={modalMode === 'petition' ? "Petition Title" : "Post Title"}
-                  value={postTitle}
-                  onChange={(e) => setPostTitle(e.target.value)}
-                />
-                <textarea 
-                  className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-30 resize-none"
-                  placeholder={modalMode === 'petition' ? "Why are you starting this petition?" : "What's on your mind?"}
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <input 
-                  autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-indigo-500 font-bold"
-                  placeholder="Ask a question..."
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                />
-                {pollOptions.map((opt, i) => (
-                  <input 
-                    key={i}
-                    className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:border-indigo-500"
-                    placeholder={`Option ${i + 1}`}
-                    value={opt}
-                    onChange={(e) => {
-                      const newOpts = [...pollOptions];
-                      newOpts[i] = e.target.value;
-                      setPollOptions(newOpts);
-                    }}
-                  />
-                ))}
-                {pollOptions.length < 5 && (
-                  <button 
-                    onClick={() => setPollOptions([...pollOptions, ''])}
-                    className="text-indigo-600 text-xs font-bold flex items-center gap-1 mt-2"
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white w-full max-w-md rounded-3xl p-6 relative shadow-2xl">
+              
+              {/* 1. Optimized Tab Switcher */}
+              <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-2xl">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setModalMode(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${
+                      modalMode === tab.id ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'
+                    }`}
                   >
-                    <Plus size={14} /> Add Option
+                    {tab.icon} {tab.label}
                   </button>
+                ))}
+              </div>
+
+              <div className="space-y-4">
+                {/* 2. Consolidated Title Input (Bold) */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Title</label>
+                  <input 
+                    autoFocus
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 font-bold text-slate-800 text-lg"
+                    placeholder={modalMode === 'petition' ? "Petition Title" : modalMode === 'poll' ? "Poll Topic" : "Post Title"}
+                    value={postTitle}
+                    onChange={(e) => setPostTitle(e.target.value)}
+                  />
+                </div>
+
+                {/* 3. Conditional Content (Regular Weight) */}
+                {modalMode === 'poll' ? (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
+                      <input 
+                        className="w-full bg-indigo-50/30 border border-slate-200 p-4 rounded-2xl outline-none focus:border-indigo-500 font-normal text-slate-600"
+                        placeholder="Ask a question..."
+                        value={pollContent}
+                        onChange={(e) => setPollContent(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {pollOptions.map((opt, i) => (
+                        <div key={i} className="flex items-center gap-2 group">
+                          <input 
+                            className="flex-1 border border-slate-200 p-3 rounded-xl outline-none focus:border-indigo-500 text-sm font-normal text-slate-600 bg-white"
+                            placeholder={`Option ${i + 1}`}
+                            value={opt}
+                            onChange={(e) => {
+                              const newOpts = [...pollOptions];
+                              newOpts[i] = e.target.value;
+                              setPollOptions(newOpts);
+                            }}
+                          />
+                          {pollOptions.length > 2 && (
+                            <button 
+                              onClick={() => {
+                                const newOpts = pollOptions.filter((_, index) => index !== i);
+                                setPollOptions(newOpts);
+                              }}
+                              className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                              title="Remove option"
+                            >
+                              <X size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {pollOptions.length < 5 && (
+                      <button 
+                        onClick={() => setPollOptions([...pollOptions, ''])} 
+                        className="text-indigo-600 text-xs font-bold flex items-center gap-1 mt-1 hover:text-indigo-700 transition-colors"
+                      >
+                        <Plus size={14} /> Add Option
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
+                    <textarea 
+                      className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 outline-none min-h-32 resize-none font-normal text-slate-600 leading-relaxed"
+                      placeholder={modalMode === 'petition' ? "Describe the goal..." : "What's on your mind?"}
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
+                    />
+                  </div>
                 )}
               </div>
-            )}
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={resetModal} className="flex-1 py-3 text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors">Cancel</button>
-              <button 
-                onClick={handleCreate} 
-                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors"
-              >
-                Create {modalMode.charAt(0).toUpperCase() + modalMode.slice(1)}
-              </button>
+              {/* 4. Action Buttons */}
+              <div className="flex gap-3 mt-8">
+                <button onClick={resetModal} className="flex-1 py-3 text-slate-500 bg-slate-100 rounded-xl font-bold">Cancel</button>
+                <button onClick={handleCreate} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all">
+                  Create {modalMode.charAt(0).toUpperCase() + modalMode.slice(1)}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };

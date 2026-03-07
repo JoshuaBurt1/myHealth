@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // Add this
+import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { Trash2 } from 'lucide-react';

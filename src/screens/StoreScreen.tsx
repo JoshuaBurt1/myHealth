@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Loader2, Plus, Minus, Search, History } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Plus, Minus, Search, History, ChevronDown, ChevronRight } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
 import CartScreen from './CartScreen';
@@ -73,12 +73,44 @@ const StoreScreen: React.FC = () => {
   const [successId, setSuccessId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Track auth state to handle centering and cart visibility
+  // Initialize all categories as closed
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>(
+    Object.fromEntries(categories.map(cat => [cat, false]))
+  );
+
   const user = auth.currentUser;
 
   const [localQuantities, setLocalQuantities] = useState<Record<string, number>>(
     Object.fromEntries(storeItems.map(item => [item.id, 1]))
   );
+
+  // LOGIC: Handle auto-expansion based on search input
+  useEffect(() => {
+    const isSearchEmpty = searchQuery.trim() === '';
+    
+    const newExpandedState: Record<string, boolean> = {};
+    
+    categories.forEach(cat => {
+      if (isSearchEmpty) {
+        // Requirement 1: If search is empty, only categories are shown (closed)
+        newExpandedState[cat] = false;
+      } else {
+        // Requirement 2: Only open relevant categories containing the items
+        const hasMatch = storeItems.some(item => 
+          item.category === cat && 
+          (item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+           item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+        newExpandedState[cat] = hasMatch;
+      }
+    });
+
+    setExpandedCats(newExpandedState);
+  }, [searchQuery]);
+
+  const toggleCategory = (cat: string) => {
+    setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
 
   const updateLocalQty = (id: string, delta: number) => {
     setLocalQuantities(prev => ({
@@ -92,10 +124,8 @@ const StoreScreen: React.FC = () => {
       alert("Please log in to add items to your cart.");
       return;
     }
-
     const qtyToAdd = localQuantities[item.id] || 1;
     setAddingId(item.id);
-    
     try {
       const cartRef = doc(db, 'users', user.uid, 'cart', item.id);
       await setDoc(cartRef, {
@@ -105,11 +135,9 @@ const StoreScreen: React.FC = () => {
         quantity: increment(qtyToAdd),
         updatedAt: serverTimestamp()
       }, { merge: true });
-
       setSuccessId(item.id);
       setLocalQuantities(prev => ({ ...prev, [item.id]: 1 }));
       setTimeout(() => setSuccessId(null), 2000);
-      
     } catch (error) {
       console.error("Error adding to cart: ", error);
     } finally {
@@ -156,57 +184,60 @@ const StoreScreen: React.FC = () => {
              item.description.toLowerCase().includes(searchQuery.toLowerCase()))
           );
 
-          if (filteredItems.length === 0) return null;
+          // We no longer return null here so that all categories stay visible
+          const isOpen = expandedCats[cat];
 
           return (
-            <section key={cat} className="mb-12">
-              <h2 className={`font-bold text-slate-400 uppercase text-xs tracking-widest mb-6 border-b pb-2 ${!user ? 'text-center' : ''}`}>{cat}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredItems.map((item) => (
-                  <div key={item.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-                    <div>
-                      <h3 className="font-bold text-slate-800">{item.name}</h3>
-                      <p className="text-slate-500 text-xs mb-4 line-clamp-2">{item.description}</p>
-                      <p className="text-indigo-600 font-bold mb-4">{item.price}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3 mt-auto">
-                      <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
-                        <button onClick={() => updateLocalQty(item.id, -1)} className="p-2 hover:bg-white rounded-lg transition-colors">
-                          <Minus size={14} />
-                        </button>
-                        <span className="w-8 text-center font-bold text-sm">{localQuantities[item.id] || 1}</span>
-                        <button onClick={() => updateLocalQty(item.id, 1)} className="p-2 hover:bg-white rounded-lg transition-colors">
-                          <Plus size={14} />
-                        </button>
+            <section key={cat} className="mb-6">
+              <button 
+                onClick={() => toggleCategory(cat)}
+                className="w-full flex items-center justify-between font-bold text-slate-400 uppercase text-xs tracking-widest mb-4 border-b pb-2 hover:text-slate-600 transition-colors"
+              >
+                <span>{cat} ({filteredItems.length})</span>
+                {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+              
+              {isOpen && filteredItems.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {filteredItems.map((item) => (
+                    <div key={item.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                      <div>
+                        <h3 className="font-bold text-slate-800">{item.name}</h3>
+                        <p className="text-slate-500 text-xs mb-4 line-clamp-2">{item.description}</p>
+                        <p className="text-indigo-600 font-bold mb-4">{item.price}</p>
                       </div>
 
-                      <button 
-                        onClick={() => handleAddToCart(item)}
-                        disabled={addingId === item.id}
-                        className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                          ${successId === item.id ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-indigo-600'}`}
-                      >
-                        {addingId === item.id ? <Loader2 className="animate-spin" size={16}/> : 'Add'}
-                      </button>
+                      <div className="flex items-center gap-3 mt-auto">
+                        <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
+                          <button onClick={() => updateLocalQty(item.id, -1)} className="p-2 hover:bg-white rounded-lg transition-colors">
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-8 text-center font-bold text-sm">{localQuantities[item.id] || 1}</span>
+                          <button onClick={() => updateLocalQty(item.id, 1)} className="p-2 hover:bg-white rounded-lg transition-colors">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+
+                        <button 
+                          onClick={() => handleAddToCart(item)}
+                          disabled={addingId === item.id}
+                          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                            ${successId === item.id ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-indigo-600'}`}
+                        >
+                          {addingId === item.id ? <Loader2 className="animate-spin" size={16}/> : 'Add'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+              
+              {isOpen && filteredItems.length === 0 && searchQuery.trim() !== '' && (
+                <p className="text-slate-400 text-sm italic py-2">No matches in this category.</p>
+              )}
             </section>
           );
         })}
-        
-        {/* Empty State for Search */}
-        {storeItems.filter(item => 
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          item.description.toLowerCase().includes(searchQuery.toLowerCase())
-        ).length === 0 && (
-          <div className="text-center py-20 text-slate-500">
-            <p className="text-lg font-medium">No items found matching "{searchQuery}"</p>
-            <button onClick={() => setSearchQuery('')} className="mt-4 text-indigo-600 hover:underline">Clear search</button>
-          </div>
-        )}
       </div>
 
       {user && (
