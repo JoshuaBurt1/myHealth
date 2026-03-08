@@ -188,6 +188,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   } | null>(null);
 
   const handlePointClick = (data: any, fieldName: string, dataKey: string) => {
+    if (!isMe) return; 
     let point = null;
     if (data && data.timestamp) {
       point = data;
@@ -413,8 +414,13 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
       {/* Editing Modal */}
       {selectedPoint && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full border border-slate-100 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
+          <div 
+            className="absolute inset-0" 
+            onClick={() => setSelectedPoint(null)} 
+          />
+
+          <div className="relative bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full border border-slate-100 animate-in fade-in zoom-in duration-200">
             <p className="text-slate-500 text-sm mb-6 font-medium">
               Recorded on {new Date(selectedPoint.ts).toLocaleString()}
             </p>
@@ -425,13 +431,13 @@ const DataScreen: React.FC<DataScreenProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <button 
                 onClick={() => setSelectedPoint(null)}
-                className="py-4 px-6 rounded-2xl bg-slate-100 text-slate-600 font-bold"
+                className="py-4 px-6 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={() => handleAction('delete')}
-                className="py-4 px-6 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100"
+                className="py-4 px-6 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
               >
                 Delete
               </button>
@@ -439,7 +445,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
             <button 
               onClick={() => handleAction('update')}
-              className="w-full mt-4 py-4 px-6 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg"
+              className="w-full mt-4 py-4 px-6 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 active:scale-[0.98] transition-all"
             >
               Edit Value
             </button>

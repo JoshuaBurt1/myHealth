@@ -2,8 +2,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
 
 export default defineConfig({
+  // 1. Set the root of the web project to this folder
+  root: __dirname,
+  
+  // 2. Point to the .env file at the absolute root of MY-HEALTH
+  envDir: '../../',
+  
   plugins: [
     react(),
     tailwindcss(),
@@ -55,5 +62,18 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  resolve: {
+    alias: {
+      // Change '@shared' to '@my-health/shared'
+      '@my-health/shared': path.resolve(__dirname, '../../packages/shared/index.ts'),
+    },
+  },
+  server: {
+    port: 5173,
+    // Ensure HMR works correctly within the monorepo structure
+    fs: {
+      allow: ['../..']
+    }
+  }
 });
