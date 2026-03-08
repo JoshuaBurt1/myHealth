@@ -447,7 +447,7 @@ const ProfileScreen: React.FC = () => {
       const rootData = rootSnap.data() || {};
       
       const isEligible = !rootData.last_vitals_update || 
-        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 12 * 60 * 60 * 1000;
+        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000; //q6 hours (+10 gem reward)
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
       const updateData: any = { name: formData.name, goal: formData.goal };

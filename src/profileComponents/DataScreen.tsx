@@ -150,7 +150,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     return stepData.length > 0;
   };
 
-  // Filtering Logic
+  // Filtering & Strict Sorting Logic
   const filteredData = useMemo(() => {
     const now = new Date();
     let threshold = 0;
@@ -165,10 +165,16 @@ const DataScreen: React.FC<DataScreenProps> = ({
       case 'Max': threshold = 0; break;
     }
 
-    return {
-      vitals: vitalsData.filter(d => d.timestamp >= threshold),
-      steps: stepData.filter(d => d.timestamp >= threshold)
-    };
+    // Filter AND sort to ensure strict chronological order for Recharts
+    const vitals = vitalsData
+      .filter(d => d.timestamp >= threshold)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const steps = stepData
+      .filter(d => d.timestamp >= threshold)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return { vitals, steps };
   }, [vitalsData, stepData, timeRange]);
 
   const vitalsTicks = useMemo(() => filteredData.vitals.map(d => d.timestamp), [filteredData.vitals]);
