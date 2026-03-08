@@ -5,7 +5,44 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   LineChart, Line 
 } from 'recharts';
-import { Heart, Wind, Droplets, Zap, Gauge, RefreshCw, Thermometer, Calendar } from 'lucide-react';
+import { 
+  Heart, Wind, Droplets, Zap, Gauge, RefreshCw, Thermometer, Calendar,
+  TestTube, Activity, User, Ruler, Scale, Dumbbell, Timer
+} from 'lucide-react';
+
+// Array configuration to map all single-line graphs dynamically
+const SINGLE_GRAPHS = [
+  // Core Vitals
+  { key: 'hr', title: 'HEART RATE', unit: 'BPM', icon: <Heart className="text-red-500" />, color: '#ef4444' },
+  { key: 'rr', title: 'RESPIRATION', unit: 'Breaths/min', icon: <Wind className="text-blue-500" />, color: '#3b82f6' },
+  { key: 'spo2', title: 'BLOOD OXYGEN', unit: 'SpO2 %', icon: <Droplets className="text-emerald-500" />, color: '#10b981', domain: [90, 100] as [number, number] },
+  { key: 'temp', title: 'BODY TEMP', unit: '°C', icon: <Thermometer className="text-amber-500" />, color: '#f59e0b', domain: [30, 43] as [number, number] },
+  
+  // Blood & Metabolic
+  { key: 'glucose', title: 'GLUCOSE', unit: 'mg/dL', icon: <TestTube className="text-rose-500" />, color: '#f43f5e' },
+  { key: 'cholesterol', title: 'CHOLESTEROL', unit: 'mg/dL', icon: <Activity className="text-yellow-500" />, color: '#eab308' },
+  { key: 'ketones', title: 'KETONES', unit: 'mmol/L', icon: <TestTube className="text-purple-500" />, color: '#a855f7' },
+  { key: 'uricAcid', title: 'URIC ACID', unit: 'mg/dL', icon: <Droplets className="text-cyan-500" />, color: '#06b6d4' },
+  { key: 'lactate', title: 'LACTATE', unit: 'mmol/L', icon: <Activity className="text-teal-500" />, color: '#14b8a6' },
+  { key: 'hemoglobin', title: 'HEMOGLOBIN', unit: 'g/dL', icon: <Droplets className="text-red-600" />, color: '#dc2626' },
+  { key: 'hematocrit', title: 'HEMATOCRIT', unit: '%', icon: <Activity className="text-red-700" />, color: '#b91c1c' },
+  
+  // Body Measurements
+  { key: 'age', title: 'AGE', unit: 'Years', icon: <User className="text-slate-500" />, color: '#64748b' },
+  { key: 'height', title: 'HEIGHT', unit: 'cm', icon: <Ruler className="text-blue-400" />, color: '#60a5fa' },
+  { key: 'weight', title: 'WEIGHT', unit: 'kg', icon: <Scale className="text-emerald-400" />, color: '#34d399' },
+  { key: 'bmi', title: 'BMI', unit: 'kg/m²', icon: <Activity className="text-indigo-400" />, color: '#818cf8' },
+  
+  // Strength
+  { key: 'benchPress', title: 'BENCH PRESS', unit: 'kg', icon: <Dumbbell className="text-indigo-600" />, color: '#4f46e5' },
+  { key: 'squat', title: 'SQUAT', unit: 'kg', icon: <Dumbbell className="text-indigo-700" />, color: '#4338ca' },
+  { key: 'deadlift', title: 'DEADLIFT', unit: 'kg', icon: <Dumbbell className="text-indigo-800" />, color: '#3730a3' },
+  
+  // Speed
+  { key: 'speed100m', title: '100M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-500" />, color: '#f97316' },
+  { key: 'speed400m', title: '400M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-600" />, color: '#ea580c' },
+  { key: 'speed1Mile', title: '1 MILE RUN', unit: 'Minutes', icon: <Timer className="text-orange-700" />, color: '#c2410c' }
+];
 
 type TimeRange = '24H' | '7D' | '1M' | '3M' | 'YTD' | '1Y' | 'Max';
 
@@ -47,12 +84,13 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
           });
         };
 
-        processVital(p.hr, 'hr');
-        processVital(p.rr, 'rr');
-        processVital(p.spo2, 'spo2');
-        processVital(p.temp, 'temp');
-        processVital(p.bpSyst, 'bpSyst');
-        processVital(p.bpDias, 'bpDias');
+        // Combine all possible keys into one parsing array
+        const allKeys = [
+          'bpSyst', 'bpDias', // BP (handled uniquely)
+          ...SINGLE_GRAPHS.map(g => g.key) // Maps all variables dynamically
+        ];
+
+        allKeys.forEach(key => processVital(p[key], key));
 
         const history = Object.values(timelineMap).sort((a: any, b: any) => a.timestamp - b.timestamp);
         setVitalsData(history);
@@ -100,8 +138,6 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
 
   const vitalsTicks = useMemo(() => filteredData.vitals.map(d => d.timestamp), [filteredData.vitals]);
   const stepTicks = useMemo(() => filteredData.steps.map(d => d.timestamp), [filteredData.steps]);
-
-  // ... (handlePointClick and handleAction remain the same)
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -181,6 +217,15 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
     textAnchor: "end" as "end",
   });
 
+  const getModalTitle = (fieldName: string) => {
+    const matchedGraph = SINGLE_GRAPHS.find(g => g.key === fieldName);
+    if (matchedGraph) return matchedGraph.title;
+    if (fieldName === 'bpSyst') return 'Systolic';
+    if (fieldName === 'bpDias') return 'Diastolic';
+    if (fieldName === 'steps_history') return 'Steps';
+    return fieldName.replace('_', ' ');
+  };
+
   if (loading || !isReady) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <RefreshCw className="animate-spin text-indigo-600" size={32} />
@@ -213,6 +258,8 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* Blood Pressure (Always explicitly configured as a multi-line graph) */}
         <MetricGraph title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
           <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }}>
             <XAxis {...rotatedXAxisProps(vitalsTicks)} />
@@ -271,14 +318,7 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
           </LineChart>
         </MetricGraph>
 
-        <MetricGraph title="HEART RATE" unit="BPM" icon={<Heart className="text-red-500" />}>
-          <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'hr', 'hr')} style={{ cursor:'pointer'}}>
-            <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-            <Line type="monotone" dataKey="hr" stroke="#ef4444" fill="#fee2e2" strokeWidth={4} dot={{ r: 4, fill: '#ef4444' }} connectNulls />
-          </LineChart>
-        </MetricGraph>
-
+        {/* Activity / Steps (Always explicitly configured as a BarChart) */}
         <MetricGraph title="ACTIVITY" unit="Steps" icon={<Zap className="text-orange-500" />}>
           <BarChart data={filteredData.steps} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'steps_history', 'val')} style={{ cursor:'pointer'}}>
             <XAxis {...rotatedXAxisProps(stepTicks)} />
@@ -287,31 +327,18 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
           </BarChart>
         </MetricGraph>
 
-        <MetricGraph title="RESPIRATION" unit="Breaths/min" icon={<Wind className="text-blue-500" />}>
-          <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'rr', 'rr')} style={{ cursor:'pointer'}}>
-            <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-            <Line type="monotone" dataKey="rr" stroke="#3b82f6" strokeWidth={4} dot={{ r: 4, fill: '#3b82f6' }} connectNulls />
-          </LineChart>
-        </MetricGraph>
+        {/* All other variables mapped dynamically using Single Line Graphs */}
+        {SINGLE_GRAPHS.map(config => (
+          <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
+            <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
+              <XAxis {...rotatedXAxisProps(vitalsTicks)} />
+              {config.domain && <YAxis domain={config.domain} hide />}
+              <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
+              <Line type="monotone" dataKey={config.key} stroke={config.color} strokeWidth={4} dot={{ r: 4, fill: config.color }} connectNulls />
+            </LineChart>
+          </MetricGraph>
+        ))}
 
-        <MetricGraph title="BLOOD OXYGEN" unit="SpO2 %" icon={<Droplets className="text-emerald-500" />}>
-          <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'spo2', 'spo2')} style={{ cursor:'pointer'}}>
-            <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-            <YAxis domain={[90, 100]} hide />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-            <Line type="monotone" dataKey="spo2" stroke="#10b981" fill="#d1fae5" strokeWidth={4} dot={{ r: 4, fill: '#10b981' }} connectNulls />
-          </LineChart>
-        </MetricGraph>
-
-        <MetricGraph title="BODY TEMP" unit="°C" icon={<Thermometer className="text-amber-500" />}>
-          <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'temp', 'temp')}  style={{ cursor:'pointer'}}>
-            <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-            <YAxis domain={[30, 43]} hide />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-            <Line type="monotone" dataKey="temp" stroke="#f59e0b" strokeWidth={4} dot={{ r: 4, fill: '#f59e0b' }} connectNulls />
-          </LineChart>
-        </MetricGraph>
       </div>
 
       {selectedPoint && (
@@ -321,12 +348,7 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
               Recorded on {new Date(selectedPoint.ts).toLocaleString()}
             </p>
             <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">
-              Manage {
-                selectedPoint.fieldName === 'bpSyst' ? 'Systolic' : 
-                selectedPoint.fieldName === 'bpDias' ? 'Diastolic' : 
-                selectedPoint.fieldName === 'steps_history' ? 'Steps' :
-                selectedPoint.fieldName.replace('_', ' ')
-              }
+              Manage {getModalTitle(selectedPoint.fieldName)}
             </h3>
             
             <div className="grid grid-cols-2 gap-4">
