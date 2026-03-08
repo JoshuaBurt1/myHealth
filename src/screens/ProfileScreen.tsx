@@ -486,10 +486,13 @@ const ProfileScreen: React.FC = () => {
 
       const batch = writeBatch(db);
       batch.set(profileRef, updateData, { merge: true });
-      batch.update(userRootRef, { 
-        gems: (rootData.gems || 0) + (isEligible ? 10 : 0), 
-        last_vitals_update: serverTimestamp() 
-      });
+
+      if (isEligible) {
+        batch.update(userRootRef, { 
+          gems: (rootData.gems || 0) + 10, 
+          last_vitals_update: serverTimestamp()
+        });
+      }
       
       await batch.commit();
 
@@ -519,15 +522,6 @@ const ProfileScreen: React.FC = () => {
       </div>
     );
   }
-
-if (loading) {
-  return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <RefreshCw className="animate-spin text-indigo-600 mb-2" size={32} />
-      <p className="text-slate-500 font-medium text-sm">Loading Profile...</p>
-    </div>
-  );
-}
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
