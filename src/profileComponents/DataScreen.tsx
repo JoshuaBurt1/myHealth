@@ -7,10 +7,10 @@ import {
 } from 'recharts';
 import { 
   Heart, Wind, Droplets, Zap, Gauge, RefreshCw, Thermometer, Calendar,
-  TestTube, Activity, User, Ruler, Scale, Dumbbell, Timer
+  TestTube, Activity, User, Ruler, Scale, Dumbbell, Timer, PlusCircle
 } from 'lucide-react';
 
-// Array configuration to map all single-line graphs dynamically
+// Standard static configurations
 const SINGLE_GRAPHS = [
   // Core Vitals
   { key: 'hr', title: 'HEART RATE', unit: 'BPM', icon: <Heart className="text-red-500" />, color: '#ef4444' },
@@ -44,16 +44,33 @@ const SINGLE_GRAPHS = [
   { key: 'speed1Mile', title: '1 MILE RUN', unit: 'Minutes', icon: <Timer className="text-orange-700" />, color: '#c2410c' }
 ];
 
+// Vibrant palette for dynamically fetched custom metrics
+const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
+
 type TimeRange = '24H' | '7D' | '1M' | '3M' | 'YTD' | '1Y' | 'Max';
+
+interface CustomMetric {
+  key: string;
+  name: string;
+  unit: string;
+}
 
 interface DataScreenProps {
   userId: string;
   refreshTrigger?: number;
+  isMe: boolean;
+  hiddenOther: string[];
 }
 
-const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
+const DataScreen: React.FC<DataScreenProps> = ({ 
+  userId, 
+  refreshTrigger, 
+  isMe, 
+  hiddenOther 
+}) => {
   const [stepData, setStepData] = useState<any[]>([]);
   const [vitalsData, setVitalsData] = useState<any[]>([]);
+  const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('Max');
@@ -71,6 +88,15 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
           return dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
         };
 
+        // Deduplicate dynamic definitions against standard keys
+        const standardKeys = new Set(SINGLE_GRAPHS.map(g => g.key.toLowerCase()));
+        const dynamicMetrics: CustomMetric[] = [
+          ...(p.customVitalsDefinitions || []),
+          ...(p.customWorkoutsDefinitions || [])
+        ].filter(m => !standardKeys.has(m.key.toLowerCase()));
+
+        setCustomMetrics(dynamicMetrics);
+
         const timelineMap: { [key: number]: any } = {};
         const processVital = (array: any[], key: string) => {
           (array || []).forEach((entry) => {
@@ -87,7 +113,8 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
         // Combine all possible keys into one parsing array
         const allKeys = [
           'bpSyst', 'bpDias', // BP (handled uniquely)
-          ...SINGLE_GRAPHS.map(g => g.key) // Maps all variables dynamically
+          ...SINGLE_GRAPHS.map(g => g.key), // Map static variables
+          ...dynamicMetrics.map(m => m.key) // Map dynamic variables
         ];
 
         allKeys.forEach(key => processVital(p[key], key));
@@ -114,6 +141,14 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
   useEffect(() => {
     fetchAllHealthData();
   }, [fetchAllHealthData, refreshTrigger]);
+
+  const hasData = (key: string) => {
+    return vitalsData.some(d => d[key] !== undefined && d[key] !== null);
+  };
+
+  const hasStepData = () => {
+    return stepData.length > 0;
+  };
 
   // Filtering Logic
   const filteredData = useMemo(() => {
@@ -220,6 +255,8 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
   const getModalTitle = (fieldName: string) => {
     const matchedGraph = SINGLE_GRAPHS.find(g => g.key === fieldName);
     if (matchedGraph) return matchedGraph.title;
+    const matchedCustom = customMetrics.find(m => m.key === fieldName);
+    if (matchedCustom) return matchedCustom.name.toUpperCase();
     if (fieldName === 'bpSyst') return 'Systolic';
     if (fieldName === 'bpDias') return 'Diastolic';
     if (fieldName === 'steps_history') return 'Steps';
@@ -260,6 +297,7 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Blood Pressure (Always explicitly configured as a multi-line graph) */}
+        {(hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias'))) && (
         <MetricGraph title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
           <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }}>
             <XAxis {...rotatedXAxisProps(vitalsTicks)} />
@@ -317,30 +355,57 @@ const DataScreen: React.FC<DataScreenProps> = ({ userId, refreshTrigger }) => {
             />
           </LineChart>
         </MetricGraph>
+        )}
 
         {/* Activity / Steps (Always explicitly configured as a BarChart) */}
-        <MetricGraph title="ACTIVITY" unit="Steps" icon={<Zap className="text-orange-500" />}>
+        {hasStepData() && (isMe || !hiddenOther.includes('steps_history')) && (
+          <MetricGraph title="ACTIVITY" unit="Steps" icon={<Zap className="text-orange-500" />}>
           <BarChart data={filteredData.steps} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'steps_history', 'val')} style={{ cursor:'pointer'}}>
             <XAxis {...rotatedXAxisProps(stepTicks)} />
             <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
             <Bar dataKey="val" fill="#f97316" radius={[4, 4, 0, 0]} barSize={20} />
           </BarChart>
         </MetricGraph>
+        )}
 
-        {/* All other variables mapped dynamically using Single Line Graphs */}
-        {SINGLE_GRAPHS.map(config => (
-          <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
-            <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
-              <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-              {config.domain && <YAxis domain={config.domain} hide />}
-              <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-              <Line type="monotone" dataKey={config.key} stroke={config.color} strokeWidth={4} dot={{ r: 4, fill: config.color }} connectNulls />
-            </LineChart>
-          </MetricGraph>
-        ))}
+        {/* All standard variables mapped dynamically using Single Line Graphs */}
+        {SINGLE_GRAPHS.map(config => {
+          const exists = hasData(config.key);
+          const isVisible = isMe || !hiddenOther.includes(config.key);
+          if (!exists || !isVisible) return null;
+          return (
+            <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
+              <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
+                <XAxis {...rotatedXAxisProps(vitalsTicks)} />
+                {config.domain && <YAxis domain={config.domain} hide />}
+                <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
+                <Line type="monotone" dataKey={config.key} stroke={config.color} strokeWidth={4} dot={{ r: 4, fill: config.color }} connectNulls />
+              </LineChart>
+            </MetricGraph>
+          );
+        })}
 
+        {/* UNIQUE DYNAMIC GRAPHS WITH ROTATING COLORS */}
+        {customMetrics.map((m, index) => {
+          const exists = hasData(m.key);
+          const isVisible = isMe || !hiddenOther.includes(m.key);
+          if (!exists || !isVisible) return null;
+          
+          const customColor = CUSTOM_COLORS[index % CUSTOM_COLORS.length];
+
+          return (
+            <MetricGraph key={m.key} title={m.name.toUpperCase()} unit={m.unit} icon={<PlusCircle style={{ color: customColor }} />}>
+              <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, m.key, m.key)} style={{ cursor:'pointer'}}>
+                <XAxis {...rotatedXAxisProps(vitalsTicks)} />
+                <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
+                <Line type="monotone" dataKey={m.key} stroke={customColor} strokeWidth={4} dot={{ r: 4, fill: customColor }} connectNulls />
+              </LineChart>
+            </MetricGraph>
+          )
+        })}
       </div>
 
+      {/* Editing Modal */}
       {selectedPoint && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-100 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full border border-slate-100 animate-in fade-in zoom-in duration-200">

@@ -110,7 +110,7 @@ const ProfileScreen: React.FC = () => {
     customVarName: ''
   });
     
-  const [trackedExercises, setTrackedExercises] = useState<{name: string, type: string, unit?: string}[]>([]);
+  const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string}[]>([]);
   const [exerciseInputs, setExerciseInputs] = useState<Record<string, string>>({});
 
   const [hiddenOther, setHiddenOther] = useState<string[]>([]);
@@ -122,6 +122,7 @@ const ProfileScreen: React.FC = () => {
   const availableVitalAddons = VITAL_ADDONS.filter(addon => !dynamicVitals.some(v => v.label === addon));
   const availableStrengthList = STRENGTH_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
   const availableSpeedList = SPEED_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
+  const sanitizeKey = (name: string) => `custom_${name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
 
   const loadUserData = useCallback(async () => {
     if (!userId) return;
@@ -192,71 +193,80 @@ const ProfileScreen: React.FC = () => {
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
 
-        if (profData.age && Array.isArray(profData.age) && profData.age.length > 0) {
-          fetchedAge = profData.age[profData.age.length - 1].value;
-        }
-        if (profData.height && Array.isArray(profData.height) && profData.height.length > 0) {
-          fetchedHeight = profData.height[profData.height.length - 1].value;
-        }
-        if (profData.weight && Array.isArray(profData.weight) && profData.weight.length > 0) {
-          fetchedWeight = profData.weight[profData.weight.length - 1].value;
-        }
+        // --- AGE, HEIGHT, WEIGHT LOGIC (Keep as is) ---
+        if (profData.age?.length > 0) fetchedAge = profData.age[profData.age.length - 1].value;
+        if (profData.height?.length > 0) fetchedHeight = profData.height[profData.height.length - 1].value;
+        if (profData.weight?.length > 0) fetchedWeight = profData.weight[profData.weight.length - 1].value;
 
+        // --- NEW: DYNAMIC VITALS LOADING ---
         const loadedDynamicVitals: typeof dynamicVitals = [];
         const newDynamicVitalsInputs: Record<string, string> = {};
+        const seenVitals = new Set<string>();
 
-        VITAL_ADDONS.forEach(addon => {
-          const key = VITAL_KEY_MAP[addon];
-          if (profData[key] !== undefined) {
-            loadedDynamicVitals.push({ key, label: addon, isCustom: false });
-            newDynamicVitalsInputs[key] = '';
-          }
-        });
-
-        if (profData.customVitals && Array.isArray(profData.customVitals)) {
-          const latestCustomVitals = new Map();
-          profData.customVitals.forEach((cv: any) => latestCustomVitals.set(cv.name, { ...cv }));
-          latestCustomVitals.forEach((cv, name) => {
-            loadedDynamicVitals.push({ key: name, label: name, isCustom: true, unit: cv.unit });
-            newDynamicVitalsInputs[name] = '';
-          });
-        }
-        setDynamicVitals(loadedDynamicVitals);
-        setDynamicVitalsInputs(newDynamicVitalsInputs);
-
-        const loadedExercises: typeof trackedExercises = [];
-        const newExerciseInputs: Record<string, string> = {};
-
-        Object.entries(STRENGTH_KEY_MAP).forEach(([_, key]) => {
-          if (profData[key] !== undefined) {
-            loadedExercises.push({ name: key, type: 'strength', unit: 'kg' });
-            newExerciseInputs[key] = '';
-          }
-        });
-
-        Object.entries(SPEED_KEY_MAP).forEach(([_, key]) => {
-          if (profData[key] !== undefined) {
-            loadedExercises.push({ name: key, type: 'speed', unit: 'min' });
-            newExerciseInputs[key] = '';
-          }
-        });
-
-        const workoutSource = profData.customWorkouts || profData.workouts || [];
-        if (Array.isArray(workoutSource)) {
-          const latestWorkouts = new Map();
-          workoutSource.forEach((w: any) => latestWorkouts.set(w.name, { ...w }));
-
-          latestWorkouts.forEach((w, name) => {
-            if (!newExerciseInputs[name]) {
-              loadedExercises.push({
-                name: w.name,
-                type: w.type,
-                unit: w.customVarName || (w.type === 'strength' ? 'kg' : 'min')
+        // 1. Load from New Definitions (Priority)
+        if (Array.isArray(profData.customVitalsDefinitions)) {
+          profData.customVitalsDefinitions.forEach((def: any) => {
+            if (!seenVitals.has(def.key)) {
+              loadedDynamicVitals.push({ 
+                key: def.key, 
+                label: def.name, 
+                isCustom: def.key.startsWith('custom_'), 
+                unit: def.unit 
               });
-              newExerciseInputs[name] = '';
+              newDynamicVitalsInputs[def.key] = '';
+              seenVitals.add(def.key);
             }
           });
         }
+
+        // 2. Legacy/Standard Check (Fallback for items added before the update)
+        VITAL_ADDONS.forEach(addon => {
+          const key = VITAL_KEY_MAP[addon];
+          if (profData[key] !== undefined && !seenVitals.has(key)) {
+            loadedDynamicVitals.push({ key, label: addon, isCustom: false });
+            newDynamicVitalsInputs[key] = '';
+            seenVitals.add(key);
+          }
+        });
+
+        setDynamicVitals(loadedDynamicVitals);
+        setDynamicVitalsInputs(newDynamicVitalsInputs);
+
+        // --- NEW: TRACKED EXERCISES LOADING ---
+        const loadedExercises: typeof trackedExercises = [];
+        const newExerciseInputs: Record<string, string> = {};
+        const seenExercises = new Set<string>();
+
+        // 1. Load from New Definitions (Priority)
+        if (Array.isArray(profData.customWorkoutsDefinitions)) {
+          profData.customWorkoutsDefinitions.forEach((def: any) => {
+            if (!seenExercises.has(def.key)) {
+              loadedExercises.push({ 
+                name: def.key,
+                label: def.name,
+                type: def.type, 
+                unit: def.unit 
+              });
+              newExerciseInputs[def.key] = '';
+              seenExercises.add(def.key);
+            }
+          });
+        }
+
+        // 2. Legacy/Standard Check (Fallback)
+        [...Object.entries(STRENGTH_KEY_MAP), ...Object.entries(SPEED_KEY_MAP)].forEach(([label, key]) => {
+          if (profData[key] !== undefined && !seenExercises.has(key)) {
+            const isStrength = Object.values(STRENGTH_KEY_MAP).includes(key);
+            loadedExercises.push({ 
+              name: key,
+              label: label,
+              type: isStrength ? 'strength' : 'speed', 
+              unit: isStrength ? 'kg' : 'min' 
+            });
+            newExerciseInputs[key] = '';
+            seenExercises.add(key);
+          }
+        });
 
         setTrackedExercises(loadedExercises);
         setExerciseInputs(newExerciseInputs);
@@ -324,101 +334,95 @@ const ProfileScreen: React.FC = () => {
   };
 
   const handleDeleteField = async (fieldLabel: string, fieldKey: string, category: 'vital' | 'workout') => {
-    if (!window.confirm(`Are you sure you want to delete "${fieldLabel}" and all its logs?`)) return;
-    
-    const profileRef = doc(db, 'users', userId!, 'profile', 'user_data');
+  if (!window.confirm(`Are you sure you want to delete "${fieldLabel}" and all its logs?`)) return;
+  
+  const profileRef = doc(db, 'users', userId!, 'profile', 'user_data');
     try {
       const docSnap = await getDoc(profileRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (category === 'workout') {
-          const newWorkouts = (data.workouts || []).filter((w: any) => w.name !== fieldKey);
-          await setDoc(profileRef, { workouts: newWorkouts }, { merge: true });
+        const isWorkout = category === 'workout';
+        
+        // 1. Remove the data logs and the definition
+        const definitionKey = isWorkout ? 'customWorkoutsDefinitions' : 'customVitalsDefinitions';
+        const updatedDefinitions = (data[definitionKey] || []).filter((def: any) => def.key !== fieldKey);
+        
+        await setDoc(profileRef, { 
+          [fieldKey]: deleteField(),
+          [definitionKey]: updatedDefinitions
+        }, { merge: true });
+
+        // 2. Update Local State
+        if (isWorkout) {
           setTrackedExercises(prev => prev.filter(e => e.name !== fieldKey));
         } else {
-          const isCustom = dynamicVitals.find(v => v.key === fieldKey)?.isCustom;
-          if (isCustom) {
-            const newCustomVitals = (data.customVitals || []).filter((v: any) => v.name !== fieldLabel);
-            await setDoc(profileRef, { customVitals: newCustomVitals }, { merge: true });
-          } else {
-            // standard vital deletions
-            await setDoc(profileRef, { [fieldKey]: deleteField() }, { merge: true });
-          }
           setDynamicVitals(prev => prev.filter(v => v.key !== fieldKey));
         }
+        
         setRefreshTrigger(prev => prev + 1);
       }
     } catch (err) {
       console.error("Failed to delete field", err);
-      alert("Failed to delete the field.");
     }
   };
-const handleSaveItem = async (mode: 'vital' | 'workout') => {
-  const isVital = mode === 'vital';
-  const form = isVital ? vitalForm : workoutForm;
-  if (!userId || !form.name) return;
 
-  const displayName = form.name.trim();
-  let targetKey = displayName;
+  const handleSaveItem = async (mode: 'vital' | 'workout') => {
+    const isVital = mode === 'vital';
+    const form = isVital ? vitalForm : workoutForm;
+    if (!userId || !form.name) return;
 
-  if (isVital) {
-    targetKey = VITAL_KEY_MAP[displayName] || displayName
-      .replace(/\s+(.)/g, (_, g1) => g1.toUpperCase())
-      .replace(/^[A-Z]/, m => m.toLowerCase());
-  } else {
-    // Determine the key for Strength/Speed or fallback to custom
-    if (form.type === 'strength') targetKey = STRENGTH_KEY_MAP[displayName] || displayName;
-    else if (form.type === 'speed') targetKey = SPEED_KEY_MAP[displayName] || displayName;
-  }
+    const displayName = form.name.trim();
+    let targetKey: string;
 
-  const isDuplicate = isVital 
-    ? dynamicVitals.some(v => v.key === targetKey)
-    : trackedExercises.some(ex => ex.name === targetKey);
-
-  if (isDuplicate) {
-    alert(`This ${mode} is already being tracked.`);
-    return;
-  }
-
-  setSaving(true);
-  try {
-    const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-    let payload = {};
-
+    // 1. Determine the key (Standard Map or Sanitize Custom)
     if (isVital) {
-      const isCustom = form.type === 'custom';
-      setDynamicVitals(prev => [...prev, { key: targetKey, label: displayName, isCustom, unit: isCustom ? form.customVarName : undefined }]);
-      setDynamicVitalsInputs(prev => ({ ...prev, [targetKey]: '' }));
-
-      payload = form.type === 'addon' 
-        ? { [targetKey]: [] } 
-        : { customVitals: arrayUnion({ name: displayName, unit: form.customVarName }) };
+      targetKey = VITAL_KEY_MAP[displayName] || sanitizeKey(displayName);
     } else {
-      const isCustom = form.type === 'custom';
-      const unit = isCustom ? form.customVarName : (form.type === 'strength' ? 'kg' : 'min');
-
-      setTrackedExercises(prev => [...prev, { name: targetKey, type: form.type, unit }]);
-      setExerciseInputs(prev => ({ ...prev, [targetKey]: '' }));
-
-      // LOGIC CHANGE: Check if it's a standard exercise or custom
-      const isStandard = STRENGTH_KEY_MAP[displayName] || SPEED_KEY_MAP[displayName];
-      
-      if (isStandard) {
-        payload = { [targetKey]: [] }; // Initialize as top-level array
-      } else {
-        payload = { customWorkouts: arrayUnion({ name: targetKey, type: form.type, customVarName: unit }) };
-      }
+      targetKey = STRENGTH_KEY_MAP[displayName] || SPEED_KEY_MAP[displayName] || sanitizeKey(displayName);
     }
 
-    await setDoc(profileRef, payload, { merge: true });
-    isVital ? setShowVitalModal(false) : setShowWorkoutModal(false);
-  } catch (err) {
-    console.error(err);
-    alert(`Failed to add ${mode}.`);
-  } finally {
-    setSaving(false);
-  }
-};
+    // 2. Duplicate Check
+    const isDuplicate = isVital 
+      ? dynamicVitals.some(v => v.key === targetKey)
+      : trackedExercises.some(ex => ex.name === targetKey);
+
+    if (isDuplicate) {
+      alert(`This ${mode} is already being tracked.`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+      const isCustom = isVital ? form.type === 'custom' : (form.type !== 'strength' && form.type !== 'speed');
+      const unit = form.customVarName || (form.type === 'strength' ? 'kg' : 'min');
+
+      // 3. Update LOCAL UI STATE (Keeps your input fields working)
+      if (isVital) {
+        setDynamicVitals(prev => [...prev, { key: targetKey, label: displayName, isCustom, unit }]);
+        setDynamicVitalsInputs(prev => ({ ...prev, [targetKey]: '' }));
+      } else {
+        setTrackedExercises(prev => [...prev, { name: targetKey, label: displayName, type: form.type, unit }]);
+        setExerciseInputs(prev => ({ ...prev, [targetKey]: '' }));
+      }
+
+      // 4. Construct FIRESTORE PAYLOAD
+      // We store a "Definition" so DataScreen knows this field exists and what its unit is.
+      const definition = { name: displayName, key: targetKey, unit, type: form.type };
+      const payload = {
+        [targetKey]: [], // Initialize the top-level array for logs
+        [isVital ? 'customVitalsDefinitions' : 'customWorkoutsDefinitions']: arrayUnion(definition)
+      };
+
+      await setDoc(profileRef, payload, { merge: true });
+      isVital ? setShowVitalModal(false) : setShowWorkoutModal(false);
+    } catch (err) {
+      console.error(err);
+      alert(`Failed to add ${mode}.`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveAllHealthData = async () => {
     if (!userId) return;
@@ -432,13 +436,11 @@ const handleSaveItem = async (mode: 'vital' | 'workout') => {
 
       const rootSnap = await getDoc(userRootRef);
       const rootData = rootSnap.data() || {};
-      const isEligible = !rootData.last_vitals_update || (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 12 * 60 * 60 * 1000;
+      const isEligible = !rootData.last_vitals_update || 
+        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 12 * 60 * 60 * 1000;
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
-
       const updateData: any = { name: formData.name, goal: formData.goal };
-      const customVitalLogs: any[] = [];
-      const customWorkoutLogs: any[] = []; // Used for non-standard exercises
 
       // 1. Age, Height, Weight
       ['age', 'height', 'weight'].forEach(f => {
@@ -446,58 +448,35 @@ const handleSaveItem = async (mode: 'vital' | 'workout') => {
           updateData[f] = arrayUnion({ value: formData[f as keyof typeof formData], dateTime: nowISO });
       });
 
-      // 2. Vitals
+      // 2. Vitals (Everything now goes to its own key)
       dynamicVitals.forEach(v => {
         const val = dynamicVitalsInputs[v.key];
         if (isValid(val)) {
-          const log = { value: Number(val), dateTime: nowISO };
-          if (v.isCustom) {
-            customVitalLogs.push({ name: v.label, unit: v.unit, ...log });
-          } else {
-            const dbKey = VITAL_KEY_MAP[v.label] || v.key;
-            updateData[dbKey] = arrayUnion(log);
-          }
+          updateData[v.key] = arrayUnion({ value: Number(val), dateTime: nowISO });
         }
       });
 
-      // 3. Exercises (Separation Logic)
+      // 3. Exercises (Everything now goes to its own key)
       trackedExercises.forEach(ex => {
         const val = exerciseInputs[ex.name];
         if (isValid(val)) {
-          const log = { 
+          updateData[ex.name] = arrayUnion({ 
             value: Number(val), 
             dateTime: nowISO,
             unit: ex.unit || null 
-          };
-
-          // Determine if it's a standard field (benchPress, speed100m, etc.)
-          const isStandardStrength = Object.values(STRENGTH_KEY_MAP).includes(ex.name);
-          const isStandardSpeed = Object.values(SPEED_KEY_MAP).includes(ex.name);
-
-          if (isStandardStrength || isStandardSpeed) {
-            // Push directly to the specific field array (e.g. updateData.benchPress)
-            updateData[ex.name] = arrayUnion(log);
-          } else {
-            // Push to the shared custom log array
-            customWorkoutLogs.push({
-              name: ex.name,
-              type: ex.type,
-              ...log
-            });
-          }
+          });
         }
       });
 
-      const hasNewData = Object.keys(updateData).length > 2 || customVitalLogs.length > 0 || customWorkoutLogs.length > 0;
+      // 4. Check if we actually have anything new to save
+      // (Excluding 'name' and 'goal' which are always in the object)
+      const hasNewData = Object.keys(updateData).some(key => !['name', 'goal'].includes(key));
       
       if (!hasNewData) {
         alert('No new values to update.');
         setSaving(false);
         return;
       }
-
-      if (customVitalLogs.length) updateData.customVitals = arrayUnion(...customVitalLogs);
-      if (customWorkoutLogs.length) updateData.customWorkoutLogs = arrayUnion(...customWorkoutLogs);
 
       const batch = writeBatch(db);
       batch.set(profileRef, updateData, { merge: true });
@@ -729,10 +708,10 @@ return (
                     isMe={isMe}
                     hiddenOther={hiddenOther}
                     toggleVisibilityOther={toggleVisibilityOther}
-                    onDelete={() => handleDeleteField(ex.name, ex.name, 'workout')}
+                    onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}
                   >
                     <InputField 
-                      label={`${ex.name} ${ex.unit ? `(${ex.unit})` : ''}`} 
+                      label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`} 
                       type="number" 
                       value={exerciseInputs[ex.name] || ''} 
                       onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} 
@@ -763,7 +742,7 @@ return (
         )}
       </div>
 
-      <DataScreen userId={userId!} refreshTrigger={refreshTrigger} />
+      <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
 
       <FollowModal config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
       
