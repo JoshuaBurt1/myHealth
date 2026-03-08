@@ -16,9 +16,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, getDocs, query, writeBatch, serverTimestamp, arrayUnion, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, Footprints, RefreshCw, CheckCircle, Dumbbell, Timer, PlusCircle } from 'lucide-react';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, Footprints, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
 import { useGlobalSteps } from '../context/StepContext';
-import { Badge, StatItem, InputField, CollapsibleSection } from '../profileComponents/ProfileUI';
+import { Badge, InputField, CollapsibleSection } from '../profileComponents/ProfileUI';
 import { VitalModal, WorkoutModal, FollowModal } from '../profileComponents/ProfileModals';
 import { useImageUpload } from '../profileComponents/useImageUpload';
 import PrivacyWrapper from '../profileComponents/PrivacyWrapper';
@@ -316,6 +316,15 @@ const ProfileScreen: React.FC = () => {
   const handleFollowUpdate = (delta: number, followingStatus: boolean) => {
     setFollowerCount(prev => Math.max(0, prev + delta));
     setIsFollowing(followingStatus);
+    if (auth.currentUser) {
+      const currentUserId = auth.currentUser.uid;
+      const currentUserName = auth.currentUser.displayName || "You";
+      if (delta > 0) {
+        setFollowersList(prev => [...prev, { uid: currentUserId, name: currentUserName }]);
+      } else {
+        setFollowersList(prev => prev.filter(user => user.uid !== currentUserId));
+      }
+    }
     setRefreshTrigger(p => p + 1); 
   };
 
@@ -436,19 +445,18 @@ const ProfileScreen: React.FC = () => {
 
       const rootSnap = await getDoc(userRootRef);
       const rootData = rootSnap.data() || {};
+      
       const isEligible = !rootData.last_vitals_update || 
         (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 12 * 60 * 60 * 1000;
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
       const updateData: any = { name: formData.name, goal: formData.goal };
 
-      // 1. Age, Height, Weight
       ['age', 'height', 'weight'].forEach(f => {
         if (isValid(formData[f as keyof typeof formData])) 
           updateData[f] = arrayUnion({ value: formData[f as keyof typeof formData], dateTime: nowISO });
       });
 
-      // 2. Vitals (Everything now goes to its own key)
       dynamicVitals.forEach(v => {
         const val = dynamicVitalsInputs[v.key];
         if (isValid(val)) {
@@ -468,8 +476,6 @@ const ProfileScreen: React.FC = () => {
         }
       });
 
-      // 4. Check if we actually have anything new to save
-      // (Excluding 'name' and 'goal' which are always in the object)
       const hasNewData = Object.keys(updateData).some(key => !['name', 'goal'].includes(key));
       
       if (!hasNewData) {
@@ -486,6 +492,14 @@ const ProfileScreen: React.FC = () => {
       });
       
       await batch.commit();
+
+      if (isEligible) {
+        setFormData(prev => ({
+          ...prev,
+          gems: (parseInt(prev.gems) + 10).toString()
+        }));
+      }
+
       setRefreshTrigger(p => p + 1);
       alert(`Data updated!${isEligible ? ' +10 gems (12h recharge)' : ''}`);
 
@@ -506,244 +520,259 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
-return (
-  <div className="max-w-2xl mx-auto p-6 space-y-8 bg-slate-50 min-h-screen pb-20 relative">
-    <div className="flex flex-col items-center pt-8">
-      <div className="relative">
-        <div className="w-32 h-32 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-lg flex items-center justify-center">
-          {profileImage ? (<img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-          ) : ( <User size={64} className="text-slate-400" />)}
-          {imageUploading && (
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
-              <Activity className="animate-spin text-white" />
-            </div>
-          )}
-        </div>
-        {isMe && (
-          <label className="absolute bottom-0 right-0 bg-blue-600 p-2 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-md transition-colors">
-            {imageUploading ? (
-              <RefreshCw size={18} className="animate-spin" />
-            ) : (
-              <Camera size={18} />
-            )}
-            <input 
-              type="file" 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handlePickImage} 
-              disabled={imageUploading} 
-            />
-          </label>
-        )}
-      </div>
+if (loading) {
+  return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+      <RefreshCw className="animate-spin text-indigo-600 mb-2" size={32} />
+      <p className="text-slate-500 font-medium text-sm">Loading Profile...</p>
+    </div>
+  );
+}
 
-        <div className="flex flex-wrap justify-center gap-2 mt-4">
-          <Badge icon={<Stars size={16} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
-          {followerCount > 10 && <Badge icon={<Stars size={16}/>} color="bg-amber-100 text-amber-600" label="Social" />}
-          {profileImage && <Badge icon={<Camera size={16}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
-          {followingCount > 0 && <Badge icon={<TrendingUp size={16}/>} color="bg-green-100 text-green-600" label="Networker" />}
-        </div>
-      </div>
-
-      {isMe && (
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-orange-50 p-3 rounded-2xl">
-                <Footprints className="text-orange-500" size={24} />
-              </div>
-              <div>
-                <h4 className="text-xl font-black text-slate-800">{steps.toLocaleString()}</h4>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">Today's Steps</p>
-              </div>
-            </div>
-
-            <button 
-              onClick={syncWithGoogleFit}
-              disabled={isSyncing}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm ${
-                isSyncing 
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                  : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 active:scale-95'
-              }`}
-            >
-              {isSyncing ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-              {isSyncing ? 'Syncing...' : 'Sync Fit'}
-            </button>
-          </div>
-
-          {lastSynced && (
-            <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <CheckCircle size={12} className="text-emerald-500" />
-              Last synced with Google Fit: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4 border-y border-slate-200 py-4 bg-white rounded-xl">
-        <div className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-lg cursor-pointer">
-          <StatItem label="Followers" count={followerCount} onClick={() => setModalConfig({ isOpen: true, type: 'followers' })} />
-        </div>
-        <div className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-lg cursor-pointer">
-          <StatItem label="Following" count={followingCount} onClick={() => setModalConfig({ isOpen: true, type: 'following' })} />
-        </div>
-      </div>
-
-      {!isMe && (
-        <FollowButton 
-          targetUserId={userId!} 
-          targetUserName={formData.name} 
-          isFollowingInitial={isFollowing}
-          onFollowChange={handleFollowUpdate}
-        />
-      )}
-
-      <div className="space-y-4">
-        <CollapsibleSection title="Basic Information" icon={<User size={20}/>}>
-          <div className="space-y-4 mt-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
-              <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={18}/>} />
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                <InputField label="Age" type="number" value={formData.age} onChange={(v: string) => setFormData({...formData, age: v})} disabled={!isMe} />
-              </PrivacyWrapper>
-              <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
-              </PrivacyWrapper>
-              <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
-              </PrivacyWrapper>
-              <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
-              </PrivacyWrapper>
-            </div>
-          </div>
-        </CollapsibleSection>
-
-        {isMe && (
-          <CollapsibleSection 
-            title="Vital Signs" 
-            icon={<Activity size={20}/>} 
-            defaultOpen={false}
-            badge={isMe && (
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  if (dynamicVitals.filter(v => v.isCustom).length >= 10) {
-                    return alert('Maximum of 10 custom vitals allowed.');
-                  }
-                  setShowVitalModal(true); 
-                  setVitalForm({ ...vitalForm, name: availableVitalAddons[0] || '', type: 'addon' });
-                }} 
-                className="ml-2 flex items-center gap-1 text-[10px] font-bold bg-red-500 text-white px-2 py-1 rounded-full hover:bg-red-600 transition-colors"
-              >
-                <PlusCircle size={12} /> ADD VITAL SIGN
-              </button>
-            )}
-          >
-            <div className="mt-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-red-50/30 p-4 rounded-2xl border border-red-50">
-                {dynamicVitals.length > 0 ? (
-                  dynamicVitals.map((vital, idx) => (
-                    <PrivacyWrapper
-                      key={`vital-${vital.key}-${idx}`}
-                      fieldKey={vital.key}
-                      isMe={isMe}
-                      hiddenOther={hiddenOther}
-                      toggleVisibilityOther={toggleVisibilityOther}
-                      onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}
-                    >
-                      <InputField 
-                        label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`} 
-                        type="number" 
-                        value={dynamicVitalsInputs[vital.key] || ''} 
-                        onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} 
-                        disabled={!isMe} 
-                        icon={<Activity size={18}/>} 
-                      />
-                    </PrivacyWrapper>
-                  ))
+  return (
+    <div className="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
+      
+      {/* RESPONSIVE TWO-COLUMN GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start mt-2">
+        
+        {/* LEFT COLUMN: Profile, Controls, Vitals, Exercises */}
+        <div className="space-y-4">
+          
+          {/* COMPACT PROFILE HEADER */}
+          <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+            {/* Left/Avatar */}
+            <div className="relative shrink-0">
+              <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-md flex items-center justify-center">
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
-                  /* This is the section you wanted to add */
-                  <div className="col-span-full text-center text-slate-400 py-4 text-sm font-medium">No vital signs tracked yet.</div>
+                  <User size={48} className="text-slate-400" />
+                )}
+                {imageUploading && (
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
+                    <Activity className="animate-spin text-white" />
+                  </div>
                 )}
               </div>
-            </div>
-          </CollapsibleSection>
-        )}
-
-        {isMe && (
-          <CollapsibleSection 
-            title="Fitness Tracker" 
-            icon={<Dumbbell size={20}/>}
-            defaultOpen={false} 
-            badge={(
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  if (trackedExercises.length >= 10) return alert('Maximum of 10 workouts allowed.');
-                  setShowWorkoutModal(true);
-                  setWorkoutForm({ ...workoutForm, name: availableStrengthList[0] || '', type: 'strength' });
-                }} 
-                className="ml-2 flex items-center gap-1 text-[10px] font-bold bg-emerald-500 text-white px-2 py-1 rounded-full hover:bg-emerald-600 transition-colors"
-              >
-                <PlusCircle size={12} /> ADD EXERCISE
-              </button>
-            )}
-          >
-          <div className="mt-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-50/30 p-4 rounded-2xl border border-emerald-50">
-              {trackedExercises.length > 0 ? (
-                trackedExercises.map((ex, idx) => (
-                  <PrivacyWrapper
-                    key={`exercise-${ex.name}-${idx}`}
-                    fieldKey={ex.name}
-                    isMe={isMe}
-                    hiddenOther={hiddenOther}
-                    toggleVisibilityOther={toggleVisibilityOther}
-                    onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}
-                  >
-                    <InputField 
-                      label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`} 
-                      type="number" 
-                      value={exerciseInputs[ex.name] || ''} 
-                      onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} 
-                      disabled={!isMe} 
-                      icon={ex.type === 'speed' ? <Timer size={18}/> : <Dumbbell size={18}/>}
-                    />
-                  </PrivacyWrapper>
-                ))
-              ) : (
-                <div className="col-span-full text-center text-slate-400 py-4 text-sm font-medium">No exercises tracked yet.</div>
+              {isMe && (
+                <label className="absolute bottom-0 right-0 bg-blue-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-sm transition-colors">
+                  {imageUploading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handlePickImage} 
+                    disabled={imageUploading} 
+                  />
+                </label>
               )}
             </div>
-          </div>
-          </CollapsibleSection>
-        )}
 
-        {isMe && (
-          <button 
-            onClick={handleSaveAllHealthData}
-            disabled={saving}
-            className={`w-full py-4 rounded-2xl font-black text-white shadow-xl flex justify-center items-center gap-2 transition-all ${
-              saving ? 'bg-indigo-400 cursor-not-allowed scale-95' : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] active:scale-95'
-            }`}
-          >
-            {saving ? <RefreshCw className="animate-spin" size={20}/> : <UploadCloud size={20}/>}
-            {saving ? 'SAVING PROGRESS...' : 'SAVE ALL UPDATES'}
-          </button>
-        )}
+
+            {/* Right/Stats & Badges */}
+            <div className="flex-1 w-full flex flex-col justify-center">
+              {/* Followers / Following Container on Top Right */}
+              <div className="flex justify-center sm:justify-start gap-3 mb-3">
+                <div 
+                  className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                  onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
+                >
+                  <div className="text-xl font-black text-slate-800">{followerCount}</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Followers</div>
+                </div>
+                <div 
+                  className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                  onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
+                >
+                  <div className="text-xl font-black text-slate-800">{followingCount}</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
+                {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}
+                {profileImage && <Badge icon={<Camera size={14}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
+                {followingCount > 0 && <Badge icon={<TrendingUp size={14}/>} color="bg-green-100 text-green-600" label="Networker" />}
+              </div>
+            </div>
+          </div>
+
+          {!isMe && (
+            <FollowButton 
+              targetUserId={userId!} 
+              targetUserName={formData.name} 
+              isFollowingInitial={isFollowing}
+              onFollowChange={handleFollowUpdate}
+            />
+          )}
+
+          <div className="space-y-4">
+            {/* BASIC INFORMATION & STEPS */}
+            <CollapsibleSection title="Basic Information" icon={<User size={18}/>}>
+              <div className="space-y-3 mt-3">
+                
+                {/* Sync Fit merged into Basic Info */}
+                {isMe && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-orange-50/60 p-3 rounded-2xl border border-orange-100 gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-orange-100 p-2.5 rounded-xl">
+                        <Footprints className="text-orange-500" size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-black text-slate-800 leading-none mb-1">{steps.toLocaleString()}</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Today's Steps</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:items-end">
+                      <button 
+                        onClick={syncWithGoogleFit}
+                        disabled={isSyncing}
+                        className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                          isSyncing 
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                            : 'bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-100 active:scale-95'
+                        }`}
+                      >
+                        <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                        {isSyncing ? 'Syncing...' : 'Sync Fit'}
+                      </button>
+                      {lastSynced && (
+                        <span className="mt-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                          Synced: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
+                  <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Age" type="number" value={formData.age} onChange={(v: string) => setFormData({...formData, age: v})} disabled={!isMe} />
+                  </PrivacyWrapper>
+                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
+                  </PrivacyWrapper>
+                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
+                  </PrivacyWrapper>
+                  <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
+                  </PrivacyWrapper>
+                </div>
+              </div>
+            </CollapsibleSection>
+
+            {/* VITAL SIGNS */}
+            {isMe && (
+              <CollapsibleSection 
+                title="Vital Signs" 
+                icon={<Activity size={18}/>} 
+                defaultOpen={false}
+                badge={isMe && (
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (dynamicVitals.filter(v => v.isCustom).length >= 10) return alert('Maximum of 10 custom vitals allowed.');
+                      setShowVitalModal(true); 
+                      setVitalForm({ ...vitalForm, name: availableVitalAddons[0] || '', type: 'addon' });
+                    }} 
+                    className="ml-2 flex items-center gap-1 text-[9px] font-bold bg-red-500 text-white px-2 py-1 rounded-full hover:bg-red-600 transition-colors"
+                  >
+                    <PlusCircle size={10} /> ADD VITAL
+                  </button>
+                )}
+              >
+                <div className="mt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-red-50/30 p-3 rounded-2xl border border-red-50">
+                    {dynamicVitals.length > 0 ? (
+                      dynamicVitals.map((vital, idx) => (
+                        <PrivacyWrapper key={`vital-${vital.key}-${idx}`} fieldKey={vital.key} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}>
+                          <InputField label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`} type="number" value={dynamicVitalsInputs[vital.key] || ''} onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} disabled={!isMe} icon={<Activity size={16}/>} />
+                        </PrivacyWrapper>
+                      ))
+                    ) : (
+                      <div className="col-span-full text-center text-slate-400 py-3 text-sm font-medium">No vital signs tracked yet.</div>
+                    )}
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* FITNESS TRACKER */}
+            {isMe && (
+              <CollapsibleSection 
+                title="Fitness Tracker" 
+                icon={<Dumbbell size={18}/>}
+                defaultOpen={false} 
+                badge={(
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (trackedExercises.length >= 10) return alert('Maximum of 10 workouts allowed.');
+                      setShowWorkoutModal(true);
+                      setWorkoutForm({ ...workoutForm, name: availableStrengthList[0] || '', type: 'strength' });
+                    }} 
+                    className="ml-2 flex items-center gap-1 text-[9px] font-bold bg-emerald-500 text-white px-2 py-1 rounded-full hover:bg-emerald-600 transition-colors"
+                  >
+                    <PlusCircle size={10} /> ADD EXERCISE
+                  </button>
+                )}
+              >
+                <div className="mt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-emerald-50/30 p-3 rounded-2xl border border-emerald-50">
+                    {trackedExercises.length > 0 ? (
+                      trackedExercises.map((ex, idx) => (
+                        <PrivacyWrapper key={`exercise-${ex.name}-${idx}`} fieldKey={ex.name} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}>
+                          <InputField label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`} type="number" value={exerciseInputs[ex.name] || ''} onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} disabled={!isMe} icon={ex.type === 'speed' ? <Timer size={16}/> : <Dumbbell size={16}/>} />
+                        </PrivacyWrapper>
+                      ))
+                    ) : (
+                      <div className="col-span-full text-center text-slate-400 py-3 text-sm font-medium">No exercises tracked yet.</div>
+                    )}
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* SAVE ALL UPDATES */}
+            {isMe && (
+              <button 
+                onClick={handleSaveAllHealthData}
+                disabled={saving}
+                className={`w-full py-3.5 rounded-2xl font-black text-white shadow-md flex justify-center items-center gap-2 transition-all ${
+                  saving ? 'bg-indigo-400 cursor-not-allowed scale-95' : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] active:scale-95'
+                }`}
+              >
+                {saving ? <RefreshCw className="animate-spin" size={18}/> : <UploadCloud size={18}/>}
+                {saving ? 'SAVING PROGRESS...' : 'SAVE ALL UPDATES'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Analytics/Charts */}
+        <div className="lg:sticky lg:top-4 h-full">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
+            <div className="p-3 border-b border-slate-50 bg-slate-50/50 shrink-0">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <TrendingUp size={14} /> Analytics
+              </h3>
+            </div>
+            <div className="flex-1">
+              <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
-
+      {/* GLOBAL MODALS */}
       <FollowModal config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
       
       <VitalModal 
