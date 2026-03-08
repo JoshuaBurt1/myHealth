@@ -17,7 +17,6 @@ export const db = getFirestore(app);
 
 // SHARED LOGIC: The "Overlap Fixer" for your Heart Rate Chart
 export const syncHealthMetric = async (userId: string, metricType: 'heart_rate' | 'steps', value: number) => {
-  const todayId = new Date().toISOString().split('T')[0];
   const timestamp = new Date().toISOString();
 
   // Update the primary daily total

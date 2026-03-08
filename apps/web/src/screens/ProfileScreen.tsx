@@ -523,7 +523,6 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
-  const isAnyModalOpen = showVitalModal || showWorkoutModal || modalConfig.isOpen;
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
       
@@ -647,17 +646,17 @@ const ProfileScreen: React.FC = () => {
                   <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} hideControls={isAnyModalOpen}>
-                      <InputField label="Age" type="number" value={formData.age} onChange={(v: string) => setFormData({...formData, age: v})} disabled={!isMe} />
+                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Age" type="number" value={formData.age} onChange={(v: string) => setFormData({...formData, age: v})} disabled={!isMe} />
                   </PrivacyWrapper>
-                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} hideControls={isAnyModalOpen}>
-                      <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
+                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
                   </PrivacyWrapper>
-                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} hideControls={isAnyModalOpen}>
-                      <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
+                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
                   </PrivacyWrapper>
-                  <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} hideControls={isAnyModalOpen}>
-                      <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
+                  <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
                   </PrivacyWrapper>
                 </div>
               </div>
@@ -687,15 +686,7 @@ const ProfileScreen: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-red-50/30 p-3 rounded-2xl border border-red-50">
                     {dynamicVitals.length > 0 ? (
                       dynamicVitals.map((vital, idx) => (
-                        <PrivacyWrapper 
-                          key={`vital-${vital.key}-${idx}`} 
-                          fieldKey={vital.key} 
-                          isMe={isMe} 
-                          hiddenOther={hiddenOther} 
-                          toggleVisibilityOther={toggleVisibilityOther} 
-                          onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}
-                          hideControls={isAnyModalOpen} // <-- ADD THIS
-                        >
+                        <PrivacyWrapper key={`vital-${vital.key}-${idx}`} fieldKey={vital.key} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}>
                           <InputField label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`} type="number" value={dynamicVitalsInputs[vital.key] || ''} onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} disabled={!isMe} icon={<Activity size={16}/>} />
                         </PrivacyWrapper>
                       ))
@@ -731,15 +722,7 @@ const ProfileScreen: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-emerald-50/30 p-3 rounded-2xl border border-emerald-50">
                     {trackedExercises.length > 0 ? (
                       trackedExercises.map((ex, idx) => (
-                        <PrivacyWrapper 
-                          key={`exercise-${ex.name}-${idx}`} 
-                          fieldKey={ex.name} 
-                          isMe={isMe} 
-                          hiddenOther={hiddenOther} 
-                          toggleVisibilityOther={toggleVisibilityOther} 
-                          onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}
-                          hideControls={isAnyModalOpen}
-                        >
+                        <PrivacyWrapper key={`exercise-${ex.name}-${idx}`} fieldKey={ex.name} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}>
                           <InputField label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`} type="number" value={exerciseInputs[ex.name] || ''} onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} disabled={!isMe} icon={ex.type === 'speed' ? <Timer size={16}/> : <Dumbbell size={16}/>} />
                         </PrivacyWrapper>
                       ))
