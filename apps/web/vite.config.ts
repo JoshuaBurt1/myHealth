@@ -71,9 +71,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Ensure HMR works correctly within the monorepo structure
+    strictPort: true, // Prevents Vite from trying other ports if 5173 is busy
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+    },
     fs: {
-      allow: ['../..']
+      allow: ['../..'] // Allows Vite to reach up to the root node_modules and shared package
     }
   }
 });

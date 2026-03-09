@@ -1,34 +1,55 @@
 // packages/shared/index.ts
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
-const firebaseConfig = {
-  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env?.VITE_FIREBASE_APP_ID || process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
+// Helper to safely grab env variables from Vite (Web) or Expo (Mobile)
+const getEnvVar = (key: string) => {
+  // @ts-ignore - Ignore check if import.meta.env doesn't exist in all environments
+  return import.meta.env?.[`VITE_FIREBASE_${key}`] || process.env[`EXPO_PUBLIC_FIREBASE_${key}`];
 };
 
-export const app = initializeApp(firebaseConfig);
+const firebaseConfig = {
+  apiKey: getEnvVar('API_KEY'),
+  authDomain: getEnvVar('AUTH_DOMAIN'),
+  projectId: getEnvVar('PROJECT_ID'),
+  storageBucket: getEnvVar('STORAGE_BUCKET'),
+  messagingSenderId: getEnvVar('MESSAGING_SENDER_ID'),
+  appId: getEnvVar('APP_ID'),
+  measurementId: getEnvVar('MEASUREMENT_ID')
+};
+
+// Singleton pattern: Check if an app already exists before initializing
+// This fixes the "Service firestore is not available" error in HMR
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+
 
 // SHARED LOGIC: The "Overlap Fixer" for your Heart Rate Chart
 export const syncHealthMetric = async (userId: string, metricType: 'heart_rate' | 'steps', value: number) => {
-  const timestamp = new Date().toISOString();
+  if (!userId) {
+    console.error("Sync failed: No userId provided.");
+    return;
+  }
 
-  // Update the primary daily total
-  await setDoc(doc(db, 'users', userId), {
-    [`daily_${metricType}`]: value,
-    last_update: serverTimestamp()
-  }, { merge: true });
+  // Use a granular ID (ISO string) to ensure Recharts shows separate data points
+  const timestampId = new Date().toISOString();
 
-  // Update the history for your Recharts components
-  // Using a specific timestamp ID prevents the "vertical line" overlap
-  await setDoc(doc(db, 'users', userId, `${metricType}_history`, timestamp), {
-    value,
-    timestamp: serverTimestamp()
-  });
+  try {
+    // Update the primary daily total
+    await setDoc(doc(db, 'users', userId), {
+      [`daily_${metricType}`]: value,
+      last_update: serverTimestamp()
+    }, { merge: true });
+
+    // Update the history for your Recharts components
+    await setDoc(doc(db, 'users', userId, `${metricType}_history`, timestampId), {
+      value,
+      timestamp: serverTimestamp()
+    });
+    
+    console.log(`Successfully synced ${metricType}: ${value}`);
+  } catch (error) {
+    console.error("Firestore sync error:", error);
+  }
 };
