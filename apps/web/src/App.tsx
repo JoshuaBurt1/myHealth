@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
-import { StepProvider, useGlobalSteps } from './context/StepContext';
+import { StepProvider } from './context/StepContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 import Navbar from './components/Navbar';
@@ -17,23 +17,17 @@ import PaymentScreen from './screens/PaymentScreen';
 import OrderHistoryScreen from './screens/OrderHistoryScreen';
 
 function AppContent({ user }: { user: User | null }) {
-  const { requestPermission } = useGlobalSteps();
-
+  // Removed requestPermission onClick wrapper entirely
   return (
-    <div 
-      onClick={requestPermission} 
-      className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:pt-16"
-    >
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:pt-16">
       <Navbar user={user} />
       <main className="max-w-6xl mx-auto p-4">
         <Routes>
           <Route index element={<HomeScreen />} />
-          
           <Route path="store" element={<StoreScreen />} />
           <Route path="orders" element={user ? <OrderHistoryScreen /> : <Navigate to="/login" replace />} />
           <Route path="cart" element={user ? <CartScreen /> : <Navigate to="/login" replace />} />
           <Route path="payment" element={user ? <PaymentScreen /> : <Navigate to="/login" replace />} />
-
           <Route path="forum" element={<ForumScreen />} />
           <Route path="login" element={<LoginScreen />} />
           <Route path="register" element={<RegisterScreen />} />

@@ -1,24 +1,27 @@
-// packages/shared/index.ts
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 
-// Helper to safely grab env variables from Vite (Web) or Expo (Mobile)
 const getEnvVar = (key: string) => {
+  const viteKey = `VITE_FIREBASE_${key}`;
   const expoKey = `EXPO_PUBLIC_FIREBASE_${key}`;
-  
-  // Check for Expo environment first (Mobile)
+
+  // 1. Check for Mobile (Process/Expo) first
+  // This is safer for Hermes/Native environments
   if (typeof process !== 'undefined' && process.env && process.env[expoKey]) {
     return process.env[expoKey];
   }
 
-  // Use a string-based check for Vite to hide it from the Hermes compiler
+  // 2. Fallback to Vite (Web)
+  // We use an indirect check to help some parsers skip this if they don't support it,
+  // but Vite is still smart enough to replace the values during build.
   try {
-    const meta = Function('return import.meta')();
-    if (meta && meta.env) {
-      return meta.env[`VITE_FIREBASE_${key}`];
+    // @ts-ignore
+    const env = import.meta.env;
+    if (env) {
+      return env[viteKey];
     }
   } catch (e) {
-    // Fail silently on mobile
+    // Fail silently on native if import.meta is totally absent
   }
 
   return undefined;
@@ -34,26 +37,25 @@ const firebaseConfig = {
   measurementId: getEnvVar('MEASUREMENT_ID')
 };
 
-// Singleton pattern: Check if an app already exists before initializing
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// SHARED LOGIC: The "Overlap Fixer" for your Heart Rate Chart
+/**
+ * Shared sync logic for Heart Rate and Steps
+ */
 export const syncHealthMetric = async (userId: string, metricType: 'heart_rate' | 'steps', value: number) => {
   if (!userId) return;
-
   const timestampId = new Date().toISOString();
 
   try {
     const userRef = doc(db, 'users', userId);
     
-    // 1. Increment the daily total instead of overwriting it
+    // Increment the total and log to history subcollection
     await setDoc(userRef, {
       [`daily_${metricType}`]: increment(value),
       last_update: serverTimestamp()
     }, { merge: true });
 
-    // 2. Log the specific window in history for Recharts
     await setDoc(doc(db, 'users', userId, `${metricType}_history`, timestampId), {
       value,
       timestamp: serverTimestamp()

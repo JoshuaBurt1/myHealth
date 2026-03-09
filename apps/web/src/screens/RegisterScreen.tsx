@@ -60,6 +60,8 @@ const RegisterScreen: React.FC = () => {
         goal: ""
       });
 
+      notifyMobileApp(uid);
+
       // Navigate to profile using the new UID
       navigate(`/profile/${uid}`);
       

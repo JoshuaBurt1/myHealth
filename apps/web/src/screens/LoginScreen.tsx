@@ -86,11 +86,15 @@ const LoginScreen: React.FC = () => {
     }
   };
 
+  // Inside LoginScreen.tsx
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      notifyMobileApp(userCredential.user.uid); 
+
       navigate(`/profile/${userCredential.user.uid}`);
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -101,6 +105,9 @@ const LoginScreen: React.FC = () => {
     try {
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
+      
+      notifyMobileApp(userCredential.user.uid);
+
       navigate(`/profile/${userCredential.user.uid}`);
     } catch (err) {
       setError('Google Sign-In failed');

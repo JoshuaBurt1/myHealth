@@ -65,8 +65,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // Change '@shared' to '@my-health/shared'
-      '@my-health/shared': path.resolve(__dirname, '../../packages/shared/index.ts'),
+      // Force all imports to use the React version in apps/web
+      'react': path.resolve(__dirname, 'node_modules/react'),
     },
   },
   server: {

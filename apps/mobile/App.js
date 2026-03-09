@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, SafeAreaView, StatusBar, Platform } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
@@ -21,7 +21,9 @@ TaskManager.defineTask(TRACKING_TASK, async ({ data, error }) => {
     const end = new Date();
     
     const result = await Pedometer.getStepCountAsync(start, end);
+    
     if (result.steps > 0) {
+      // Updates users/documentId/daily_steps via your shared package
       await syncHealthMetric(userId, 'steps', result.steps);
       await AsyncStorage.setItem('last_step_sync', end.toISOString());
     }
@@ -33,15 +35,16 @@ TaskManager.defineTask(TRACKING_TASK, async ({ data, error }) => {
 export default function App() {
   const webViewRef = useRef(null);
 
-  // --- 2. Initialize Tracking (Types removed for .js) ---
+  // --- 2. Initialize Tracking ---
   const startTracking = async (uid) => {
     await AsyncStorage.setItem('user_id', uid);
     
+    // Explicitly request pedometer permission (Required for Android 10+ / Pixel 10)
+    const { status: pedoStatus } = await Pedometer.requestPermissionsAsync();
     const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
     const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
-    const isAvailable = await Pedometer.isAvailableAsync();
 
-    if (isAvailable && foreStatus === 'granted' && backStatus === 'granted') {
+    if (pedoStatus === 'granted' && foreStatus === 'granted' && backStatus === 'granted') {
       await Location.startLocationUpdatesAsync(TRACKING_TASK, {
         accuracy: Location.Accuracy.Balanced,
         timeInterval: 15 * 60 * 1000,
