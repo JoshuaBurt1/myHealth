@@ -1,11 +1,27 @@
 // packages/shared/index.ts
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 
 // Helper to safely grab env variables from Vite (Web) or Expo (Mobile)
 const getEnvVar = (key: string) => {
-  // @ts-ignore - Ignore check if import.meta.env doesn't exist in all environments
-  return import.meta.env?.[`VITE_FIREBASE_${key}`] || process.env[`EXPO_PUBLIC_FIREBASE_${key}`];
+  const expoKey = `EXPO_PUBLIC_FIREBASE_${key}`;
+  
+  // Check for Expo environment first (Mobile)
+  if (typeof process !== 'undefined' && process.env && process.env[expoKey]) {
+    return process.env[expoKey];
+  }
+
+  // Use a string-based check for Vite to hide it from the Hermes compiler
+  try {
+    const meta = Function('return import.meta')();
+    if (meta && meta.env) {
+      return meta.env[`VITE_FIREBASE_${key}`];
+    }
+  } catch (e) {
+    // Fail silently on mobile
+  }
+
+  return undefined;
 };
 
 const firebaseConfig = {
@@ -19,36 +35,29 @@ const firebaseConfig = {
 };
 
 // Singleton pattern: Check if an app already exists before initializing
-// This fixes the "Service firestore is not available" error in HMR
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-
-
 // SHARED LOGIC: The "Overlap Fixer" for your Heart Rate Chart
 export const syncHealthMetric = async (userId: string, metricType: 'heart_rate' | 'steps', value: number) => {
-  if (!userId) {
-    console.error("Sync failed: No userId provided.");
-    return;
-  }
+  if (!userId) return;
 
-  // Use a granular ID (ISO string) to ensure Recharts shows separate data points
   const timestampId = new Date().toISOString();
 
   try {
-    // Update the primary daily total
-    await setDoc(doc(db, 'users', userId), {
-      [`daily_${metricType}`]: value,
+    const userRef = doc(db, 'users', userId);
+    
+    // 1. Increment the daily total instead of overwriting it
+    await setDoc(userRef, {
+      [`daily_${metricType}`]: increment(value),
       last_update: serverTimestamp()
     }, { merge: true });
 
-    // Update the history for your Recharts components
+    // 2. Log the specific window in history for Recharts
     await setDoc(doc(db, 'users', userId, `${metricType}_history`, timestampId), {
       value,
       timestamp: serverTimestamp()
     });
-    
-    console.log(`Successfully synced ${metricType}: ${value}`);
   } catch (error) {
     console.error("Firestore sync error:", error);
   }

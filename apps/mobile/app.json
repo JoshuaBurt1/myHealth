@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "MyHealth",
+    "slug": "my-health-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Allow MyHealth to track your steps even when the app is closed.",
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-sensors"
+    ],
+    "android": {
+      "package": "com.squarehexagon.myhealth",
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE_HEALTH",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.squarehexagon.myhealth",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMotionUsageDescription": "This app uses the pedometer to track your daily steps.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8b533de9-da8a-4853-84b4-f2616d3ce190"
+      }
+    }
+  }
+}

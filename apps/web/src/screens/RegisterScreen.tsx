@@ -13,6 +13,18 @@ const RegisterScreen: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const notifyMobileApp = (uid: string) => {
+    // Check if the native bridge exists
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'AUTH_SUCCESS',
+        uid: uid
+      }));
+    } else {
+      console.log("Not in a native shell, skipping mobile sync.");
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');

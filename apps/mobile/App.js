@@ -1,5 +1,6 @@
-// apps/mobile/App.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, View, SafeAreaView, StatusBar, Platform } from 'react-native';
+import { WebView } from 'react-native-webview';
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
@@ -8,63 +9,84 @@ import { syncHealthMetric } from '@my-health/shared';
 
 const TRACKING_TASK = 'background-health-task';
 
-// 1. Define the Task (Must be in global scope)
-// apps/mobile/App.js
+// --- 1. Background Task Definition ---
 TaskManager.defineTask(TRACKING_TASK, async ({ data, error }) => {
   if (error) return;
+  try {
+    const userId = await AsyncStorage.getItem('user_id');
+    if (!userId) return; 
 
-  if (data) {
-    try {
-      // 1. Get the ID we saved during login
-      const userId = await AsyncStorage.getItem('user_id');
-      
-      if (!userId) {
-        console.log("No user logged in. Skipping background sync.");
-        return;
-      }
-
-      // 2. Get step data
-      const end = new Date();
-      const start = new Date();
-      start.setMinutes(end.getMinutes() - 15);
-      
-      const result = await Pedometer.getStepCountAsync(start, end);
-
-      if (result.steps > 0) {
-        // 3. Use the SHARED logic to update Firestore
-        // This ensures the Web App and Mobile App see the same data!
-        await syncHealthMetric(userId, 'steps', result.steps);
-      }
-    } catch (err) {
-      console.error("Background sync failed:", err);
+    const lastSyncStr = await AsyncStorage.getItem('last_step_sync');
+    const start = lastSyncStr ? new Date(lastSyncStr) : new Date(Date.now() - 15 * 60000);
+    const end = new Date();
+    
+    const result = await Pedometer.getStepCountAsync(start, end);
+    if (result.steps > 0) {
+      await syncHealthMetric(userId, 'steps', result.steps);
+      await AsyncStorage.setItem('last_step_sync', end.toISOString());
     }
+  } catch (err) {
+    console.error("Native Sync Error:", err);
   }
 });
 
 export default function App() {
-  useEffect(() => {
-    const startTracking = async () => {
-      // 2. Request Permissions
-      const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
-      if (foreStatus !== 'granted') return;
+  const webViewRef = useRef(null);
 
-      const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backStatus !== 'granted') return;
+  // --- 2. Initialize Tracking (Types removed for .js) ---
+  const startTracking = async (uid) => {
+    await AsyncStorage.setItem('user_id', uid);
+    
+    const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
+    const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
+    const isAvailable = await Pedometer.isAvailableAsync();
 
-      // 3. Start Location Tracking (The "Anchor" for background work)
+    if (isAvailable && foreStatus === 'granted' && backStatus === 'granted') {
       await Location.startLocationUpdatesAsync(TRACKING_TASK, {
         accuracy: Location.Accuracy.Balanced,
-        timeInterval: 15 * 60 * 1000, // Every 15 minutes
-        distanceInterval: 50, // Or every 50 meters
+        timeInterval: 15 * 60 * 1000,
+        distanceInterval: 10,
         foregroundService: {
-          notificationTitle: "Health Tracker Active",
-          notificationBody: "Tracking your steps in the background.",
+          notificationTitle: "myHealth Pedometer",
+          notificationBody: "Tracking your steps in the background",
+          notificationColor: "#3F51B5"
         },
       });
-    };
+    }
+  };
 
-    startTracking();
-  }, []);
+  // --- 3. Handle Messages from Web App ---
+  const onMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'AUTH_SUCCESS') {
+        startTracking(data.uid);
+      }
+    } catch (e) {
+      console.error("Bridge Error:", e);
+    }
+  };
 
-  return null; // Your UI here
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <WebView 
+        ref={webViewRef}
+        source={{ uri: 'https://myhealth79.web.app/' }} 
+        onMessage={onMessage}
+        style={{ flex: 1 }}
+        domStorageEnabled={true}
+        javaScriptEnabled={true}
+        startInLoadingState={true}
+      />
+    </SafeAreaView>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+});

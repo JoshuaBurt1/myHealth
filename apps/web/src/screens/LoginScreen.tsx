@@ -74,6 +74,18 @@ const LoginScreen: React.FC = () => {
     }
   };
 
+  const notifyMobileApp = (uid: string) => {
+    // Check if the native bridge exists
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'AUTH_SUCCESS',
+        uid: uid
+      }));
+    } else {
+      console.log("Not in a native shell, skipping mobile sync.");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');

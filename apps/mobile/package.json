@@ -1,25 +1,30 @@
 {
   "name": "@my-health/mobile",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~50.0.0",
-    "react": "18.2.0",
-    "react-native": "0.73.0",
-    "expo-location": "~16.5.0",
-    "expo-task-manager": "~11.7.0",
-    "expo-sensors": "~12.9.0",
-    "@react-native-async-storage/async-storage": "1.21.0",
-    "@my-health/shared": "*"
+    "@my-health/shared": "file:../../packages/shared",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "^54.0.33",
+    "expo-dev-client": "~6.0.20",
+    "expo-location": "~19.0.8",
+    "expo-sensors": "~15.0.8",
+    "expo-task-manager": "~14.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-webview": "13.15.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@react-native-community/cli": "^20.1.2",
+    "@react-native/metro-config": "^0.84.1",
+    "babel-preset-expo": "~54.0.10"
   },
   "private": true
 }
