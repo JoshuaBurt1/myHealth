@@ -2,33 +2,42 @@ import React, { useEffect, useRef } from 'react';
 import { StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as TaskManager from 'expo-task-manager';
-import * as Location from 'expo-location';
+import * as BackgroundFetch from 'expo-background-fetch';
 import { Pedometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncHealthMetric } from '@my-health/shared';
 
-const TRACKING_TASK = 'background-health-task';
+const BACKGROUND_STEP_TASK = 'background-step-task';
 
 // --- 1. Background Task Definition ---
-TaskManager.defineTask(TRACKING_TASK, async ({ data, error }) => {
-  if (error) return;
+TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
   try {
     const userId = await AsyncStorage.getItem('user_id');
-    if (!userId) return; 
+    if (!userId) return BackgroundFetch.BackgroundFetchResult.NoData;
 
     const lastSyncStr = await AsyncStorage.getItem('last_step_sync');
-    const start = lastSyncStr ? new Date(lastSyncStr) : new Date(Date.now() - 15 * 60000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    let start = lastSyncStr ? new Date(lastSyncStr) : new Date(Date.now() - 15 * 60000);
+
+    if (start < twentyFourHoursAgo) start = twentyFourHoursAgo;
     const end = new Date();
     
+    // Query the step history
     const result = await Pedometer.getStepCountAsync(start, end);
+    console.log(`Syncing ${result.steps} steps from ${start.toISOString()} to ${end.toISOString()}`);
     
-    if (result.steps > 0) {
-      // Updates users/documentId/daily_steps via your shared package
+    if (result && result.steps > 0) {
+      // Send to Firebase
       await syncHealthMetric(userId, 'steps', result.steps);
+      // Update the timestamp for the next background wake-up
       await AsyncStorage.setItem('last_step_sync', end.toISOString());
+      return BackgroundFetch.BackgroundFetchResult.NewData;
     }
+    
+    return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch (err) {
     console.error("Native Sync Error:", err);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
 
@@ -39,21 +48,14 @@ export default function App() {
   const startTracking = async (uid) => {
     await AsyncStorage.setItem('user_id', uid);
     
-    // Explicitly request pedometer permission (Required for Android 10+ / Pixel 10)
-    const { status: pedoStatus } = await Pedometer.requestPermissionsAsync();
-    const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
-    const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
+    const { status } = await Pedometer.requestPermissionsAsync();
 
-    if (pedoStatus === 'granted' && foreStatus === 'granted' && backStatus === 'granted') {
-      await Location.startLocationUpdatesAsync(TRACKING_TASK, {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 15 * 60 * 1000,
-        distanceInterval: 10,
-        foregroundService: {
-          notificationTitle: "myHealth Pedometer",
-          notificationBody: "Tracking your steps in the background",
-          notificationColor: "#3F51B5"
-        },
+    if (status === 'granted') {
+      // Register the background fetch task
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_STEP_TASK, {
+        minimumInterval: 15 * 60, // Minimum 15 minutes (OS enforced)
+        stopOnTerminate: false,   // Keep running after app is swiped away (Android)
+        startOnBoot: true,        // Start automatically after phone restarts (Android)
       });
     }
   };

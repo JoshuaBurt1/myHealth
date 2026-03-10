@@ -12,6 +12,7 @@
     "@my-health/shared": "file:../../packages/shared",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "^54.0.33",
+    "expo-background-fetch": "~14.0.9",
     "expo-dev-client": "~6.0.20",
     "expo-location": "~19.0.8",
     "expo-sensors": "~15.0.8",
