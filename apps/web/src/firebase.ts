@@ -1,8 +1,8 @@
 import { getAuth } from "firebase/auth";
-import { app, db, syncHealthMetric } from "@my-health/shared";
+import { app, db } from "@my-health/shared";
 
 export const auth = getAuth(app);
 
-export { db, syncHealthMetric };
+export { db };
 
 export default app;

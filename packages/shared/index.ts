@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
 const getEnvVar = (key: string) => {
   const viteKey = `VITE_FIREBASE_${key}`;
@@ -39,28 +39,3 @@ const firebaseConfig = {
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-
-/**
- * Shared sync logic for Heart Rate and Steps
- */
-export const syncHealthMetric = async (userId: string, metricType: 'heart_rate' | 'steps', value: number) => {
-  if (!userId) return;
-  const timestampId = new Date().toISOString();
-
-  try {
-    const userRef = doc(db, 'users', userId);
-    
-    // Increment the total and log to history subcollection
-    await setDoc(userRef, {
-      [`daily_${metricType}`]: increment(value),
-      last_update: serverTimestamp()
-    }, { merge: true });
-
-    await setDoc(doc(db, 'users', userId, `${metricType}_history`, timestampId), {
-      value,
-      timestamp: serverTimestamp()
-    });
-  } catch (error) {
-    console.error("Firestore sync error:", error);
-  }
-};

@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
-import { StepProvider } from './context/StepContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 import Navbar from './components/Navbar';
@@ -17,7 +16,6 @@ import PaymentScreen from './screens/PaymentScreen';
 import OrderHistoryScreen from './screens/OrderHistoryScreen';
 
 function AppContent({ user }: { user: User | null }) {
-  // Removed requestPermission onClick wrapper entirely
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:pt-16">
       <Navbar user={user} />
@@ -70,11 +68,9 @@ export default function App() {
 
   return (
     <PayPalScriptProvider options={paypalOptions}>
-      <StepProvider>
         <Router>
           <AppContent user={user} />
         </Router>
-      </StepProvider>
     </PayPalScriptProvider>
   );
 }

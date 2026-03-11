@@ -2,46 +2,43 @@
   "expo": {
     "name": "MyHealth",
     "slug": "my-health-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "version": "1.0.0",
     "plugins": [
-      "expo-sensors",
-      "expo-background-fetch",
-      "expo-task-manager"
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
+      "expo-asset"
     ],
     "android": {
       "package": "com.squarehexagon.myhealth",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
       "permissions": [
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.WAKE_LOCK",
-        "android.permission.ACTIVITY_RECOGNITION",
-        "android.permission.FOREGROUND_SERVICE_HEALTH"
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE"
       ]
     },
     "ios": {
       "bundleIdentifier": "com.squarehexagon.myhealth",
-      "supportsTablet": true,
       "infoPlist": {
-        "NSMotionUsageDescription": "This app uses the pedometer to track your daily steps.",
-        "UIBackgroundModes": [
-          "fetch",
-          "processing"
-        ]
-      }
-    },
-    "extra": {
-      "eas": {
-        "projectId": "8b533de9-da8a-4853-84b4-f2616d3ce190"
+        "NSHealthShareUsageDescription": "We need access to your health data to sync steps and heart rate.",
+        "NSHealthUpdateUsageDescription": "We need access to your health data to sync steps and heart rate."
       }
     }
   }
