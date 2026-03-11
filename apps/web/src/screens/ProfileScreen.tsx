@@ -1,7 +1,16 @@
 // ProfileScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+// This is used to hide the current steps and sync button in web version (viewable in mobile web view only)
+declare global {
+  interface Window {
+    ReactNativeWebView?: {
+      postMessage: (message: string) => void;
+    };
+  }
+}
+
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, collection, getDocs, query, writeBatch, serverTimestamp, arrayUnion, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, Footprints, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
 import { Badge, InputField, CollapsibleSection } from '../profileComponents/ProfileUI';
@@ -34,7 +43,8 @@ const STRENGTH_KEY_MAP: Record<string, string> = {
 const SPEED_KEY_MAP: Record<string, string> = {
   '100m': 'speed100m',
   '400m': 'speed400m',
-  '1 mile': 'speed1Mile'
+  '1 mile': 'speed1Mile',
+  'Steps' : 'steps'
 };
 const VITAL_ADDONS = Object.keys(VITAL_KEY_MAP);
 const STRENGTH_LIST = Object.keys(STRENGTH_KEY_MAP);
@@ -110,70 +120,65 @@ const ProfileScreen: React.FC = () => {
   const sanitizeKey = (name: string) => `custom_${name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
 
   // --- 1. Listen for data coming BACK from Native App ---
-  // --- 1. Listen for data coming BACK from Native App ---
   useEffect(() => {
-    const handleNativeMessage = async (event: MessageEvent) => {
-      if (event.data && event.data.type === 'HEALTH_CONNECT_RESULT') {
-        const { payload } = event.data;
+    const handleNativeMessage = async (event: any) => {
+      // React Native WebView messages can come in 'event.data'
+      let data = event.data;
+      try {
+        if (typeof data === 'string') data = JSON.parse(data);
+      } catch (e) { return; }
+
+      if (data.type === 'HEALTH_CONNECT_RESULT') {
+        const { payload } = data;
         setIsSyncing(false);
         setLastSynced(new Date());
 
         if (payload.error) {
-          alert(`Sync failed: ${payload.error}`);
+          console.error("Sync Error:", payload.error);
           return;
         }
 
-        // Update local UI state immediately
+        // Update local UI
         setSteps(payload.steps || 0);
-        if (payload.hr) {
-          setDynamicVitalsInputs(prev => ({
-            ...prev,
-            'hr': payload.hr.toString()
-          }));
-        }
 
-        // 🚀 NEW: Save directly to the exact Firestore paths from your image
+        // --- FIRESTORE WRITE ---
         if (userId && (payload.steps > 0 || payload.hr > 0)) {
+          const now = new Date().toISOString();
+          const profileDataRef = doc(db, 'users', userId, 'profile', 'user_data');
+          const userRootRef = doc(db, 'users', userId);
+
+          const profileUpdates: any = {};
+          if (payload.steps > 0) {
+            profileUpdates.steps = arrayUnion({ value: String(payload.steps), dateTime: now });
+          }
+          if (payload.hr > 0) {
+            profileUpdates.hr = arrayUnion({ value: String(payload.hr), dateTime: now });
+          }
+
           try {
-            const now = new Date().toISOString();
-
-            // Path 1: users/documentId/profile/user_data
-            const profileDataRef = doc(db, 'users', userId, 'profile', 'user_data');
-            const profileUpdates: any = {};
-
-            // Path 2: users/documentId (Root Document)
-            const userRootRef = doc(db, 'users', userId);
-            const rootUpdates: any = {
+            await setDoc(profileDataRef, profileUpdates, { merge: true });
+            await setDoc(userRootRef, {
               daily_steps: payload.steps || 0,
               last_step_update: serverTimestamp()
-            };
-
-            // Format exactly like the arrays in your screenshot
-            if (payload.steps > 0) {
-              profileUpdates.steps = arrayUnion({ value: payload.steps.toString(), dateTime: now });
-            }
-
-            if (payload.hr > 0) {
-              profileUpdates.hr = arrayUnion({ value: payload.hr.toString(), dateTime: now });
-              rootUpdates.last_vitals_update = serverTimestamp();
-            }
-
-            // Execute the writes
-            if (Object.keys(profileUpdates).length > 0) {
-              await setDoc(profileDataRef, profileUpdates, { merge: true });
-            }
-            await setDoc(userRootRef, rootUpdates, { merge: true });
-
+            }, { merge: true });
+            
+            // Optional: alert("Sync Successful!"); 
           } catch (err) {
-            console.error("Error saving Health Connect data to Firestore:", err);
+            console.error("Firestore Write Error:", err);
           }
         }
       }
     };
 
+    // Android usually needs document, iOS usually needs window
     window.addEventListener('message', handleNativeMessage);
-    return () => window.removeEventListener('message', handleNativeMessage);
-  }, [userId]); // <-- IMPORTANT: Ensure userId is in the dependency array
+    document.addEventListener('message', handleNativeMessage);
+
+    return () => {
+      window.removeEventListener('message', handleNativeMessage);
+      document.removeEventListener('message', handleNativeMessage);
+    };
+  }, [userId]);
 
   // --- 2. Send the command TO the Native App ---
   const syncWithGoogleFit = () => {
@@ -192,85 +197,63 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const loadUserData = useCallback(async () => {
+  //load user data 
+  useEffect(() => {
     if (!userId) return;
 
     setLoading(true);
-    setProfileImage(null);
-    setFollowerCount(0);
-    setFollowingCount(0);
-    setFollowersList([]);
-    setFollowingList([]);
-    setDynamicVitals([]);
-    setDynamicVitalsInputs({});
-    setTrackedExercises([]);
-    setExerciseInputs({});
-    setHiddenOther([]);
-    setFormData({
-      name: '', goal: '', gems: '0', age: '', height: '', weight: '', bmi: ''
+
+    const userRootRef = doc(db, 'users', userId);
+    const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+    const imageRef = doc(db, 'users', userId, 'profile', 'image_data');
+    const followersRef = query(collection(db, 'users', userId, 'followers'));
+    const followingRef = query(collection(db, 'users', userId, 'following'));
+
+    // 1. Listen to Root User Doc (Steps, Gems, Display Name)
+    const unsubRoot = onSnapshot(userRootRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const rootData = docSnap.data();
+        setFormData(prev => ({ 
+          ...prev, 
+          name: rootData.display_name || prev.name,
+          gems: rootData.gems !== undefined ? rootData.gems.toString() : '0' 
+        }));
+        if (rootData.daily_steps !== undefined) setSteps(rootData.daily_steps);
+        if (rootData.last_step_update) setLastSynced(rootData.last_step_update.toDate());
+      }
     });
 
-    try {
-      const userRootRef = doc(db, 'users', userId);
-      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-      const imageRef = doc(db, 'users', userId, 'profile', 'image_data');
-
-      const [userRootDoc, followersSnap, followingSnap, profileDoc, imageDoc, followingStatus] = await Promise.all([
-        getDoc(userRootRef),
-        getDocs(query(collection(db, 'users', userId, 'followers'))),
-        getDocs(query(collection(db, 'users', userId, 'following'))),
-        getDoc(profileRef),
-        getDoc(imageRef),
-        isMe || !currentUserId ? Promise.resolve(null) : getDoc(doc(db, 'users', currentUserId, 'following', userId))
-      ]);
-
-      let fetchedName = '';
-      let fetchedGoal = '';
-      let fetchedGems = '0';
-      let fetchedAge = '';
-      let fetchedHeight = '';
-      let fetchedWeight = '';
-
-      if (userRootDoc.exists()) {
-        const rootData = userRootDoc.data();
-        fetchedGems = rootData.gems !== undefined ? rootData.gems.toString() : '0';
-        fetchedName = rootData.display_name || fetchedName;
-      }
-
-      if (profileDoc.exists()) {
-        const profData = profileDoc.data();
-        fetchedName = profData.name || fetchedName;
-        fetchedGoal = profData.goal || '';
+    // 2. Listen to Profile Data (Vitals, Workouts, Bio info)
+    const unsubProfile = onSnapshot(profileRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const profData = docSnap.data();
+        
+        setFormData(prev => ({
+          ...prev,
+          name: profData.name || prev.name,
+          goal: profData.goal || '',
+          age: profData.age?.length > 0 ? profData.age[profData.age.length - 1].value : '',
+          height: profData.height?.length > 0 ? profData.height[profData.height.length - 1].value : '',
+          weight: profData.weight?.length > 0 ? profData.weight[profData.weight.length - 1].value : ''
+        }));
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
 
-        // --- AGE, HEIGHT, WEIGHT LOGIC (Keep as is) ---
-        if (profData.age?.length > 0) fetchedAge = profData.age[profData.age.length - 1].value;
-        if (profData.height?.length > 0) fetchedHeight = profData.height[profData.height.length - 1].value;
-        if (profData.weight?.length > 0) fetchedWeight = profData.weight[profData.weight.length - 1].value;
-
-        // --- NEW: DYNAMIC VITALS LOADING ---
+        // Dynamic Vitals Parsing
         const loadedDynamicVitals: typeof dynamicVitals = [];
         const newDynamicVitalsInputs: Record<string, string> = {};
         const seenVitals = new Set<string>();
 
-        // 1. Load from New Definitions (Priority)
         if (Array.isArray(profData.customVitalsDefinitions)) {
           profData.customVitalsDefinitions.forEach((def: any) => {
             if (!seenVitals.has(def.key)) {
-              loadedDynamicVitals.push({ 
-                key: def.key, 
-                label: def.name, 
-                isCustom: def.key.startsWith('custom_'), 
-                unit: def.unit 
-              });
+              loadedDynamicVitals.push({ key: def.key, label: def.name, isCustom: def.key.startsWith('custom_'), unit: def.unit });
               newDynamicVitalsInputs[def.key] = '';
               seenVitals.add(def.key);
             }
           });
         }
 
-        // 2. Legacy/Standard Check (Fallback for items added before the update)
         VITAL_ADDONS.forEach(addon => {
           const key = VITAL_KEY_MAP[addon];
           if (profData[key] !== undefined && !seenVitals.has(key)) {
@@ -283,37 +266,25 @@ const ProfileScreen: React.FC = () => {
         setDynamicVitals(loadedDynamicVitals);
         setDynamicVitalsInputs(newDynamicVitalsInputs);
 
-        // --- NEW: TRACKED EXERCISES LOADING ---
+        // Tracked Exercises Parsing
         const loadedExercises: typeof trackedExercises = [];
         const newExerciseInputs: Record<string, string> = {};
         const seenExercises = new Set<string>();
 
-        // 1. Load from New Definitions (Priority)
         if (Array.isArray(profData.customWorkoutsDefinitions)) {
           profData.customWorkoutsDefinitions.forEach((def: any) => {
             if (!seenExercises.has(def.key)) {
-              loadedExercises.push({ 
-                name: def.key,
-                label: def.name,
-                type: def.type, 
-                unit: def.unit 
-              });
+              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: def.unit });
               newExerciseInputs[def.key] = '';
               seenExercises.add(def.key);
             }
           });
         }
 
-        // 2. Legacy/Standard Check (Fallback)
         [...Object.entries(STRENGTH_KEY_MAP), ...Object.entries(SPEED_KEY_MAP)].forEach(([label, key]) => {
           if (profData[key] !== undefined && !seenExercises.has(key)) {
             const isStrength = Object.values(STRENGTH_KEY_MAP).includes(key);
-            loadedExercises.push({ 
-              name: key,
-              label: label,
-              type: isStrength ? 'strength' : 'speed', 
-              unit: isStrength ? 'kg' : 'min' 
-            });
+            loadedExercises.push({ name: key, label: label, type: isStrength ? 'strength' : 'speed', unit: isStrength ? 'kg' : 'min' });
             newExerciseInputs[key] = '';
             seenExercises.add(key);
           }
@@ -322,38 +293,43 @@ const ProfileScreen: React.FC = () => {
         setTrackedExercises(loadedExercises);
         setExerciseInputs(newExerciseInputs);
       }
+      setLoading(false); // Stop loading once main profile is fetched
+    });
 
-      setFormData({
-        name: fetchedName,
-        goal: fetchedGoal,
-        gems: fetchedGems,
-        age: fetchedAge,
-        height: fetchedHeight,
-        weight: fetchedWeight,
-        bmi: ''
+    // 3. Listen to Profile Image
+    const unsubImage = onSnapshot(imageRef, (docSnap) => {
+      if (docSnap.exists()) setProfileImage(docSnap.data().imageId);
+    });
+
+    // 4. Listen to Followers/Following Lists
+    const unsubFollowers = onSnapshot(followersRef, (snap) => {
+      setFollowersList(snap.docs.map(d => ({ uid: d.id, name: d.data().name || 'Unknown User' })));
+      setFollowerCount(snap.size);
+    });
+
+    const unsubFollowing = onSnapshot(followingRef, (snap) => {
+      setFollowingList(snap.docs.map(d => ({ uid: d.id, name: d.data().name || 'Unknown User' })));
+      setFollowingCount(snap.size);
+    });
+
+    // 5. Follow Status (One-time check is usually fine here, but snapshot keeps it synced)
+    let unsubStatus = () => {};
+    if (!isMe && currentUserId) {
+      unsubStatus = onSnapshot(doc(db, 'users', currentUserId, 'following', userId), (docSnap) => {
+        setIsFollowing(docSnap.exists());
       });
-
-      if (imageDoc.exists()) setProfileImage(imageDoc.data().imageId);
-
-      const fwerData = followersSnap.docs.map(d => ({ uid: d.id, name: d.data().name || 'Unknown User' }));
-      const fwingData = followingSnap.docs.map(d => ({ uid: d.id, name: d.data().name || 'Unknown User' }));
-
-      setFollowersList(fwerData);
-      setFollowingList(fwingData);
-
-      setFollowerCount(followersSnap.size);
-      setFollowingCount(followingSnap.size);
-      setIsFollowing(followingStatus?.exists() || false);
-    } catch (err) {
-      console.error("Error loading profile:", err);
-    } finally {
-      setLoading(false);
     }
-  }, [userId, isMe, currentUserId]);
 
-  useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
+    // Cleanup all listeners on unmount
+    return () => {
+      unsubRoot();
+      unsubProfile();
+      unsubImage();
+      unsubFollowers();
+      unsubFollowing();
+      unsubStatus();
+    };
+  }, [userId, isMe, currentUserId]);
 
   useEffect(() => {
     const h = parseFloat(formData.height);
@@ -658,7 +634,7 @@ const ProfileScreen: React.FC = () => {
               <div className="space-y-3 mt-3">
                 
                 {/* Sync Fit merged into Basic Info */}
-                {isMe && (
+                {isMe && !!window.ReactNativeWebView && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-orange-50/60 p-3 rounded-2xl border border-orange-100 gap-3">
                     <div className="flex items-center gap-3">
                       <div className="bg-orange-100 p-2.5 rounded-xl">
@@ -666,7 +642,7 @@ const ProfileScreen: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-lg font-black text-slate-800 leading-none mb-1">{steps.toLocaleString()}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Today's Steps</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Steps</p>
                       </div>
                     </div>
 

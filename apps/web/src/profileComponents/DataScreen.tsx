@@ -1,13 +1,13 @@
+//DataScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
-import { doc, getDoc, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  LineChart, Line 
+  XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line 
 } from 'recharts';
 import { 
-  Heart, Wind, Droplets, Zap, Gauge, RefreshCw, Thermometer, Calendar,
-  TestTube, Activity, User, Ruler, Scale, Dumbbell, Timer, PlusCircle
+  Heart, Wind, Droplets, Gauge, RefreshCw, Thermometer, Calendar,
+  TestTube, Activity, User, Ruler, Scale, Dumbbell, Timer, PlusCircle, Footprints
 } from 'lucide-react';
 
 // Standard static configurations
@@ -41,7 +41,8 @@ const SINGLE_GRAPHS = [
   // Speed
   { key: 'speed100m', title: '100M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-500" />, color: '#f97316' },
   { key: 'speed400m', title: '400M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-600" />, color: '#ea580c' },
-  { key: 'speed1Mile', title: '1 MILE RUN', unit: 'Minutes', icon: <Timer className="text-orange-700" />, color: '#c2410c' }
+  { key: 'speed1Mile', title: '1 MILE RUN', unit: 'Minutes', icon: <Timer className="text-orange-700" />, color: '#c2410c' },
+  { key: 'steps', title: 'Steps', unit: '', icon: <Footprints className="text-orange-800" />, color: '#9a3412' }
 ];
 
 // Vibrant palette for dynamically fetched custom metrics
@@ -64,23 +65,22 @@ interface DataScreenProps {
 
 const DataScreen: React.FC<DataScreenProps> = ({ 
   userId, 
-  refreshTrigger, 
   isMe, 
-  hiddenOther 
+  hiddenOther // Note: refreshTrigger is no longer needed!
 }) => {
-  const [stepData, setStepData] = useState<any[]>([]);
   const [vitalsData, setVitalsData] = useState<any[]>([]);
   const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('Max');
 
-  const fetchAllHealthData = React.useCallback(async () => {
+  useEffect(() => {
     if (!userId) return;
-    try {
-      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-      const profileSnap = await getDoc(profileRef);
-      
+
+    const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+    
+    // Set up the real-time listener
+    const unsubscribe = onSnapshot(profileRef, (profileSnap) => {
       if (profileSnap.exists()) {
         const p = profileSnap.data();
         const parseDate = (dateObj: any) => {
@@ -88,8 +88,12 @@ const DataScreen: React.FC<DataScreenProps> = ({
           return dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
         };
 
-        // Deduplicate dynamic definitions against standard keys
-        const standardKeys = new Set(SINGLE_GRAPHS.map(g => g.key.toLowerCase()));
+        const standardKeys = new Set([
+          ...SINGLE_GRAPHS.map(g => g.key.toLowerCase()),
+          'bpsyst',
+          'bpdias'
+        ]);
+
         const dynamicMetrics: CustomMetric[] = [
           ...(p.customVitalsDefinitions || []),
           ...(p.customWorkoutsDefinitions || [])
@@ -110,44 +114,34 @@ const DataScreen: React.FC<DataScreenProps> = ({
           });
         };
 
-        // Combine all possible keys into one parsing array
         const allKeys = [
-          'bpSyst', 'bpDias', // BP (handled uniquely)
-          ...SINGLE_GRAPHS.map(g => g.key), // Map static variables
-          ...dynamicMetrics.map(m => m.key) // Map dynamic variables
+          'bpSyst', 'bpDias',
+          ...SINGLE_GRAPHS.map(g => g.key),
+          ...dynamicMetrics.map(m => m.key)
         ];
 
         allKeys.forEach(key => processVital(p[key], key));
 
         const history = Object.values(timelineMap).sort((a: any, b: any) => a.timestamp - b.timestamp);
         setVitalsData(history);
-        
-        const steps = (p.steps_history || []).map((entry: any) => ({
-          timestamp: parseDate(entry.dateTime).getTime(),
-          val: parseFloat(entry.value) || 0,
-          raw: entry 
-        })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-        
-        setStepData(steps);
+      } else {
+        setVitalsData([]);
       }
-    } catch (err) {
-      console.error("Fetch Error:", err);
-    } finally {
+      
       setLoading(false);
       setTimeout(() => setIsReady(true), 150);
-    }
-  }, [userId]);
+      
+    }, (err) => {
+      console.error("DataScreen Snapshot Error:", err);
+      setLoading(false);
+    });
 
-  useEffect(() => {
-    fetchAllHealthData();
-  }, [fetchAllHealthData, refreshTrigger]);
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, [userId]);
 
   const hasData = (key: string) => {
     return vitalsData.some(d => d[key] !== undefined && d[key] !== null);
-  };
-
-  const hasStepData = () => {
-    return stepData.length > 0;
   };
 
   // Filtering & Strict Sorting Logic
@@ -166,19 +160,13 @@ const DataScreen: React.FC<DataScreenProps> = ({
     }
 
     // Filter AND sort to ensure strict chronological order for Recharts
-    const vitals = vitalsData
+    return vitalsData
       .filter(d => d.timestamp >= threshold)
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    const steps = stepData
-      .filter(d => d.timestamp >= threshold)
-      .sort((a, b) => a.timestamp - b.timestamp);
+  }, [vitalsData, timeRange]);
 
-    return { vitals, steps };
-  }, [vitalsData, stepData, timeRange]);
-
-  const vitalsTicks = useMemo(() => filteredData.vitals.map(d => d.timestamp), [filteredData.vitals]);
-  const stepTicks = useMemo(() => filteredData.steps.map(d => d.timestamp), [filteredData.steps]);
+  const vitalsTicks = useMemo(() => filteredData.map(d => d.timestamp), [filteredData]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -194,12 +182,11 @@ const DataScreen: React.FC<DataScreenProps> = ({
       point = data;
     } else if (data && (data.activeTooltipIndex !== undefined || data.activePayload)) {
       const index = data.activeTooltipIndex ?? data.activePayload?.[0]?.payload?.index;
-      const dataSource = fieldName === 'steps_history' ? filteredData.steps : filteredData.vitals;
-      point = dataSource[index];
+      point = filteredData[index];
     }
 
     if (point) {
-      const raw = fieldName === 'steps_history' ? point.raw : point[`${dataKey}_raw`];      
+      const raw = point[`${dataKey}_raw`];      
       setSelectedPoint({ 
         ts: point.timestamp, 
         val: point[dataKey], 
@@ -232,7 +219,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
       }
 
       setSelectedPoint(null);
-      fetchAllHealthData();
     } catch (err) {
       console.error("Firebase Sync Error:", err);
     }
@@ -266,7 +252,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
     if (matchedCustom) return matchedCustom.name.toUpperCase();
     if (fieldName === 'bpSyst') return 'Systolic';
     if (fieldName === 'bpDias') return 'Diastolic';
-    if (fieldName === 'steps_history') return 'Steps';
     return fieldName.replace('_', ' ');
   };
 
@@ -306,7 +291,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
         {/* Blood Pressure (Always explicitly configured as a multi-line graph) */}
         {(hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias'))) && (
         <MetricGraph title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
-          <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }}>
+          <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }}>
             <XAxis {...rotatedXAxisProps(vitalsTicks)} />
             <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} itemSorter={(item) => (item.dataKey === 'bpSyst' ? -1 : 1)}/>
             <Line type="monotone" dataKey="bpSyst" name="Systolic" stroke="#8b5cf6" strokeWidth={4} connectNulls={true} dot={(props: any) => {
@@ -364,17 +349,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
         </MetricGraph>
         )}
 
-        {/* Activity / Steps (Always explicitly configured as a BarChart) */}
-        {hasStepData() && (isMe || !hiddenOther.includes('steps_history')) && (
-          <MetricGraph title="ACTIVITY" unit="Steps" icon={<Zap className="text-orange-500" />}>
-          <BarChart data={filteredData.steps} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, 'steps_history', 'val')} style={{ cursor:'pointer'}}>
-            <XAxis {...rotatedXAxisProps(stepTicks)} />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-            <Bar dataKey="val" fill="#f97316" radius={[4, 4, 0, 0]} barSize={20} />
-          </BarChart>
-        </MetricGraph>
-        )}
-
         {/* All standard variables mapped dynamically using Single Line Graphs */}
         {SINGLE_GRAPHS.map(config => {
           const exists = hasData(config.key);
@@ -382,7 +356,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
           if (!exists || !isVisible) return null;
           return (
             <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
-              <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
+              <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
                 <XAxis {...rotatedXAxisProps(vitalsTicks)} />
                 {config.domain && <YAxis domain={config.domain} hide />}
                 <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
@@ -402,7 +376,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
           return (
             <MetricGraph key={m.key} title={m.name.toUpperCase()} unit={m.unit} icon={<PlusCircle style={{ color: customColor }} />}>
-              <LineChart data={filteredData.vitals} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, m.key, m.key)} style={{ cursor:'pointer'}}>
+              <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, m.key, m.key)} style={{ cursor:'pointer'}}>
                 <XAxis {...rotatedXAxisProps(vitalsTicks)} />
                 <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
                 <Line type="monotone" dataKey={m.key} stroke={customColor} strokeWidth={4} dot={{ r: 4, fill: customColor }} connectNulls />
