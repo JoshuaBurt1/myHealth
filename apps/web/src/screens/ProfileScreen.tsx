@@ -234,7 +234,8 @@ const ProfileScreen: React.FC = () => {
           goal: profData.goal || '',
           age: profData.age?.length > 0 ? profData.age[profData.age.length - 1].value : '',
           height: profData.height?.length > 0 ? profData.height[profData.height.length - 1].value : '',
-          weight: profData.weight?.length > 0 ? profData.weight[profData.weight.length - 1].value : ''
+          weight: profData.weight?.length > 0 ? profData.weight[profData.weight.length - 1].value : '',
+
         }));
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
@@ -474,12 +475,12 @@ const ProfileScreen: React.FC = () => {
       const rootData = rootSnap.data() || {};
       
       const isEligible = !rootData.last_vitals_update || 
-        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000; //q6 hours (+10 gem reward)
+        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000; //q6 hours (+10 gem reward) 
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
       const updateData: any = { name: formData.name, goal: formData.goal };
 
-      ['age', 'height', 'weight'].forEach(f => {
+      ['age', 'height', 'weight', 'bmi'].forEach(f => {
         if (isValid(formData[f as keyof typeof formData])) 
           updateData[f] = arrayUnion({ value: formData[f as keyof typeof formData], dateTime: nowISO });
       });

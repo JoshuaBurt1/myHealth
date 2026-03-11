@@ -63,16 +63,33 @@ interface DataScreenProps {
   hiddenOther: string[];
 }
 
+// Helpers for specific data scaling and isolated X-Axis rendering
+const getTicksForMetric = (data: any[], dataKey: string) => {
+  return data.filter(d => d[dataKey] != null).map(d => d.timestamp);
+};
+
+const getMinMaxForMetric = (data: any[], dataKey: string, providedDomain?: [number, number]) => {
+  if (providedDomain) return { domain: providedDomain, ticks: providedDomain };
+  const values = data.map(d => d[dataKey]).filter(v => v != null);
+  if (values.length === 0) return { domain: [0, 100], ticks: [0, 100] };
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) {
+    return { domain: [min > 0 ? 0 : min, max + 10], ticks: [min > 0 ? 0 : min, max + 10] };
+  }
+  return { domain: [min, max], ticks: [min, max] };
+};
+
 const DataScreen: React.FC<DataScreenProps> = ({ 
   userId, 
   isMe, 
-  hiddenOther // Note: refreshTrigger is no longer needed!
+  hiddenOther
 }) => {
   const [vitalsData, setVitalsData] = useState<any[]>([]);
   const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>('Max');
+  const [timeRange, setTimeRange] = useState<TimeRange>('7D');
 
   useEffect(() => {
     if (!userId) return;
@@ -166,8 +183,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
   }, [vitalsData, timeRange]);
 
-  const vitalsTicks = useMemo(() => filteredData.map(d => d.timestamp), [filteredData]);
-
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
     val: any; 
@@ -175,18 +190,11 @@ const DataScreen: React.FC<DataScreenProps> = ({
     rawObject: any;
   } | null>(null);
 
-  const handlePointClick = (data: any, fieldName: string, dataKey: string) => {
-    if (!isMe) return; 
-    let point = null;
-    if (data && data.timestamp) {
-      point = data;
-    } else if (data && (data.activeTooltipIndex !== undefined || data.activePayload)) {
-      const index = data.activeTooltipIndex ?? data.activePayload?.[0]?.payload?.index;
-      point = filteredData[index];
-    }
+  const handlePointClick = (point: any, fieldName: string, dataKey: string) => {
+    if (!isMe || !point) return; 
 
-    if (point) {
-      const raw = point[`${dataKey}_raw`];      
+    const raw = point[`${dataKey}_raw`];      
+    if (raw) {
       setSelectedPoint({ 
         ts: point.timestamp, 
         val: point[dataKey], 
@@ -289,78 +297,128 @@ const DataScreen: React.FC<DataScreenProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Blood Pressure (Always explicitly configured as a multi-line graph) */}
-        {(hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias'))) && (
-        <MetricGraph title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
-          <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }}>
-            <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-            <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} itemSorter={(item) => (item.dataKey === 'bpSyst' ? -1 : 1)}/>
-            <Line type="monotone" dataKey="bpSyst" name="Systolic" stroke="#8b5cf6" strokeWidth={4} connectNulls={true} dot={(props: any) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null) return null;
-                return (
-                  <circle key={`dot-sys-${payload.timestamp}`} cx={cx} cy={cy} r={4} fill="#8b5cf6" style={{ cursor: 'pointer', pointerEvents: 'all' }} 
-                    onMouseDown={(e) => { 
-                      e.stopPropagation(); 
-                      handlePointClick(payload, 'bpSyst', 'bpSyst'); 
-                    }} 
-                  />
-                );
-              }} 
-              activeDot={(props: any) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null) return null;
-                return (
-                  <circle key={`act-sys-${payload.timestamp}`} cx={cx} cy={cy} r={8} fill="#8b5cf6" style={{ cursor: 'pointer', pointerEvents: 'all' }} 
-                    onMouseDown={(e) => { 
-                      e.stopPropagation(); 
-                      handlePointClick(payload, 'bpSyst', 'bpSyst'); 
-                    }} 
-                  />
-                );
-              }}
-            />
-            <Line type="monotone" dataKey="bpDias" name="Diastolic" stroke="#c084fc" strokeWidth={4} connectNulls={true}
-              dot={(props: any) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null) return null;
-                return (
-                  <circle key={`dot-dia-${payload.timestamp}`} cx={cx} cy={cy} r={4} fill="#c084fc" style={{ cursor: 'pointer', pointerEvents: 'all' }} 
-                    onMouseDown={(e) => { 
-                      e.stopPropagation(); 
-                      handlePointClick(payload, 'bpDias', 'bpDias'); 
-                    }} 
-                  />
-                );
-              }} 
-              activeDot={(props: any) => {
-                const { cx, cy, payload } = props;
-                if (cx == null || cy == null) return null;
-                return (
-                  <circle key={`act-dia-${payload.timestamp}`} cx={cx} cy={cy} r={8} fill="#c084fc" style={{ cursor: 'pointer', pointerEvents: 'all' }} 
-                    onMouseDown={(e) => { 
-                      e.stopPropagation(); 
-                      handlePointClick(payload, 'bpDias', 'bpDias'); 
-                    }} 
-                  />
-                );
-              }}
-            />
-          </LineChart>
-        </MetricGraph>
-        )}
+        {(hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias'))) && (() => {
+          const bpTicksX = filteredData.filter(d => d.bpSyst != null || d.bpDias != null).map(d => d.timestamp);
+          const bpSystMinMax = getMinMaxForMetric(filteredData, 'bpSyst');
+          const bpDiasMinMax = getMinMaxForMetric(filteredData, 'bpDias');
+          const overallMin = Math.min(bpSystMinMax.domain[0], bpDiasMinMax.domain[0]);
+          const overallMax = Math.max(bpSystMinMax.domain[1], bpDiasMinMax.domain[1]);
+          const bpTicksY = [overallMin, overallMax];
+
+          return (
+            <MetricGraph title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
+              <LineChart data={filteredData} margin={{ top: 30, right: 30, left: 0, bottom: 60 }}>
+                <XAxis {...rotatedXAxisProps(bpTicksX)} />
+                <YAxis domain={[overallMin, overallMax]} ticks={bpTicksY} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={35} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+                <Tooltip cursor={false} wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} itemSorter={(item) => (item.dataKey === 'bpSyst' ? -1 : 1)}/>
+                
+                <Line 
+                  type="monotone" 
+                  dataKey="bpSyst" 
+                  name="Systolic" 
+                  stroke="#8b5cf6" 
+                  strokeWidth={4} 
+                  connectNulls={true} 
+                  // Disable the line path from capturing clicks
+                  style={{ pointerEvents: 'none' }} 
+                  dot={{ 
+                    r: 5, 
+                    fill: "#8b5cf6", 
+                    style: { cursor: 'pointer', pointerEvents: 'all' },
+                    onClick: (props: any) => handlePointClick(props.payload, 'bpSyst', 'bpSyst') 
+                  }}
+                  activeDot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle 
+                        key={`act-sys-${payload.timestamp}`} 
+                        cx={cx} 
+                        cy={cy} 
+                        r={8} 
+                        fill="#8b5cf6" 
+                        style={{ cursor: 'pointer', pointerEvents: 'all' }} 
+                        onClick={() => handlePointClick(payload, 'bpSyst', 'bpSyst')}
+                      />
+                    );
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="bpDias" 
+                  name="Diastolic" 
+                  stroke="#c084fc" 
+                  strokeWidth={4} 
+                  connectNulls={true}
+                  style={{ pointerEvents: 'none' }}
+                  dot={{ 
+                    r: 5, 
+                    fill: "#c084fc", 
+                    style: { cursor: 'pointer', pointerEvents: 'all' },
+                    onClick: (props: any) => handlePointClick(props.payload, 'bpDias', 'bpDias')
+                  }}
+                  activeDot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle 
+                        key={`act-dias-${payload.timestamp}`} 
+                        cx={cx} 
+                        cy={cy} 
+                        r={8} 
+                        fill="#c084fc" 
+                        style={{ cursor: 'pointer', pointerEvents: 'all' }} 
+                        onClick={() => handlePointClick(payload, 'bpDias', 'bpDias')}
+                      />
+                    );
+                  }}
+                />
+              </LineChart>
+            </MetricGraph>
+          );
+        })()}
 
         {/* All standard variables mapped dynamically using Single Line Graphs */}
         {SINGLE_GRAPHS.map(config => {
           const exists = hasData(config.key);
           const isVisible = isMe || !hiddenOther.includes(config.key);
           if (!exists || !isVisible) return null;
+
+          const metricTicksX = getTicksForMetric(filteredData, config.key);
+          const { domain, ticks: ticksY } = getMinMaxForMetric(filteredData, config.key, config.domain);
+
           return (
             <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
-              <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, config.key, config.key)} style={{ cursor:'pointer'}}>
-                <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-                {config.domain && <YAxis domain={config.domain} hide />}
-                <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-                <Line type="monotone" dataKey={config.key} stroke={config.color} strokeWidth={4} dot={{ r: 4, fill: config.color }} connectNulls />
+              <LineChart data={filteredData} margin={{ top: 30, right: 30, left: 0, bottom: 60 }}>
+                <XAxis {...rotatedXAxisProps(metricTicksX)} />
+                <YAxis domain={domain} ticks={ticksY} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={35} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+                <Tooltip cursor={false} wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
+                <Line 
+                  type="monotone" 
+                  dataKey={config.key} 
+                  stroke={config.color} 
+                  strokeWidth={4} 
+                  connectNulls 
+                  style={{ pointerEvents: 'none' }} 
+                  dot={{ 
+                    r: 5, 
+                    fill: config.color, 
+                    style: { cursor: 'pointer', pointerEvents: 'all' },
+                    onClick: (props: any) => handlePointClick(props.payload, config.key, config.key)
+                  }}
+                  activeDot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle 
+                        key={`act-${config.key}-${payload.timestamp}`} 
+                        cx={cx} 
+                        cy={cy} 
+                        r={8} 
+                        fill={config.color} 
+                        style={{ cursor: 'pointer', pointerEvents: 'all' }} 
+                        onClick={() => handlePointClick(payload, config.key, config.key)}
+                      />
+                    );
+                  }}
+                />
               </LineChart>
             </MetricGraph>
           );
@@ -373,13 +431,44 @@ const DataScreen: React.FC<DataScreenProps> = ({
           if (!exists || !isVisible) return null;
           
           const customColor = CUSTOM_COLORS[index % CUSTOM_COLORS.length];
+          const metricTicksX = getTicksForMetric(filteredData, m.key);
+          const { domain, ticks: ticksY } = getMinMaxForMetric(filteredData, m.key);
 
           return (
             <MetricGraph key={m.key} title={m.name.toUpperCase()} unit={m.unit} icon={<PlusCircle style={{ color: customColor }} />}>
-              <LineChart data={filteredData} margin={{ top: 30, right: 40, left: 10, bottom: 60 }} onMouseDown={(data) => handlePointClick(data, m.key, m.key)} style={{ cursor:'pointer'}}>
-                <XAxis {...rotatedXAxisProps(vitalsTicks)} />
-                <Tooltip wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
-                <Line type="monotone" dataKey={m.key} stroke={customColor} strokeWidth={4} dot={{ r: 4, fill: customColor }} connectNulls />
+              <LineChart data={filteredData} margin={{ top: 30, right: 30, left: 0, bottom: 60 }}>
+                <XAxis {...rotatedXAxisProps(metricTicksX)} />
+                <YAxis domain={domain} ticks={ticksY} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={35} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+                <Tooltip cursor={false} wrapperStyle={{ pointerEvents: 'none' }} labelFormatter={(val) => new Date(val).toLocaleString()} />
+                <Line 
+                  type="monotone" 
+                  dataKey={m.key} 
+                  stroke={customColor} 
+                  strokeWidth={4} 
+                  connectNulls 
+                  // Disable clicks on the line itself
+                  style={{ pointerEvents: 'none' }} 
+                  dot={{ 
+                    r: 5, 
+                    fill: customColor, 
+                    style: { cursor: 'pointer', pointerEvents: 'all' },
+                    onClick: (props: any) => handlePointClick(props.payload, m.key, m.key)
+                  }}
+                  activeDot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    return (
+                      <circle 
+                        key={`act-custom-${m.key}-${payload.timestamp}`} 
+                        cx={cx} 
+                        cy={cy} 
+                        r={8} 
+                        fill={customColor} 
+                        style={{ cursor: 'pointer', pointerEvents: 'all' }} 
+                        onClick={() => handlePointClick(payload, m.key, m.key)}
+                      />
+                    );
+                  }}
+                />
               </LineChart>
             </MetricGraph>
           )
