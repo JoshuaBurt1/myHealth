@@ -16,9 +16,9 @@ const Navbar = ({ user }: NavbarProps) => {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Home' },
-    { path: '/store', icon: Store, label: 'Store' },
     { path: '/forum', icon: MessageSquare, label: 'Forum' },
     { path: profilePath, icon: UserIcon, label: 'Profile' },
+    { path: '/store', icon: Store, label: 'Store' },
   ];
 
   return (

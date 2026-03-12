@@ -532,7 +532,7 @@ const ProfileScreen: React.FC = () => {
       }
 
       setRefreshTrigger(p => p + 1);
-      alert(`Data updated!${isEligible ? ' +10 gems (12h recharge)' : ''}`);
+      alert(`Data updated!${isEligible ? ' +10 gems (6h recharge)' : ''}`);
 
     } catch (err) {
       console.error("Save Error:", err);

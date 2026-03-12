@@ -90,6 +90,7 @@ export default function App() {
       <WebView 
         ref={webViewRef}
         source={{ uri: 'https://myhealth79.web.app/' }} // Or your local dev IP for testing
+        geolocationEnabled={true}
         onMessage={onMessage}
         style={{ flex: 1 }}
         domStorageEnabled={true}

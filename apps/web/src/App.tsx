@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
+import { LocationProvider } from './context/LocationContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 import Navbar from './components/Navbar';
@@ -68,9 +69,11 @@ export default function App() {
 
   return (
     <PayPalScriptProvider options={paypalOptions}>
+      <LocationProvider>
         <Router>
           <AppContent user={user} />
         </Router>
+      </LocationProvider>
     </PayPalScriptProvider>
   );
 }
