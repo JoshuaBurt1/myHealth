@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, query, where, limit, onSnapshot, orderBy } from 'firebase/firestore';
-import { Vote, FileSignature, ArrowRight, Globe, Map as MapIcon } from 'lucide-react';
+import { Vote, FileSignature, ArrowRight, Globe } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 
@@ -79,7 +79,7 @@ const HomeScreen: React.FC = () => {
       snapshot.docs.forEach(doc => {
         const data = doc.data() as ForumPost;
         if (data.location && Array.isArray(data.location) && data.hazard?.type) {
-          hazardsList.push({ id: doc.id, ...data });
+          hazardsList.push({ ...data, id: doc.id });
         }
       });
       setHazardPosts(hazardsList);

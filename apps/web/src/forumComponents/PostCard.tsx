@@ -7,8 +7,8 @@ import {
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { PostReplies } from './PostReplies';
-import { Post } from './forum';
-import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, Loader2 } from 'lucide-react';
+import type { Post } from './forum';
+import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
@@ -20,7 +20,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [replyContent, setReplyContent] = useState('');
   const [rootReplyLocation, setRootReplyLocation] = useState<[number, number] | null>(null);
   
-  const { userLocation, locationError } = useLocation();
+  const { userLocation } = useLocation();
   const navigate = useNavigate();
   const user = auth.currentUser;
 

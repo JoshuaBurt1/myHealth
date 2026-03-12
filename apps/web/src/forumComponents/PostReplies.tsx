@@ -7,7 +7,7 @@ import { db, auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
 import { Trash2, X, ThumbsUp, ThumbsDown, CornerDownRight, MapPin } from 'lucide-react';
-import { Reply } from './forum';
+import type { Reply } from './forum';
 
 const LEVEL_COLORS = ['border-indigo-200', 'border-blue-300', 'border-sky-300', 'border-cyan-200'];
 

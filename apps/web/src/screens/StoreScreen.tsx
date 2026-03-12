@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Plus, Minus, Search, History, ChevronDown, ChevronRight } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
-import CartScreen from './CartScreen';
+import CartScreen from '../storeOrder/CartScreen';
 import { Link } from 'react-router-dom';
 
 interface StoreItem {
