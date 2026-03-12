@@ -8,6 +8,11 @@ export interface TabItem {
   icon: React.ReactNode;
 }
 
+export interface ConfirmEntry {
+  userId: string;
+  location: [number, number];
+}
+
 export interface Reply { 
   id: string; 
   content: string; 
@@ -31,21 +36,22 @@ export interface PollOption {
   votes: number; 
 }
 
-export interface Post { 
-  id: string; 
-  title?: string; 
-  content: string; 
-  authorId: string; 
-  authorName: string; 
-  createdAt: any; 
-  lastUpdated?: any;
-  type?: 'post' | 'poll' | 'petition'; 
-  options?: PollOption[]; 
-  userVotes?: Record<string, number>; 
-  likes?: string[]; 
-  dislikes?: string[];
-  signatures?: string[]; 
-  replyCount?: number; 
-  location?: [number, number]; 
-  hazard?: {type: string; value: string;}; 
+export interface Post {
+  id: string;
+  type: 'post' | 'poll' | 'petition';
+  authorId: string;
+  authorName: string;
+  title: string;
+  content: string;
+  createdAt: any;
+  lastUpdated: any;
+  likes: string[];
+  dislikes: string[];
+  replyCount: number;
+  location?: [number, number];
+  hazard?: { type: string; value: string };
+  options?: PollOption[];
+  userVotes?: Record<string, number>;
+  signatures?: string[];
+  confirm?: ConfirmEntry[];
 }

@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, serverTimestamp, } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { 
-  MessageSquarePlus, X, BarChart2, Plus, Type, FileText, MapPin
+  MessageSquarePlus, X, BarChart2, Plus, Type, FileText, MapPin, Globe
 } from 'lucide-react';
 import { PostCard } from '../forumComponents/PostCard';
 import type { Post, TabItem } from '../forumComponents/forum';
+
+// --- Map Imports ---
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Rectangle } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const tabs: TabItem[] = [
   { id: 'post', label: 'Post', icon: <Type size={16} /> },
@@ -18,6 +22,38 @@ const HAZARD_TYPES = [
   "Food contamination", "Biological event", "Radiation", 
   "Toxic gas", "War zone", "Substance abuse", "Extreme environment"
 ];
+
+// Map hazard types to specific colors
+const HAZARD_COLORS: Record<string, string> = {
+  "Food contamination": "#f97316", // Orange
+  "Biological event": "#84cc16",   // Lime
+  "Radiation": "#a855f7",          // Purple
+  "Toxic gas": "#eab308",          // Yellow
+  "War zone": "#ef4444",           // Red
+  "Substance abuse": "#3b82f6",    // Blue
+  "Extreme environment": "#06b6d4" // Cyan
+};
+
+
+// Helper component to dynamically change map zoom based on the slider, 
+// and pan to user location ONLY when it first loads (so it remains scrollable).
+const MapController = ({ userLocation, zoom }: { userLocation: [number, number] | null; zoom: number }) => {
+  const map = useMap();
+  
+  // Update zoom when radius slider changes
+  useEffect(() => {
+    map.setZoom(zoom);
+  }, [zoom, map]);
+
+  // Jump to user location once it is acquired
+  useEffect(() => {
+    if (userLocation) {
+      map.panTo(userLocation);
+    }
+  }, [userLocation, map]);
+
+  return null;
+};
 
 const ForumScreen: React.FC = () => {
   const { userLocation, locationError } = useLocation();
@@ -37,9 +73,12 @@ const ForumScreen: React.FC = () => {
   const [hazardType, setHazardType] = useState('');
   const [hazardValue, setHazardValue] = useState('');
   const [filterHazard, setFilterHazard] = useState('none');
-  const [radius, setRadius] = useState(20000);
+  const [radius, setRadius] = useState(20000); // Max 20000km for "Global"
   
   const user = auth.currentUser;
+
+  // Calculate dynamic map zoom from radius
+  const mapZoom = Math.max(2, Math.round(15 - Math.log2(radius === 20000 ? 50000 : radius)));
 
   useEffect(() => {
     const q = query(collection(db, 'myHealth_posts'), orderBy('lastUpdated', 'desc'));
@@ -61,12 +100,43 @@ const ForumScreen: React.FC = () => {
       const latDiff = postLat - userLat;
       const lngDiff = postLng - userLng;
       const distInDegrees = Math.sqrt(Math.pow(latDiff, 2) + Math.pow(lngDiff, 2));
-      const radiusInDegrees = radius * 0.009;
+      const radiusInDegrees = radius * 0.009; // Approx 1km = 0.009 degrees
       matchesLocation = distInDegrees <= radiusInDegrees;
     }
     
     return matchesHazard && matchesLocation;
   });
+
+  const GRID_SIZE = 0.05;
+  const gridCells = useMemo(() => {
+    const cells: Record<string, any> = {};
+    filteredPosts.forEach(post => {
+      // We only process posts that have confirmed community locations
+      if (!post.confirm || !Array.isArray(post.confirm)) return;
+
+      post.confirm.forEach((c: any) => {
+        if (!c.location) return;
+        const [lat, lng] = c.location;
+        const gridX = Math.floor(lat / GRID_SIZE);
+        const gridY = Math.floor(lng / GRID_SIZE);
+        const key = `${gridX}_${gridY}`;
+
+        if (!cells[key]) {
+          cells[key] = {
+            bounds: [
+              [gridX * GRID_SIZE, gridY * GRID_SIZE], 
+              [(gridX + 1) * GRID_SIZE, (gridY + 1) * GRID_SIZE]
+            ],
+            count: 0,
+            types: new Set<string>()
+          };
+        }
+        cells[key].count += 1;
+        if (post.hazard?.type) cells[key].types.add(post.hazard.type);
+      });
+    });
+    return Object.values(cells);
+  }, [filteredPosts]);
 
   const handleCreate = async () => {
     if (!user) return alert("Please log in!");
@@ -76,6 +146,8 @@ const ForumScreen: React.FC = () => {
       const profileSnap = await getDoc(profileRef);
       const realName = profileSnap.exists() ? profileSnap.data().name : "Anonymous";
 
+      const confirmLocation = postLocation || userLocation;
+
       const commonData: any = {
         authorId: user.uid,
         authorName: realName,
@@ -84,6 +156,7 @@ const ForumScreen: React.FC = () => {
         likes: [],
         dislikes: [],
         replyCount: 0,
+        confirm: confirmLocation ? [{ userId: user.uid, location: confirmLocation }] : [],
       };
 
       if (hazardType && hazardValue.trim()) {
@@ -165,7 +238,6 @@ const ForumScreen: React.FC = () => {
             <p className="text-slate-500 mt-1 text-sm lg:text-base">Engage with local health initiatives.</p>
           </div>
           
-          {/* NEW IN-LINE CREATE BUTTON */}
           <button 
             onClick={() => setIsModalOpen(true)} 
             className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-3 lg:px-6 lg:py-3 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 whitespace-nowrap"
@@ -204,9 +276,110 @@ const ForumScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* FILTER CARD */}
+          {/* FILTER DISCOVERY & MAP CARD */}
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Filter Discovery</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Filter Discovery</h3>
+            </div>
+
+            {/* INTEGRATED MAP VIEW */}
+            <div className="relative h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden shadow-inner z-0">
+              <MapContainer 
+                center={userLocation || [20, 0]} 
+                zoom={mapZoom} 
+                style={{ height: "100%", width: "100%", zIndex: 0 }}
+                zoomControl={false}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap'
+                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                />
+                
+                <MapController userLocation={userLocation} zoom={mapZoom} />
+                {/* 1. RENDER WARNING AREA GRID (Same as HomeScreen) */}
+                {gridCells.map((cell: any, idx: number) => {
+                  let color = cell.count > 5 ? '#ef4444' : cell.count >= 3 ? '#f97316' : '#fbbf24';
+                  let levelText = cell.count > 5 ? 'Severe' : cell.count >= 3 ? 'Elevated' : 'Low';
+
+                  return (
+                    <Rectangle
+                      key={`grid-${idx}`}
+                      bounds={cell.bounds}
+                      pathOptions={{ color: color, weight: 1, fillOpacity: 0.15 }}
+                    >
+                      <Popup className="font-sans">
+                        <div className="min-w-35">
+                          <div className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest border-b pb-1">
+                            Area Warning Level
+                          </div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-bold text-slate-700">Severity:</span>
+                            <span className="text-sm font-black" style={{ color }}>{levelText}</span>
+                          </div>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-semibold text-slate-600">Reports:</span>
+                            <span className="text-xs font-bold bg-slate-100 px-1.5 rounded">{cell.count}</span>
+                          </div>
+                          <p className="text-[10px] font-semibold text-slate-500 italic mt-2">
+                            Hazards: {Array.from(cell.types).join(', ')}
+                          </p>
+                        </div>
+                      </Popup>
+                    </Rectangle>
+                  );
+                })}
+
+                {/* 2. RENDER MULTIPLE OCCURRENCE MARKERS (Confirmations Only) */}
+                {filteredPosts.map((post) => {
+                  if (!post.hazard?.type || !post.confirm) return null;
+                  const hazardColor = HAZARD_COLORS[post.hazard.type] || '#94a3b8';
+
+                  return post.confirm.map((c: any, idx: number) => (
+                    <CircleMarker 
+                      key={`${post.id}-conf-${idx}`}
+                      center={c.location as [number, number]} 
+                      radius={4} 
+                      pathOptions={{ 
+                        color: 'white', 
+                        fillColor: hazardColor, 
+                        fillOpacity: 0.7, 
+                        weight: 1.5 
+                      }}
+                    >
+                      <Popup className="font-sans">
+                        <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: hazardColor }}>
+                          {post.hazard?.type}
+                        </span>
+                        <strong className="text-slate-800 text-sm">{post.title}</strong>
+                        <div className="text-xs text-slate-500 italic mt-1">Community Confirmed</div>
+                      </Popup>
+                    </CircleMarker>
+                  ));
+                })}
+
+                {/* User Position Marker */}
+                {userLocation && (
+                  <CircleMarker 
+                    center={userLocation} 
+                    radius={5} 
+                    pathOptions={{ color: 'white', fillColor: '#3b82f6', fillOpacity: 1, weight: 2 }}
+                  >
+                    <Popup className="font-sans font-bold text-slate-800">You are here</Popup>
+                  </CircleMarker>
+                )}
+              </MapContainer>
+
+              {/* Minimal overlay for map status */}
+              <div className="absolute bottom-2 left-2 right-2 bg-white/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-200 shadow-sm z-400 pointer-events-none flex justify-center">
+                 <div className="flex items-center gap-1">
+                    <Globe size={10} className="text-slate-400" />
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">
+                      {radius === 20000 ? "Global Overview" : `${radius}km Radius Area`}
+                    </span>
+                 </div>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <label className="text-xs font-bold text-slate-600 flex items-center gap-2">
@@ -277,7 +450,7 @@ const ForumScreen: React.FC = () => {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setModalMode(tab.id)}
+                  onClick={() => setModalMode(tab.id as 'post' | 'poll' | 'petition')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${
                     modalMode === tab.id ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'
                   }`}
