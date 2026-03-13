@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, 
-  getDoc, addDoc, collection, serverTimestamp, increment, runTransaction 
+  getDoc, addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
@@ -13,6 +13,19 @@ import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle
 interface PostCardProps {
   post: Post;
 }
+
+const HAZARD_COLORS: Record<string, string> = {
+  "Food contamination": "#f97316",    // Orange
+  "Water contamination": "#0ea5e9",   // Sky Blue
+  "Biological event": "#84cc16",      // Lime
+  "Radiation": "#a855f7",             // Purple
+  "Toxic gas": "#eab308",             // Yellow
+  "War zone": "#ef4444",              // Red
+  "Gang activity": "#1e293b",         // Slate/Dark
+  "Substance abuse": "#6366f1",       // Indigo
+  "Medication side-effect": "#f43f5e", // Rose/Pink
+  "Extreme environment": "#06b6d4"    // Cyan
+};
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -34,10 +47,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const isAuthor = userId === post.authorId;
   const hasLiked = post.likes?.includes(userId);
   const hasDisliked = post.dislikes?.includes(userId);
-  const hasSigned = post.signatures?.includes(userId);
-  const hasConfirmed = post.confirm?.some(c => c.userId === userId);
-  const userSelectedOption = post.userVotes?.[userId];
-  const totalVotes = post.options?.reduce((acc, curr) => acc + curr.votes, 0) || 0;
+
+  // --- SAFE ACCESSORS FOR UNION TYPES ---
+  const signatures = post.type === 'petition' ? post.signatures || [] : [];
+  const hasSigned = signatures.includes(userId);
+  
+  const confirms = post.type === 'post' ? post.confirm || [] : [];
+  const hasConfirmed = confirms.some(c => c.userId === userId);
+  
+  const userVotes = post.type === 'poll' ? post.userVotes || {} : {};
+  const userSelectedOption = userVotes[userId];
+  
+  const options = post.type === 'poll' ? post.options || [] : [];
+  const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
 
   const handleDelete = async () => {
     if (window.confirm("Delete this entire post?")) {
@@ -47,6 +69,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   const handleConfirmToggle = async () => {
     if (!user) return alert("Please log in to confirm!");
+    if (post.type !== 'post') return; // Safety check
 
     if (hasConfirmed) {
       try {
@@ -68,7 +91,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   };
 
   const handleConfirmSubmit = async () => {
-    if (!user) return;
+    if (!user || post.type !== 'post') return;
     let locToSave: [number, number] | null = null;
 
     if (confirmOption === 'post' && post.location) {
@@ -85,10 +108,16 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
     try {
       const postRef = doc(db, 'myHealth_posts', post.id);
-      const newConfirm = { userId: user.uid, location: locToSave };
+      const newConfirm = { 
+        userId: user.uid, 
+        location: locToSave,
+        confirmTime: Timestamp.now()
+      };      
       await updateDoc(postRef, {
-        confirm: arrayUnion(newConfirm)
+        confirm: arrayUnion(newConfirm),
+        lastUpdated: serverTimestamp() 
       });
+      
       setIsConfirmModalOpen(false);
       setCustomLat('');
       setCustomLng('');
@@ -130,7 +159,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   };
 
   const handleVote = async (optionIndex: number) => {
-    if (!user) return alert("Please log in to participate!");
+    if (!user || post.type !== 'poll') return alert("Please log in to participate!");
     const postRef = doc(db, 'myHealth_posts', post.id);
 
     try {
@@ -138,9 +167,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         const postDoc = await transaction.get(postRef);
         if (!postDoc.exists()) throw "Post missing";
 
-        const postData = postDoc.data() as Post;
-        const userVotes = postData.userVotes || {};
-        const previousVoteIndex = userVotes[user.uid];
+        // Cast to any to safely modify dynamic nested userVotes map during transaction
+        const postData = postDoc.data() as any; 
+        const currentVotes = postData.userVotes || {};
+        const previousVoteIndex = currentVotes[user.uid];
 
         if (previousVoteIndex === optionIndex) return; 
 
@@ -171,12 +201,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   };
 
   const handleSignPetition = async () => {
-    if (!user) return alert("Please log in to sign!");
+    if (!user || post.type !== 'petition') return alert("Please log in to sign!");
     const postRef = doc(db, 'myHealth_posts', post.id);
-    const signatures = post.signatures || [];
     
     try {
-      if (signatures.includes(user.uid)) {
+      if (hasSigned) {
         await updateDoc(postRef, { signatures: arrayRemove(user.uid) }); 
       } else {
         await updateDoc(postRef, { signatures: arrayUnion(user.uid) });
@@ -267,22 +296,25 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </div>
             
             <div className="flex gap-2 items-center">
-              <button
-                onClick={handleConfirmToggle}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  hasConfirmed 
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 hover:bg-emerald-600' 
-                    : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
-                }`}
-              >
-                <CheckCircle size={14} />
-                {hasConfirmed ? 'Confirmed' : 'Confirm'}
-                {post.confirm && post.confirm.length > 0 && (
-                  <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${hasConfirmed ? 'bg-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
-                    {post.confirm.length}
-                  </span>
-                )}
-              </button>
+              {/* Confirm button should only appear for hazard posts */}
+              {post.type === 'post' && post.hazard && (
+                <button
+                  onClick={handleConfirmToggle}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    hasConfirmed 
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 hover:bg-emerald-600' 
+                      : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
+                  }`}
+                >
+                  <CheckCircle size={14} />
+                  {hasConfirmed ? 'Confirmed' : 'Confirm'}
+                  {confirms.length > 0 && (
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${hasConfirmed ? 'bg-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
+                      {confirms.length}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {isAuthor && (
                 <button onClick={handleDelete} className="text-red-300 hover:text-red-500 transition-colors">
@@ -293,13 +325,22 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
 
           <div className="space-y-1">
-            {post.hazard && (
+            {post.type === 'post' && post.hazard && (
               <div className="flex items-center gap-2 mb-2">
-                <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  ⚠️ {post.hazard.type}
+                <span 
+                  style={{ 
+                    backgroundColor: `${HAZARD_COLORS[post.hazard.type]}15`, // 15 is ~8% opacity in hex
+                    color: HAZARD_COLORS[post.hazard.type] 
+                  }}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                >
+                  ⚠️ {post.hazard.type} 
                 </span>
-                <span className="text-xs text-red-500 font-medium italic">
-                  {post.hazard.value}
+                <span 
+                  style={{ color: HAZARD_COLORS[post.hazard.type] }}
+                  className="text-xs font-medium italic opacity-80"
+                >
+                  {post.hazard.value} 
                 </span>
               </div>
             )}
@@ -442,20 +483,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </div>
 
             {confirmOption === 'custom' && (
-              <div className="mt-3 flex gap-2 animate-in slide-in-from-top-2">
+              <div className="mt-3 flex w-full gap-2 animate-in slide-in-from-top-2">
                 <input 
                   type="number" 
-                  placeholder="Latitude" 
+                  placeholder="Lat" 
                   value={customLat} 
                   onChange={e => setCustomLat(e.target.value)} 
-                  className="flex-1 border border-slate-200 bg-white rounded-xl p-3 outline-none focus:border-indigo-500 text-sm" 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 text-sm" 
                 />
                 <input 
                   type="number" 
-                  placeholder="Longitude" 
+                  placeholder="Lng" 
                   value={customLng} 
                   onChange={e => setCustomLng(e.target.value)} 
-                  className="flex-1 border border-slate-200 bg-white rounded-xl p-3 outline-none focus:border-indigo-500 text-sm" 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 text-sm" 
                 />
               </div>
             )}

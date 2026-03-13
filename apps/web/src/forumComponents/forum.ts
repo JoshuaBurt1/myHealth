@@ -11,6 +11,7 @@ export interface TabItem {
 export interface ConfirmEntry {
   userId: string;
   location: [number, number];
+  confirmTime: any;
 }
 
 export interface Reply { 
@@ -36,9 +37,8 @@ export interface PollOption {
   votes: number; 
 }
 
-export interface Post {
+interface BasePost {
   id: string;
-  type: 'post' | 'poll' | 'petition';
   authorId: string;
   authorName: string;
   title: string;
@@ -49,9 +49,25 @@ export interface Post {
   dislikes: string[];
   replyCount: number;
   location?: [number, number];
-  hazard?: { type: string; value: string };
-  options?: PollOption[];
-  userVotes?: Record<string, number>;
-  signatures?: string[];
-  confirm?: ConfirmEntry[];
 }
+
+// Specific Types
+export interface StandardPost extends BasePost {
+  type: 'post';
+  hazard?: { type: string; value: string };
+  confirm?: ConfirmEntry[]; // Only exists here
+}
+
+export interface PollPost extends BasePost {
+  type: 'poll';
+  options: PollOption[];
+  userVotes: Record<string, number>;
+}
+
+export interface PetitionPost extends BasePost {
+  type: 'petition';
+  signatures: string[];
+}
+
+// The Union Type
+export type Post = StandardPost | PollPost | PetitionPost;
