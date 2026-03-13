@@ -21,27 +21,23 @@ const tabs: TabItem[] = [
 const HAZARD_TYPES = [
   "Food contamination", 
   "Water contamination", 
-  "Biological event", 
+  "Biological hazard", 
+  "Chemical hazard", 
   "Radiation", 
-  "Toxic gas", 
-  "War zone", 
-  "Gang activity",
-  "Substance abuse", 
+  "Unsafe Area",
   "Medication side-effect",
-  "Extreme environment"
+  "Environmental event"
 ];
 
 const HAZARD_COLORS: Record<string, string> = {
-  "Food contamination": "#f97316",    // Orange
-  "Water contamination": "#0ea5e9",   // Sky Blue
-  "Biological event": "#84cc16",      // Lime
-  "Radiation": "#a855f7",             // Purple
-  "Toxic gas": "#eab308",             // Yellow
-  "War zone": "#ef4444",              // Red
-  "Gang activity": "#1e293b",         // Slate/Dark
-  "Substance abuse": "#6366f1",       // Indigo
+  "Food contamination": "#f97316",     // Orange
+  "Water contamination": "#6366f1",    // Indigo
+  "Biological hazard": "#84cc16",      // Lime
+  "Chemical hazard": "#eab308",        // Yellow
+  "Radiation": "#a855f7",              // Purple
+  "Unsafe Area": "#ef4444",            // Red
   "Medication side-effect": "#f43f5e", // Rose/Pink
-  "Extreme environment": "#06b6d4"    // Cyan
+  "Environmental event": "#06b6d4"     // Cyan
 };
 
 // Helper component to dynamically change map zoom based on the slider, 

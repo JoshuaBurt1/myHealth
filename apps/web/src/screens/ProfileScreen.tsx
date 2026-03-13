@@ -10,7 +10,7 @@ declare global {
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField, increment } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, Footprints, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
 import { Badge, InputField, CollapsibleSection } from '../profileComponents/ProfileUI';
@@ -61,9 +61,9 @@ const ProfileScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const { handlePickImage, isUploading: imageUploading } = useImageUpload(
-  userId, 
-  (base64) => setProfileImage(base64)
-);
+    userId, 
+    (base64) => setProfileImage(base64)
+  );
   const [saving, setSaving] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -122,7 +122,6 @@ const ProfileScreen: React.FC = () => {
   // --- 1. Listen for data coming BACK from Native App ---
   useEffect(() => {
     const handleNativeMessage = async (event: any) => {
-      // React Native WebView messages can come in 'event.data'
       let data = event.data;
       try {
         if (typeof data === 'string') data = JSON.parse(data);
@@ -139,30 +138,91 @@ const ProfileScreen: React.FC = () => {
         }
 
         // Update local UI
-        setSteps(payload.steps || 0);
+        setSteps(payload.today?.steps || 0);
 
         // --- FIRESTORE WRITE ---
-        if (userId && (payload.steps > 0 || payload.hr > 0)) {
-          const now = new Date().toISOString();
+        if (userId && (payload.today?.steps > 0 || payload.yesterday?.steps > 0 || payload.hr > 0)) {
           const profileDataRef = doc(db, 'users', userId, 'profile', 'user_data');
           const userRootRef = doc(db, 'users', userId);
 
-          const profileUpdates: any = {};
-          if (payload.steps > 0) {
-            profileUpdates.steps = arrayUnion({ value: String(payload.steps), dateTime: now });
-          }
-          if (payload.hr > 0) {
-            profileUpdates.hr = arrayUnion({ value: String(payload.hr), dateTime: now });
-          }
-
           try {
-            await setDoc(profileDataRef, profileUpdates, { merge: true });
-            await setDoc(userRootRef, {
-              daily_steps: payload.steps || 0,
-              last_step_update: serverTimestamp()
-            }, { merge: true });
+            const profileSnap = await getDoc(profileDataRef);
+            const profileData = profileSnap.exists() ? profileSnap.data() : {};
             
-            // Optional: alert("Sync Successful!"); 
+            const profileUpdates: any = {};
+            let stepsArray = Array.isArray(profileData.steps) ? [...profileData.steps] : [];
+            
+            // Map holding previously rewarded totals (e.g. {"2026-03-12": 4500})
+            let stepRewards = profileData.stepRewards || {}; 
+            let totalNewGems = 0;
+
+            // Helper to process a specific day
+            const processDayData = (dayData: { date: string, steps: number } | undefined) => {
+              if (!dayData || dayData.steps <= 0) return;
+
+              // 1. Array Update: Ensure only one max entry per day
+              const index = stepsArray.findIndex((entry: any) => 
+                entry.dateTime && entry.dateTime.startsWith(dayData.date)
+              );
+
+              // Use current time for today, but artificially set yesterday to 23:59 so line charts display it correctly
+              const isToday = dayData.date === payload.today?.date;
+              const logTime = isToday ? new Date().toISOString() : `${dayData.date}T23:59:59.000Z`;
+
+              if (index >= 0) {
+                const existingSteps = parseInt(stepsArray[index].value, 10);
+                if (dayData.steps > existingSteps) {
+                  stepsArray[index].value = String(dayData.steps);
+                  stepsArray[index].dateTime = logTime;
+                }
+              } else {
+                stepsArray.push({ value: String(dayData.steps), dateTime: logTime });
+              }
+
+              // 2. Gems Calculation (1 gem = 100 steps)
+              const alreadyRewarded = stepRewards[dayData.date] || 0;
+              const unrewardedSteps = dayData.steps - alreadyRewarded;
+
+              if (unrewardedSteps >= 100) {
+                const earnedGems = Math.floor(unrewardedSteps / 100);
+                totalNewGems += earnedGems;
+                
+                // Add the EXACT chunk we converted to gems to the total rewarded.
+                // (e.g. If unrewarded=150 -> earnedGems=1 -> accounted=100. The remaining 50 wait for next sync)
+                stepRewards[dayData.date] = alreadyRewarded + (earnedGems * 100);
+              }
+            };
+
+            processDayData(payload.yesterday);
+            processDayData(payload.today);
+
+            // Reassign updated arrays/objects to payload
+            profileUpdates.steps = stepsArray;
+            profileUpdates.stepRewards = stepRewards;
+
+            if (payload.hr > 0) {
+              profileUpdates.hr = arrayUnion({ value: String(payload.hr), dateTime: new Date().toISOString() });
+            }
+
+            // Root Document payload
+            const rootUpdates: any = {
+              daily_steps: payload.today?.steps || 0,
+              last_step_update: serverTimestamp()
+            };
+
+            // Increment gems securely on the server side
+            if (totalNewGems > 0) {
+              rootUpdates.gems = increment(totalNewGems);
+            }
+
+            // Commit Writes
+            await setDoc(profileDataRef, profileUpdates, { merge: true });
+            await setDoc(userRootRef, rootUpdates, { merge: true });
+
+            if (totalNewGems > 0) {
+              alert(`Sync successful! You earned ${totalNewGems} gems from your steps! 💎`);
+            }
+            
           } catch (err) {
             console.error("Firestore Write Error:", err);
           }
@@ -170,7 +230,6 @@ const ProfileScreen: React.FC = () => {
       }
     };
 
-    // Android usually needs document, iOS usually needs window
     window.addEventListener('message', handleNativeMessage);
     document.addEventListener('message', handleNativeMessage);
 
@@ -186,12 +245,10 @@ const ProfileScreen: React.FC = () => {
     
     // Check if we are inside the React Native WebView
     if (window.ReactNativeWebView) {
-      // Send the request to the native shell
       window.ReactNativeWebView.postMessage(JSON.stringify({ 
         type: 'SYNC_HEALTH_CONNECT' 
       }));
     } else {
-      // Fallback if testing in a regular desktop browser
       setIsSyncing(false);
       alert("Health Connect sync is only available on the mobile app.");
     }
@@ -313,7 +370,7 @@ const ProfileScreen: React.FC = () => {
       setFollowingCount(snap.size);
     });
 
-    // 5. Follow Status (One-time check is usually fine here, but snapshot keeps it synced)
+    // 5. Follow Status
     let unsubStatus = () => {};
     if (!isMe && currentUserId) {
       unsubStatus = onSnapshot(doc(db, 'users', currentUserId, 'following', userId), (docSnap) => {
@@ -434,7 +491,7 @@ const ProfileScreen: React.FC = () => {
       const isCustom = isVital ? form.type === 'custom' : (form.type !== 'strength' && form.type !== 'speed');
       const unit = form.customVarName || (form.type === 'strength' ? 'kg' : 'min');
 
-      // 3. Update LOCAL UI STATE (Keeps your input fields working)
+      // 3. Update LOCAL UI STATE
       if (isVital) {
         setDynamicVitals(prev => [...prev, { key: targetKey, label: displayName, isCustom, unit }]);
         setDynamicVitalsInputs(prev => ({ ...prev, [targetKey]: '' }));
@@ -444,7 +501,6 @@ const ProfileScreen: React.FC = () => {
       }
 
       // 4. Construct FIRESTORE PAYLOAD
-      // We store a "Definition" so DataScreen knows this field exists and what its unit is.
       const definition = { name: displayName, key: targetKey, unit, type: form.type };
       const payload = {
         [targetKey]: [], // Initialize the top-level array for logs
@@ -475,7 +531,7 @@ const ProfileScreen: React.FC = () => {
       const rootData = rootSnap.data() || {};
       
       const isEligible = !rootData.last_vitals_update || 
-        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000; //q6 hours (+10 gem reward) 
+        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000;
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
       const updateData: any = { name: formData.name, goal: formData.goal };
@@ -492,7 +548,7 @@ const ProfileScreen: React.FC = () => {
         }
       });
 
-      // 3. Exercises (Everything now goes to its own key)
+      // 3. Exercises
       trackedExercises.forEach(ex => {
         const val = exerciseInputs[ex.name];
         if (isValid(val)) {
@@ -517,19 +573,12 @@ const ProfileScreen: React.FC = () => {
 
       if (isEligible) {
         batch.update(userRootRef, { 
-          gems: (rootData.gems || 0) + 10, 
+          gems: increment(10),
           last_vitals_update: serverTimestamp()
         });
       }
       
       await batch.commit();
-
-      if (isEligible) {
-        setFormData(prev => ({
-          ...prev,
-          gems: (parseInt(prev.gems) + 10).toString()
-        }));
-      }
 
       setRefreshTrigger(p => p + 1);
       alert(`Data updated!${isEligible ? ' +10 gems (6h recharge)' : ''}`);

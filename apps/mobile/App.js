@@ -28,26 +28,59 @@ export default function App() {
         { recordType: 'HeartRate', accessType: 'read' }
       ]);
 
-      // Get today's data
-      const startTime = new Date();
-      startTime.setHours(0, 0, 0, 0);
-      const endTime = new Date().toISOString();
+      // Calculate Yesterday and Today Timeframes
+      const now = new Date();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0); // Start of yesterday
+      
+      const endTime = now.toISOString();
 
+      // Fetch 2 days of steps
       const { records: stepRecords } = await readRecords('Steps', {
-        timeRangeFilter: { operator: 'between', startTime: startTime.toISOString(), endTime }
+        timeRangeFilter: { operator: 'between', startTime: yesterday.toISOString(), endTime }
       });
       
+      // Only really need today for Heart Rate snapshot
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
       const { records: hrRecords } = await readRecords('HeartRate', {
-        timeRangeFilter: { operator: 'between', startTime: startTime.toISOString(), endTime }
+        timeRangeFilter: { operator: 'between', startTime: todayStart.toISOString(), endTime }
       });
 
-      // Calculate totals
-      const totalSteps = stepRecords.reduce((sum, r) => sum + (r.count || 0), 0);
+      // Helper to safely format dates to local YYYY-MM-DD
+      const getLocalYYYYMMDD = (dateObj) => {
+        return new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000))
+          .toISOString()
+          .split('T')[0];
+      };
+
+      const todayStr = getLocalYYYYMMDD(now);
+      const yesterdayStr = getLocalYYYYMMDD(yesterday);
+
+      let todaySteps = 0;
+      let yesterdaySteps = 0;
+
+      // Group steps by day
+      stepRecords.forEach(r => {
+        const recordDate = getLocalYYYYMMDD(new Date(r.startTime));
+        if (recordDate === todayStr) {
+          todaySteps += (r.count || 0);
+        } else if (recordDate === yesterdayStr) {
+          yesterdaySteps += (r.count || 0);
+        }
+      });
+
       const lastHR = hrRecords.length > 0 
         ? hrRecords[hrRecords.length - 1].samples?.[0]?.beatsPerMinute 
         : null;
 
-      return { steps: totalSteps, hr: lastHR };
+      // Pass neatly packaged objects
+      return { 
+        today: { date: todayStr, steps: todaySteps },
+        yesterday: { date: yesterdayStr, steps: yesterdaySteps },
+        hr: lastHR 
+      };
 
     } catch (error) {
       console.error("Health Connect Error:", error);
@@ -61,11 +94,9 @@ export default function App() {
       const data = JSON.parse(event.nativeEvent.data);
       console.log("[Bridge Message Received]:", data.type);
       
-      // If the web app asks for a sync...
       if (data.type === 'SYNC_HEALTH_CONNECT') {
         const healthStats = await fetchHealthData();
         
-        // Send the result back to the web app
         if (webViewRef.current) {
           const jsCode = `
             window.dispatchEvent(new MessageEvent('message', { 
@@ -89,7 +120,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" />
       <WebView 
         ref={webViewRef}
-        source={{ uri: 'https://myhealth79.web.app/' }} // Or your local dev IP for testing
+        source={{ uri: 'https://myhealth79.web.app/' }}
         geolocationEnabled={true}
         onMessage={onMessage}
         style={{ flex: 1 }}
