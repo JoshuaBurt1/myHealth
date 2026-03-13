@@ -100,6 +100,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [reductionFactor, setReductionFactor] = useState(1.0);
   
   // View states
   const [showAll, setShowAll] = useState(false);
@@ -220,7 +221,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     let threshold = 0;
     let intervalMs = 0;
 
-    // 1. Determine Date Range & Interval
+    // 1. Determine Date Range & Base Interval
     if (customStart && customEnd) {
       threshold = new Date(customStart).getTime();
       const endTs = new Date(customEnd).getTime();
@@ -245,41 +246,34 @@ const DataScreen: React.FC<DataScreenProps> = ({
       result = result.filter(d => d.timestamp >= threshold);
     }
 
-    if (intervalMs <= 0 || result.length <= 1) return result;
+    // APPLY SLIDER: Modify the interval based on reductionFactor
+    // If factor is 0, we return raw results.
+    const adjustedInterval = intervalMs * reductionFactor;
+
+    if (adjustedInterval <= 0 || result.length <= 1 || reductionFactor <= 0.05) return result;
 
     // 2. Metric-Independent Bucketing
     const buckets: { [key: number]: any } = {};
     
     result.forEach(point => {
-      // For 1M and larger, group by local calendar day to prevent UTC date splitting
-      const d = new Date(point.timestamp);
-      const isLongRange = ['1M', '3M', 'YTD', '1Y'].includes(timeRange);
-      
-      const bucketKey = isLongRange 
-        ? new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-        : Math.floor(point.timestamp / intervalMs) * intervalMs;
+      const bucketKey = Math.floor(point.timestamp / adjustedInterval) * adjustedInterval;
 
       if (!buckets[bucketKey]) {
         buckets[bucketKey] = { timestamp: bucketKey };
       }
 
-      // Look at every key in the point (hr, bpSyst, temp, etc.)
       Object.keys(point).forEach(key => {
         if (key === 'timestamp' || key.endsWith('_raw')) return;
-
         const val = point[key];
-        // Spike Preservation: If this point's value for THIS metric is higher 
-        // than what's already in the bucket, update it.
         if (buckets[bucketKey][key] === undefined || val > buckets[bucketKey][key]) {
           buckets[bucketKey][key] = val;
-          // Keep the raw object for the specific peak value so deletion still works
           buckets[bucketKey][`${key}_raw`] = point[`${key}_raw`];
         }
       });
     });
 
     return Object.values(buckets).sort((a: any, b: any) => a.timestamp - b.timestamp);
-  }, [vitalsData, timeRange, customStart, customEnd]);
+  }, [vitalsData, timeRange, customStart, customEnd, reductionFactor]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -539,14 +533,35 @@ const DataScreen: React.FC<DataScreenProps> = ({
             </button>
           </div>
 
-          {/* Row 2: View Toggle Button */}
-          <button 
-            onClick={() => setShowAll(!showAll)}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-indigo-600 font-bold text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors"
-          >
-            {showAll ? <Maximize2 size={16} /> : <LayoutGrid size={16} />}
-            {showAll ? 'Show Single Graph' : 'Show All Graphs'}
-          </button>
+          {/* Row 2: View Toggle Button & Interval Slider */}
+          <div className="flex flex-wrap items-center gap-4 w-full">
+            <button 
+              onClick={() => setShowAll(!showAll)}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-indigo-600 font-bold text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors shrink-0"
+            >
+              {showAll ? <Maximize2 size={16} /> : <LayoutGrid size={16} />}
+              {showAll ? 'Show Single Graph' : 'Show All Graphs'}
+            </button>
+
+            {/* Slider Control */}
+            <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex-1 min-w-50 max-w-sm">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                Detail
+              </span>
+              <input 
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={reductionFactor}
+                onChange={(e) => setReductionFactor(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                Summary
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
