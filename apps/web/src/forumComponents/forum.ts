@@ -2,6 +2,9 @@ import React from 'react';
 
 export type ModalMode = "post" | "poll" | "petition";
 
+// 1. Define literal types for your sections
+export type ForumSection = 'Personal Health' | 'Population Health' | 'Off topic';
+
 export interface TabItem {
   id: ModalMode;
   label: string;
@@ -27,7 +30,6 @@ export interface Reply {
   level: number; 
   isDeleted?: boolean; 
   likes?: string[]; 
-  islikes?: string[]; 
   dislikes?: string[]; 
   location?: [number, number]; 
 }
@@ -37,6 +39,9 @@ export interface PollOption {
   votes: number; 
 }
 
+// 2. Base interface for shared properties
+// IMPROVEMENT: By lifting optional `topic`, `hazard`, and `confirm` to the BasePost, 
+// TypeScript won't throw errors when checking these properties across mixed Post arrays.
 interface BasePost {
   id: string;
   authorId: string;
@@ -49,13 +54,17 @@ interface BasePost {
   dislikes: string[];
   replyCount: number;
   location?: [number, number];
+  forumSection: ForumSection; 
+  
+  // Properties that might exist depending on section, now accessible safely on any Post
+  topic?: string; 
+  hazard?: { type: string; value: string };
+  confirm?: ConfirmEntry[]; 
 }
 
-// Specific Types
+// 3. Define the Discriminated Union cleanly
 export interface StandardPost extends BasePost {
   type: 'post';
-  hazard?: { type: string; value: string };
-  confirm?: ConfirmEntry[]; // Only exists here
 }
 
 export interface PollPost extends BasePost {
@@ -69,5 +78,4 @@ export interface PetitionPost extends BasePost {
   signatures: string[];
 }
 
-// The Union Type
 export type Post = StandardPost | PollPost | PetitionPost;

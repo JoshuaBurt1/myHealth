@@ -1,16 +1,36 @@
+// ForumScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { 
-  MessageSquarePlus, X, BarChart2, Plus, Type, FileText, MapPin, Globe
+  MessageSquarePlus, BarChart2, Type, FileText, MapPin, Globe, Activity, Heart, Hash, Search, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { PostCard } from '../forumComponents/PostCard';
 import type { Post, TabItem } from '../forumComponents/forum';
+import { CreatePostModal } from '../forumComponents/CreatePostModal';
 
 // --- Map Imports ---
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Rectangle } from 'react-leaflet';
+import L from 'leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Rectangle, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+
+// Fix for default marker icons
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    iconRetinaUrl: markerIcon2x,
+    shadowUrl: markerShadow,
+    iconSize: [16, 26], 
+    iconAnchor: [8, 26], 
+    popupAnchor: [0, -26], 
+    shadowSize: [26, 26] 
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const tabs: TabItem[] = [
   { id: 'post', label: 'Post', icon: <Type size={16} /> },
@@ -18,39 +38,41 @@ const tabs: TabItem[] = [
   { id: 'petition', label: 'Petition', icon: <FileText size={16} /> }
 ];
 
-const HAZARD_TYPES = [
-  "Food contamination", 
-  "Water contamination", 
-  "Biological hazard", 
-  "Chemical hazard", 
-  "Radiation", 
-  "Unsafe Area",
-  "Medication side-effect",
-  "Environmental event"
+const FORUM_SECTIONS = [
+  { id: 'Personal Health', icon: <Heart size={18} /> },
+  { id: 'Population Health', icon: <Activity size={18} /> },
+  { id: 'Off topic', icon: <Hash size={18} /> }
 ];
 
+const HAZARD_TYPES = ["Food contamination", "Water contamination", "Biological hazard", "Chemical hazard", "Radiation", "Unsafe Area", "Medication side-effect", "Environmental event"];
+const TOPIC_TYPES = ["Fitness", "Health product", "Medical", "Mental health", "Cessation groups"];
+
 const HAZARD_COLORS: Record<string, string> = {
-  "Food contamination": "#f97316",     // Orange
-  "Water contamination": "#6366f1",    // Indigo
+  "Food contamination": "#ef4444",     // Red
+  "Water contamination": "#3333ff",    // Indigo
   "Biological hazard": "#84cc16",      // Lime
   "Chemical hazard": "#eab308",        // Yellow
   "Radiation": "#a855f7",              // Purple
-  "Unsafe Area": "#ef4444",            // Red
-  "Medication side-effect": "#f43f5e", // Rose/Pink
+  "Unsafe Area": "#0f172b",            // Black
+  "Medication side-effect": "#ff99cc", // Rose/Pink
   "Environmental event": "#06b6d4"     // Cyan
 };
 
-// Helper component to dynamically change map zoom based on the slider, 
-// and pan to user location ONLY when it first loads (so it remains scrollable).
+const TOPIC_COLORS: Record<string, string> = {
+  "Fitness": "#22c55e",       // Green
+  "Health product": "#3b82f6",// Blue
+  "Medical": "#ef4444",       // Red
+  "Mental health": "#8b5cf6", // Violet
+  "Cessation groups": "#f59e0b" // Amber
+};
+
 const MapController = ({ userLocation, zoom }: { userLocation: [number, number] | null; zoom: number }) => {
   const map = useMap();
   
-  // Update zoom when radius slider changes
   useEffect(() => {
     map.setZoom(zoom);
   }, [zoom, map]);
 
-  // Jump to user location once it is acquired
   useEffect(() => {
     if (userLocation) {
       map.panTo(userLocation);
@@ -65,6 +87,9 @@ const ForumScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Section State
+  const [activeSection, setActiveSection] = useState<string>('Personal Health');
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'post' | 'poll' | 'petition'>('post');
@@ -74,15 +99,28 @@ const ForumScreen: React.FC = () => {
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [postLocation, setPostLocation] = useState<[number, number] | null>(null);
 
-  // Hazards & Filtering
+  // Hazards & Specific Section Modal Data
   const [hazardType, setHazardType] = useState('');
   const [hazardValue, setHazardValue] = useState('');
+  const [postTopic, setPostTopic] = useState('');
+  const [topicValue, setTopicValue] = useState('');
+
+  // Filtering & Pagination
   const [filterHazard, setFilterHazard] = useState('none');
-  const [radius, setRadius] = useState(20000); // Max 20000km for "Global"
+  const [filterTopic, setFilterTopic] = useState('none');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [radius, setRadius] = useState(20000); 
+  const [currentPage, setCurrentPage] = useState(1);
+  const POSTS_PER_PAGE = 10;
   
+  const [showTypes, setShowTypes] = useState({
+    post: true,
+    poll: true,
+    petition: true,
+  });
+
   const user = auth.currentUser;
 
-  // Calculate dynamic map zoom from radius
   const mapZoom = Math.max(2, Math.round(15 - Math.log2(radius === 20000 ? 50000 : radius)));
 
   useEffect(() => {
@@ -95,30 +133,64 @@ const ForumScreen: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const filteredPosts = posts.filter(post => {
-    // Narrow down to post type before checking hazard
-    const matchesHazard = filterHazard === 'none' || (post.type === 'post' && post.hazard?.type === filterHazard); 
-    let matchesLocation = true;
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSection, filterHazard, filterTopic, searchQuery, radius, showTypes]);
 
+  const filteredPosts = posts.filter(post => {
+    // 0. Filter by Post Type Checkboxes
+    if (!showTypes[post.type as keyof typeof showTypes]) return false;
+
+    // 1. Filter by Section First
+    if (post.forumSection !== activeSection) return false;
+
+    // 2. Global Search Query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        post.title.toLowerCase().includes(query) || 
+        post.content.toLowerCase().includes(query) ||
+        post.authorName.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+
+    // 3. Specific Section Filtering
+    let sectionMatch = true;
+    if (activeSection === 'Population Health') {
+      // Allow posts, polls, and petitions to match hazard filters
+      sectionMatch = filterHazard === 'none' || post.hazard?.type === filterHazard; 
+    } else if (activeSection === 'Personal Health') {
+      sectionMatch = filterTopic === 'none' || post.topic === filterTopic; 
+    } 
+    if (!sectionMatch) return false;
+
+    // 4. Check Location Radius
+    let matchesLocation = true;
     if (userLocation && post.location && radius < 20000) {
       const [postLat, postLng] = post.location;
       const [userLat, userLng] = userLocation;
       const latDiff = postLat - userLat;
       const lngDiff = postLng - userLng;
       const distInDegrees = Math.sqrt(Math.pow(latDiff, 2) + Math.pow(lngDiff, 2));
-      const radiusInDegrees = radius * 0.009; // Approx 1km = 0.009 degrees
+      const radiusInDegrees = radius * 0.009; 
       matchesLocation = distInDegrees <= radiusInDegrees;
     }
     
-    return matchesHazard && matchesLocation;
+    return matchesLocation;
   });
+
+  const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
+  const paginatedPosts = filteredPosts.slice(
+    (currentPage - 1) * POSTS_PER_PAGE,
+    currentPage * POSTS_PER_PAGE
+  );
 
   const GRID_SIZE = 0.05;
   const gridCells = useMemo(() => {
     const cells: Record<string, any> = {};
     filteredPosts.forEach(post => {
-      // Safely check type before iterating confirm
-      if (post.type !== 'post' || !post.confirm || !Array.isArray(post.confirm)) return;
+      // Include all types with a confirmation location
+      if (!post.confirm || !Array.isArray(post.confirm)) return;
 
       post.confirm.forEach((c: any) => { 
         if (!c.location) return;
@@ -138,7 +210,7 @@ const ForumScreen: React.FC = () => {
           };
         }
         cells[key].count += 1;
-        if (post.hazard?.type) cells[key].types.add(post.hazard.type);
+        if (post.hazard?.type) cells[key].types.add(post.hazard.type); 
       });
     });
     return Object.values(cells);
@@ -152,73 +224,83 @@ const ForumScreen: React.FC = () => {
       const profileSnap = await getDoc(profileRef);
       const realName = profileSnap.exists() ? profileSnap.data().name : "Anonymous";
 
-      // Base data shared by every single post type
-      const commonData = {
+      // 1. Initialize base data common to ALL posts
+      const commonData: any = {
         authorId: user.uid,
         authorName: realName,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
+        forumSection: activeSection,
         likes: [],
         dislikes: [],
         replyCount: 0,
+        location: postLocation || null
       };
+
+      // 2. Handle Section-Specific Metadata (Topic or Hazard)
+      if (activeSection === 'Personal Health' && postTopic) {
+        commonData.topic = postTopic;
+      }
+
+      if (activeSection === 'Population Health' && hazardType && hazardValue.trim()) {
+        const confirmLocation = postLocation || userLocation;
+        
+        commonData.hazard = {
+          type: hazardType,
+          value: hazardValue.trim()
+        };
+        
+        // Attach confirmation data if we're in Population Health
+        commonData.confirm = confirmLocation ? [{ 
+          userId: user.uid, 
+          location: confirmLocation,
+          confirmTime: Timestamp.now() 
+        }] : [];
+      }
+
+      // 3. Construct the final object based on Modal Mode
+      let finalPostData: any = { ...commonData };
 
       if (modalMode === 'post') {
         if (!newPostContent.trim() || !postTitle.trim()) return alert("Please fill out the title and content.");
-        
-        const postData: any = {
-          ...commonData,
-          title: postTitle,
-          content: newPostContent,
-          type: 'post',
+        finalPostData = { 
+          ...finalPostData, 
+          type: 'post', 
+          title: postTitle, 
+          content: newPostContent 
         };
-
-        // Rule: Only add hazard and confirm if a hazard is actually being reported
-        if (hazardType && hazardValue.trim()) {
-          const confirmLocation = postLocation || userLocation;
-          
-          postData.hazard = {
-            type: hazardType,
-            value: hazardValue.trim()
-          };
-          postData.confirm = confirmLocation ? [{ 
-            userId: user.uid, 
-            location: confirmLocation,
-            confirmTime: Timestamp.now() 
-          }] : [];
-        }
-
-        if (postLocation) postData.location = postLocation;
-
-        await addDoc(collection(db, 'myHealth_posts'), postData);
 
       } else if (modalMode === 'poll') {
         if (!pollContent.trim() || pollOptions.some(opt => !opt.trim())) {
           return alert("Please provide a question and fill all option fields.");
         }
-        await addDoc(collection(db, 'myHealth_posts'), {
-          ...commonData,
-          title: postTitle,
-          content: pollContent,
-          type: 'poll',
-          options: pollOptions.map(text => ({ text, votes: 0 })),
+        finalPostData = { 
+          ...finalPostData, 
+          type: 'poll', 
+          title: postTitle, 
+          content: pollContent, 
+          options: pollOptions.map(text => ({ text, votes: 0 })), 
           userVotes: {} 
-        });
+        };
 
       } else if (modalMode === 'petition') {
         if (!newPostContent.trim() || !postTitle.trim()) return alert("Please fill out the title and content.");
-        await addDoc(collection(db, 'myHealth_posts'), {
-          ...commonData,
-          title: postTitle,
-          content: newPostContent,
-          type: 'petition',
-          signatures: [],
-        });
+        finalPostData = { 
+          ...finalPostData, 
+          type: 'petition', 
+          title: postTitle, 
+          content: newPostContent, 
+          signatures: [] 
+        };
       }
 
+      // 4. Single entry point for database write
+      await addDoc(collection(db, 'myHealth_posts'), finalPostData);
       resetModal();
+
     } catch (err) {
       console.error("Error creating post:", err);
+      alert("Something went wrong while publishing.");
     }
   };
 
@@ -239,6 +321,7 @@ const ForumScreen: React.FC = () => {
     setPostLocation(null);
     setHazardType('');
     setHazardValue('');
+    setPostTopic('');
     setIsModalOpen(false);
     setModalMode('post');
   };
@@ -249,7 +332,7 @@ const ForumScreen: React.FC = () => {
     <div className="flex flex-col lg:flex-row gap-8 p-4 bg-slate-50 min-h-screen pb-24 max-w-7xl mx-auto">
       {/* MAIN FEED */}
       <div className="flex-1 max-w-2xl w-full mx-auto lg:mx-0">
-        <header className="mb-8 flex flex-row items-start justify-between gap-4">
+        <header className="mb-6 flex flex-row items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 tracking-tight">Community Forum</h1>
             <p className="text-slate-500 mt-1 text-sm lg:text-base">Engage with local health initiatives.</p>
@@ -265,20 +348,80 @@ const ForumScreen: React.FC = () => {
           </button>
         </header>
 
-        <div className="space-y-4">
-          {filteredPosts.map((post) => (
-            <PostCard key={post.id} post={post} />
+        {/* SECTION TABS */}
+        <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
+          {FORUM_SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => {
+                setActiveSection(section.id);
+                setFilterHazard('none');
+                setFilterTopic('none');
+                setSearchQuery('');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                activeSection === section.id 
+                  ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' 
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              }`}
+            >
+              {section.icon}
+              {section.id}
+            </button>
           ))}
+        </div>
+
+        <div className="space-y-4">
+          {paginatedPosts.length > 0 ? (
+            <>
+              {paginatedPosts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+              
+              {/* PAGINATION CONTROLS */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 mt-6">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 text-sm font-bold text-slate-600 disabled:opacity-30 hover:text-indigo-600 transition-colors"
+                  >
+                    <ChevronLeft size={16} /> Prev
+                  </button>
+                  <span className="text-sm font-bold text-slate-400">
+                    Page <span className="text-slate-800">{currentPage}</span> of {totalPages}
+                  </span>
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1 text-sm font-bold text-slate-600 disabled:opacity-30 hover:text-indigo-600 transition-colors"
+                  >
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-3xl border border-slate-200">
+              <p className="text-slate-500 font-medium">No posts found.</p>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="mt-4 text-indigo-600 font-bold hover:underline"
+              >
+                Be the first to post
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* SIDEBAR COLUMN */}
       <div className="w-full lg:w-96 order-1 lg:order-2">
-        <div className="lg:sticky lg:top-4 space-y-6 h-fit">
+        <div className="lg:sticky lg:top-4 space-y-4 h-fit">
           
           {/* COMMUNITY PULSE CARD */}
           <div className="bg-linear-to-br from-indigo-600 to-violet-700 p-5 rounded-3xl shadow-lg text-white">
-            <h3 className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-4 flex items-center gap-2"> Community Pulse</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-4 flex items-center gap-2"> {activeSection} Pulse</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/5">
                 <span className="block text-2xl font-black">{filteredPosts.length}</span>
@@ -286,10 +429,14 @@ const ForumScreen: React.FC = () => {
               </div>
               <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/5">
                 <span className="block text-2xl font-black">
-                  {/* Safely narrow down to hazard posts */}
-                  {filteredPosts.filter(p => p.type === 'post' && p.hazard).length} 
+                  {activeSection === 'Population Health' 
+                    ? filteredPosts.filter(p => p.hazard).length // Counts any post type with a hazard
+                    : filteredPosts.reduce((acc, p) => acc + (p.replyCount || 0), 0)
+                  } 
                 </span>
-                <span className="text-[10px] font-bold uppercase opacity-60">Hazards</span>
+                <span className="text-[10px] font-bold uppercase opacity-60">
+                  {activeSection === 'Population Health' ? 'Hazards' : 'Total Replies'}
+                </span>
               </div>
             </div>
           </div>
@@ -302,9 +449,43 @@ const ForumScreen: React.FC = () => {
               </h3>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 space-y-4">
+              
+              {/* GLOBAL SEARCH */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-600">Search Discussions</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="Search posts, topics, or authors..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-9 pr-4 outline-none focus:border-indigo-500 text-sm font-medium text-slate-700"
+                  />
+                </div>
+              </div>
+
+              {/* Post Type Checkboxes */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-600">Post Types</label>
+                <div className="flex gap-4">
+                  {(['post', 'poll', 'petition'] as const).map((type) => (
+                    <label key={type} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showTypes[type]}
+                        onChange={(e) => setShowTypes(prev => ({ ...prev, [type]: e.target.checked }))}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                      <span className="text-xs font-medium text-slate-700 capitalize">{type}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* INTEGRATED MAP VIEW */}
-              <div className="relative h-64 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden shadow-inner z-0">
+              <div className="relative h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden shadow-inner z-0">
                 <MapContainer 
                   center={userLocation || [20, 0]} 
                   zoom={mapZoom} 
@@ -318,8 +499,8 @@ const ForumScreen: React.FC = () => {
                   
                   <MapController userLocation={userLocation} zoom={mapZoom} />
                   
-                  {/* 1. RENDER WARNING AREA GRID */}
-                  {gridCells.map((cell: any, idx: number) => {
+                  {/* GRID MAP LOGIC (ONLY SHOWN FOR POPULATION HEALTH) */}
+                  {activeSection === 'Population Health' && gridCells.map((cell: any, idx: number) => {
                     let color = cell.count > 5 ? '#ef4444' : cell.count >= 3 ? '#f97316' : '#fbbf24';
                     let levelText = cell.count > 5 ? 'Severe' : cell.count >= 3 ? 'Elevated' : 'Low';
 
@@ -351,43 +532,79 @@ const ForumScreen: React.FC = () => {
                     );
                   })}
 
-                  {/* 2. RENDER MULTIPLE OCCURRENCE MARKERS */}
+                  {/* POST & CONFIRM LOCATION MARKERS (ALL SECTIONS) */}
                   {filteredPosts.map((post) => {
-                    // Type guard ensures post is a StandardPost before checking hazard and confirm
-                    if (post.type !== 'post' || !post.hazard?.type || !post.confirm) return null; 
-                    const hazardColor = HAZARD_COLORS[post.hazard.type] || '#94a3b8'; 
+                    const elements = [];
 
-                    return post.confirm.map((c: any, idx: number) => ( 
-                      <CircleMarker 
-                        key={`${post.id}-conf-${idx}`}
-                        center={c.location as [number, number]} 
-                        radius={4} 
-                        pathOptions={{ 
-                          color: 'white', 
-                          fillColor: hazardColor, 
-                          fillOpacity: 0.7, 
-                          weight: 1.5 
-                        }}
-                      >
-                        <Popup className="font-sans">
-                          <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: hazardColor }}>
-                            {post.hazard?.type} 
-                          </span>
-                          <strong className="text-slate-800 text-sm">{post.title}</strong>
-                          <div className="text-xs text-slate-500 italic mt-1">Community Confirmed</div>
-                        </Popup>
-                      </CircleMarker>
-                    ));
+                    // 1. Render Confirmed Locations (Population Health uses this array for its events)
+                    if (activeSection === 'Population Health' && post.confirm && post.confirm.length > 0) {
+                      const hazardColor = post.hazard?.type ? (HAZARD_COLORS[post.hazard.type] || '#94a3b8') : '#94a3b8';
+                      const labelText = post.hazard?.type || 'Hazard';
+
+                      post.confirm.forEach((c: any, idx: number) => {
+                        if (c.location) {
+                          elements.push(
+                            <CircleMarker 
+                              key={`conf-${post.id}-${idx}`} 
+                              center={c.location as [number, number]} 
+                              radius={4} 
+                              pathOptions={{ color: 'white', fillColor: hazardColor, fillOpacity: 0.7, weight: 1.5 }}
+                            >
+                              <Popup className="font-sans">
+                                <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: hazardColor }}>
+                                  {labelText} ({post.type})
+                                </span>
+                                <strong className="text-slate-800 text-sm">{post.title}</strong>
+                                <div className="text-xs text-slate-500 italic mt-1">Community Confirmed</div>
+                              </Popup>
+                            </CircleMarker>
+                          );
+                        }
+                      });
+                    } 
+                    // 2. Render Single Location Marker (Personal Health, Off Topic, or Posts lacking a confirm array)
+                    else if (post.location) {
+                      let markerColor = '#94a3b8';
+                      let labelText: string = post.forumSection;
+
+                      if (post.forumSection === 'Personal Health' && post.topic) {
+                        markerColor = TOPIC_COLORS[post.topic] || markerColor;
+                        labelText = post.topic;
+                      } else if (post.forumSection === 'Population Health' && post.hazard?.type) {
+                        markerColor = HAZARD_COLORS[post.hazard.type] || markerColor;
+                        labelText = post.hazard.type;
+                      }
+
+                      elements.push(
+                        <CircleMarker 
+                          key={`loc-${post.id}`} 
+                          center={post.location as [number, number]} 
+                          radius={6} 
+                          pathOptions={{ color: 'white', fillColor: markerColor, fillOpacity: 0.8, weight: 1.5 }}
+                        >
+                          <Popup className="font-sans">
+                            <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: markerColor }}>
+                              {labelText} ({post.type})
+                            </span>
+                            <strong className="text-slate-800 text-sm">{post.title}</strong>
+                            <div className="text-xs text-slate-500 italic mt-1">By {post.authorName}</div>
+                          </Popup>
+                        </CircleMarker>
+                      );
+                    }
+                    return elements;
                   })}
 
+                  {/* USER LOCATION PIN */}
                   {userLocation && (
-                    <CircleMarker 
-                      center={userLocation} 
-                      radius={5} 
-                      pathOptions={{ color: 'white', fillColor: '#3b82f6', fillOpacity: 1, weight: 2 }}
-                    >
-                      <Popup className="font-sans font-bold text-slate-800">You are here</Popup>
-                    </CircleMarker>
+                    <Marker position={userLocation}>
+                      <Popup className="font-sans">
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Current Position</p>
+                          <strong className="text-slate-800 text-sm">You are here</strong>
+                        </div>
+                      </Popup>
+                    </Marker>
                   )}
                 </MapContainer>
 
@@ -401,6 +618,7 @@ const ForumScreen: React.FC = () => {
                 </div>
               </div>
 
+              {/* SHARED RANGE SLIDER */}
               <div className="space-y-4">
                 <div className="flex justify-between items-end">
                   <label className="text-xs font-bold text-slate-600 flex items-center gap-2">
@@ -430,188 +648,118 @@ const ForumScreen: React.FC = () => {
 
               <hr className="border-slate-50" />
 
+              {/* DYNAMIC FILTERS BASED ON ACTIVE SECTION */}
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-600">Active Alert Types</label>
-                <div className="flex flex-wrap gap-2">
-                  <button 
-                    onClick={() => setFilterHazard('none')}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      filterHazard === 'none' 
-                        ? 'bg-slate-900 text-white shadow-md' 
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    All Posts
-                  </button>
-
-                  {HAZARD_TYPES.map(type => {
-                    const isActive = filterHazard === type;
-                    const activeColor = HAZARD_COLORS[type];
-
-                    return (
+                {activeSection === 'Population Health' && (
+                  <>
+                    <label className="text-xs font-bold text-slate-600">Active Alert Types</label>
+                    <div className="flex flex-wrap gap-2">
                       <button 
-                        key={type}
-                        onClick={() => setFilterHazard(isActive ? "" : type)}
-                        style={{
-                          backgroundColor: isActive ? activeColor : undefined,
-                        }}
+                        onClick={() => setFilterHazard('none')}
                         className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                          isActive 
-                            ? 'text-white shadow-md' 
+                          filterHazard === 'none' 
+                            ? 'bg-indigo-600 text-white shadow-md' 
                             : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                         }`}
                       >
-                        {type}
+                        All Posts
                       </button>
-                    );
-                  })}
-                </div>
+
+                      {HAZARD_TYPES.map(type => {
+                        const isActive = filterHazard === type;
+                        const activeColor = HAZARD_COLORS[type];
+
+                        return (
+                          <button 
+                            key={type}
+                            onClick={() => setFilterHazard(isActive ? "none" : type)}
+                            style={{ backgroundColor: isActive ? activeColor : undefined }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                              isActive 
+                                ? 'text-white shadow-md' 
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            }`}
+                          >
+                            {type}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {activeSection === 'Personal Health' && (
+                  <>
+                    <label className="text-xs font-bold text-slate-600">Filter by Topic</label>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        onClick={() => setFilterTopic('none')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                          filterTopic === 'none' 
+                            ? 'bg-indigo-600 text-white shadow-md' 
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        All Topics
+                      </button>
+                      {TOPIC_TYPES.map(topic => {
+                        const isActive = filterTopic === topic;
+                        const activeColor = TOPIC_COLORS[topic];
+
+                        return (
+                          <button 
+                            key={topic}
+                            onClick={() => setFilterTopic(isActive ? "none" : topic)}
+                            style={{ backgroundColor: isActive ? activeColor : undefined }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                              isActive 
+                                ? 'text-white shadow-md' 
+                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            }`}
+                          >
+                            {topic}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
-
+                
       {/* MODAL OVERLAY */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white w-full max-w-md rounded-3xl p-6 relative shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-2xl">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setModalMode(tab.id as 'post' | 'poll' | 'petition')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition-all ${
-                    modalMode === tab.id ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {tab.icon} {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Title</label>
-                <input 
-                  autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 font-bold text-slate-800 text-lg"
-                  placeholder={modalMode === 'petition' ? "Petition Title" : modalMode === 'poll' ? "Poll Topic" : "Post Title"}
-                  value={postTitle}
-                  onChange={(e) => setPostTitle(e.target.value)}
-                />
-              </div>
-
-              {modalMode === 'poll' ? (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
-                    <input 
-                      className="w-full bg-indigo-50/30 border border-slate-200 p-4 rounded-2xl outline-none focus:border-indigo-500 font-normal text-slate-600"
-                      placeholder="Ask a question..."
-                      value={pollContent}
-                      onChange={(e) => setPollContent(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {pollOptions.map((opt, i) => (
-                      <div key={i} className="flex items-center gap-2 group">
-                        <input 
-                          className="flex-1 border border-slate-200 p-3 rounded-xl outline-none focus:border-indigo-500 text-sm font-normal text-slate-600 bg-white"
-                          placeholder={`Option ${i + 1}`}
-                          value={opt}
-                          onChange={(e) => {
-                            const newOpts = [...pollOptions];
-                            newOpts[i] = e.target.value;
-                            setPollOptions(newOpts);
-                          }}
-                        />
-                        {pollOptions.length > 2 && (
-                          <button 
-                            onClick={() => {
-                              const newOpts = pollOptions.filter((_, index) => index !== i);
-                              setPollOptions(newOpts);
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            <X size={18} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {pollOptions.length < 5 && (
-                    <button 
-                      onClick={() => setPollOptions([...pollOptions, ''])} 
-                      className="text-indigo-600 text-xs font-bold flex items-center gap-1 mt-1"
-                    >
-                      <Plus size={14} /> Add Option
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
-                  <textarea 
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 outline-none min-h-32 resize-none font-normal text-slate-600 leading-relaxed"
-                    placeholder={modalMode === 'petition' ? "Describe the goal..." : "What's on your mind?"}
-                    value={newPostContent}
-                    onChange={(e) => setNewPostContent(e.target.value)}
-                  />
-                </div>
-              )}
-
-              {modalMode === 'post' && (
-                <div className="space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Hazard Reporting
-                  </label>
-                  <div className="flex flex-col gap-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                    <select 
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                      value={hazardType}
-                      onChange={(e) => setHazardType(e.target.value)}
-                    >
-                      <option value="">Select Hazard Type...</option>
-                      {HAZARD_TYPES.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                    <input 
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                      placeholder="Specific details..."
-                      value={hazardValue}
-                      onChange={(e) => setHazardValue(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-sm text-slate-600 font-bold">
-                  <MapPin size={18} className={postLocation ? "text-emerald-500" : "text-slate-400"} />
-                  {postLocation ? "Location Attached" : "Attach Location"}
-                </div>
-                <button 
-                  onClick={handleTogglePostLocation}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold ${postLocation ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}
-                >
-                  {postLocation ? "Remove" : "Add"}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <button onClick={resetModal} className="flex-1 py-3 text-slate-500 bg-slate-100 rounded-xl font-bold">Cancel</button>
-              <button onClick={handleCreate} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700">
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreatePostModal 
+        isOpen={isModalOpen}
+        onClose={resetModal}
+        activeSection={activeSection}
+        modalMode={modalMode}
+        setModalMode={setModalMode}
+        tabs={tabs}
+        postTitle={postTitle}
+        setPostTitle={setPostTitle}
+        newPostContent={newPostContent}
+        setNewPostContent={setNewPostContent}
+        pollContent={pollContent}
+        setPollContent={setPollContent}
+        pollOptions={pollOptions}
+        setPollOptions={setPollOptions}
+        hazardType={hazardType}
+        setHazardType={setHazardType}
+        hazardValue={hazardValue}
+        setHazardValue={setHazardValue}
+        postTopic={postTopic}
+        setPostTopic={setPostTopic}
+        topicValue={topicValue}
+        setTopicValue={setTopicValue}
+        HAZARD_TYPES={HAZARD_TYPES}
+        TOPIC_TYPES={TOPIC_TYPES}
+        postLocation={postLocation}
+        onToggleLocation={handleTogglePostLocation}
+        onCreate={handleCreate}
+      />
     </div>
   );
 };

@@ -25,6 +25,14 @@ const HAZARD_COLORS: Record<string, string> = {
   "Environmental event": "#06b6d4"     // Cyan
 };
 
+const TOPIC_COLORS: Record<string, string> = {
+  "Fitness": "#22c55e",       // Green
+  "Health product": "#3b82f6",// Blue
+  "Medical": "#ef4444",       // Red
+  "Mental health": "#8b5cf6", // Violet
+  "Cessation groups": "#f59e0b" // Amber
+};
+
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -274,37 +282,41 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         </div>
             
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-2">
-            <div className="text-xs flex flex-wrap items-center gap-1">
-              <span className="font-bold text-slate-400">By </span>
-              <button 
-                onClick={() => navigate(`/profile/${post.authorId}`)} 
-                className="font-bold text-indigo-400 hover:text-indigo-600 hover:underline transition-all"
-              >
-                {post.authorName}
-              </button>
-              <span className="font-bold text-slate-400 ml-1 flex items-center gap-1">
-                • {post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000).toLocaleString() : '...'}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-3">
+            <div className="text-[clamp(0.65rem,2.5vw,0.75rem)] flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-slate-400">By </span>
+                <button 
+                  onClick={() => navigate(`/profile/${post.authorId}`)} 
+                  className="font-bold text-indigo-400 hover:text-indigo-600 hover:underline transition-all truncate max-w-35 sm:max-w-none"
+                >
+                  {post.authorName}
+                </button>
+              </div>
+              
+              <span className="font-bold text-slate-400 flex items-center gap-1.5 flex-wrap">
+                <span className="hidden sm:inline">•</span>
+                <span>{post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000).toLocaleString() : '...'}</span>
                 {post.location && (
-                  <span className="flex items-center text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full ml-1" title={`${post.location[0]}, ${post.location[1]}`}>
-                    <MapPin size={10} className="mr-1"/> Location Attached
+                  <span className="flex items-center text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-full whitespace-nowrap" title={`${post.location[0]}, ${post.location[1]}`}>
+                    <MapPin size={10} className="mr-1 shrink-0"/> Location Attached
                   </span>
                 )}
               </span>
             </div>
             
-            <div className="flex gap-2 items-center">
-              {/* Confirm button should only appear for hazard posts */}
-              {post.type === 'post' && post.hazard && (
+            <div className="flex gap-2 items-center self-start">
+              {/* Confirm button should only appear for Population Health hazard posts */}
+              {post.forumSection === 'Population Health' && post.type === 'post' && post.hazard && (
                 <button
                   onClick={handleConfirmToggle}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[clamp(0.65rem,2vw,0.75rem)] font-bold transition-all whitespace-nowrap ${
                     hasConfirmed 
                       ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 hover:bg-emerald-600' 
                       : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
                   }`}
                 >
-                  <CheckCircle size={14} />
+                  <CheckCircle size={14} className="shrink-0" />
                   {hasConfirmed ? 'Confirmed' : 'Confirm'}
                   {confirms.length > 0 && (
                     <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[10px] ${hasConfirmed ? 'bg-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
@@ -315,7 +327,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               )}
 
               {isAuthor && (
-                <button onClick={handleDelete} className="text-red-300 hover:text-red-500 transition-colors">
+                <button onClick={handleDelete} className="text-red-300 hover:text-red-500 transition-colors p-1">
                   <Trash2 size={16} />
                 </button>
               )}
@@ -323,29 +335,46 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
 
           <div className="space-y-1">
-            {post.type === 'post' && post.hazard && (
-              <div className="flex items-center gap-2 mb-2">
+            {/* Population Health Hazard Badge */}
+            {post.forumSection === 'Population Health' && post.hazard && (
+              <div className="flex items-center flex-wrap gap-2 mb-2">
                 <span 
                   style={{ 
-                    backgroundColor: `${HAZARD_COLORS[post.hazard.type]}15`, // 15 is ~8% opacity in hex
-                    color: HAZARD_COLORS[post.hazard.type] 
+                    backgroundColor: `${HAZARD_COLORS[post.hazard.type] || '#94a3b8'}15`, 
+                    color: HAZARD_COLORS[post.hazard.type] || '#94a3b8'
                   }}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
                 >
                   ⚠️ {post.hazard.type} 
                 </span>
                 <span 
-                  style={{ color: HAZARD_COLORS[post.hazard.type] }}
-                  className="text-xs font-medium italic opacity-80"
+                  style={{ color: HAZARD_COLORS[post.hazard.type] || '#94a3b8' }}
+                  className="text-[clamp(0.65rem,2vw,0.75rem)] font-medium italic opacity-80"
                 >
                   {post.hazard.value} 
                 </span>
               </div>
             )}
+
+            {/* Personal Health Topic Badge */}
+            {post.forumSection === 'Personal Health' && post.topic && (
+              <div className="flex items-center flex-wrap gap-2 mb-2">
+                <span 
+                  style={{ 
+                    backgroundColor: `${TOPIC_COLORS[post.topic] || '#94a3b8'}15`, 
+                    color: TOPIC_COLORS[post.topic] || '#94a3b8'
+                  }}
+                  className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                >
+                  📌 {post.topic} 
+                </span>
+              </div>
+            )}
+
             <h2 className="text-xl font-semibold text-gray-900 leading-tight">
               {post.title}
             </h2>
-            <p className="text-sm text-gray-600 leading-relaxed">
+            <p className="text-sm text-gray-600 leading-relaxed mt-1">
               {post.content}
             </p>
           </div>
@@ -361,9 +390,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                       ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-300 hover:border-indigo-400'}`}
                   >
                     <div className={`absolute inset-0 transition-all duration-700 ${isSelected ? 'bg-indigo-300/40' : 'bg-indigo-300/20'}`} style={{ width: `${pct}%` }} />
-                    <div className="relative flex justify-between items-center text-sm font-bold">
+                    <div className="relative flex justify-between items-center text-sm font-bold gap-2">
                       <span className={isSelected ? 'text-indigo-950' : 'text-slate-800'}>{opt.text}</span>
-                      <span className={`px-2 py-1 rounded-lg text-[11px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-900'}`}>{pct}%</span>
+                      <span className={`shrink-0 px-2 py-1 rounded-lg text-[11px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-900'}`}>{pct}%</span>
                     </div>
                   </button>
                 );
@@ -375,50 +404,52 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           )}
 
           {post.type === 'petition' && (
-            <div className="my-4 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-center justify-between">
-              <span className="font-black text-amber-900 text-lg flex items-center gap-2">
+            <div className="my-4 p-4 bg-amber-50 rounded-xl border border-amber-100 flex flex-wrap items-center justify-between gap-3">
+              <span className="font-black text-amber-900 text-[clamp(1rem,3vw,1.125rem)] flex items-center gap-2 whitespace-nowrap">
                 <Edit3 size={18} /> {post.signatures?.length || 0} Signatures
               </span>
               <button
                 onClick={handleSignPetition}
-                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${hasSigned ? 'bg-amber-200 text-amber-800' : 'bg-amber-500 text-white hover:scale-105'}`}
+                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap flex-1 sm:flex-none text-center ${hasSigned ? 'bg-amber-200 text-amber-800' : 'bg-amber-500 text-white hover:scale-105'}`}
               >
                 {hasSigned ? 'Signed ✓' : 'Add Signature'}
               </button>
             </div>
           )}
 
-          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100">
-            <button onClick={() => handleReaction('like')} className={`flex items-center gap-1 text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mt-4 pt-3 border-t border-slate-100">
+            <button onClick={() => handleReaction('like')} className={`flex items-center gap-1.5 text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400'}`}>
               <ThumbsUp size={16} className={hasLiked ? 'fill-indigo-600' : ''} /> {post.likes?.length || 0}
             </button>
-            <button onClick={() => handleReaction('dislike')} className={`flex items-center gap-1 text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400'}`}>
+            <button onClick={() => handleReaction('dislike')} className={`flex items-center gap-1.5 text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400'}`}>
               <ThumbsDown size={16} className={hasDisliked ? 'fill-red-500' : ''} /> {post.dislikes?.length || 0}
             </button>
 
             <div className="ml-auto flex items-center gap-3 text-xs font-bold text-slate-400">
-              <button onClick={toggleReplies} className="hover:text-indigo-500">
+              <button onClick={toggleReplies} className="hover:text-indigo-500 whitespace-nowrap">
                 {isExpanded ? 'Hide Replies' : `Replies (${post.replyCount || 0})`}
               </button>
-              <span>|</span>
-              <button onClick={() => { setIsReplying(!isReplying); if (!isExpanded && !isReplying) toggleReplies(); }} className="hover:text-indigo-500 flex items-center gap-1">
+              <span className="hidden sm:inline">|</span>
+              <button onClick={() => { setIsReplying(!isReplying); if (!isExpanded && !isReplying) toggleReplies(); }} className="hover:text-indigo-500 flex items-center gap-1 whitespace-nowrap">
                 <Plus size={14}/> Add Reply
               </button>
             </div>
           </div>
 
           {isReplying && (
-            <div className="flex gap-2 mt-3 animate-in fade-in zoom-in-95 duration-200 items-center">
-              <input autoFocus className="flex-1 bg-slate-100 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Write a reply..." value={replyContent} onChange={(e) => setReplyContent(e.target.value)} />
-              <button 
-                onClick={handleToggleRootReplyLocation}
-                className={`p-2 rounded-xl transition-colors ${rootReplyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                title="Attach Location"
-              >
-                <MapPin size={18} />
-              </button>
-              <button onClick={handleAddRootReply} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Post</button>
-              <button onClick={() => { setIsReplying(false); setReplyContent(''); setRootReplyLocation(null); }}><X size={16} className="text-slate-400" /></button>
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3 animate-in fade-in zoom-in-95 duration-200 items-center">
+              <input autoFocus className="flex-1 min-w-37.5 bg-slate-100 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Write a reply..." value={replyContent} onChange={(e) => setReplyContent(e.target.value)} />
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleToggleRootReplyLocation}
+                  className={`p-2 rounded-xl transition-colors ${rootReplyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                  title="Attach Location"
+                >
+                  <MapPin size={18} />
+                </button>
+                <button onClick={handleAddRootReply} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Post</button>
+                <button onClick={() => { setIsReplying(false); setReplyContent(''); setRootReplyLocation(null); }}><X size={16} className="text-slate-400" /></button>
+              </div>
             </div>
           )}
 
