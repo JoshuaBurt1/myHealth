@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+//PostCard.tsx
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, 
@@ -15,28 +16,31 @@ interface PostCardProps {
 }
 
 const HAZARD_COLORS: Record<string, string> = {
-  "Food contamination": "#f97316",     // Orange
-  "Water contamination": "#6366f1",    // Indigo
-  "Biological hazard": "#84cc16",      // Lime
-  "Chemical hazard": "#eab308",        // Yellow
-  "Radiation": "#a855f7",              // Purple
-  "Unsafe Area": "#ef4444",            // Red
-  "Medication side-effect": "#f43f5e", // Rose/Pink
-  "Environmental event": "#06b6d4"     // Cyan
+  "Food contamination": "#ef4444", "Water contamination": "#3333ff", "Biological hazard": "#84cc16",
+  "Chemical hazard": "#eab308", "Radiation": "#a855f7", "Unsafe Area": "#0f172b",
+  "Medication side-effect": "#ff99cc", "Environmental event": "#06b6d4"
+};
+
+const HELP_COLORS: Record<string, string> = {
+  "Volunteer event": "#f97316", "Paid-volunteer event": "#fbbf24", "Fundraiser event": "#db2777",
+  "Donation event": "#059669", "Blood donation event": "#be123c", "Vaccination clinic event": "#2563eb",
+  "Medical screening event": "#0891b2", "Environmental event": "#15803d", "Sporting event": "#6366f1"
+};
+
+const PUBLIC_COLORS: Record<string, string> = {
+  "Community garden": "#16a34a", "Fresh water fountain": "#3b82f6", "Bike/e-bike/scooter": "#64748b", "Shelter": "#d97706"
 };
 
 const TOPIC_COLORS: Record<string, string> = {
-  "Fitness": "#22c55e",       // Green
-  "Health product": "#3b82f6",// Blue
-  "Medical": "#ef4444",       // Red
-  "Mental health": "#8b5cf6", // Violet
-  "Cessation groups": "#f59e0b" // Amber
+  "Fitness": "#22c55e", "Diet": "#ea580c", "Health product": "#3b82f6",
+  "Medical": "#ef4444", "Physiotherapy": "#14b8a6", "Mental health": "#8b5cf6", "Cessation groups": "#f59e0b"
 };
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null); 
   const [rootReplyLocation, setRootReplyLocation] = useState<[number, number] | null>(null);
   
   // Confirm Modal State
@@ -66,6 +70,34 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   
   const options = post.type === 'poll' ? post.options || [] : [];
   const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
+
+  const formatHelpDate = (ts: any) => {
+    if (!ts) return null;
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    return date.toLocaleString([], { 
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+    });
+  };
+
+  // Helper to convert URLs into clickable links
+  const renderTextWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    return parts.map((part, i) => 
+      urlRegex.test(part) ? (
+        <a 
+          key={i} 
+          href={part} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-indigo-600 hover:underline break-all"
+        >
+          {part}
+        </a>
+      ) : part
+    );
+  };
 
   const handleDelete = async () => {
     if (window.confirm("Delete this entire post?")) {
@@ -274,6 +306,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   const toggleReplies = () => setIsExpanded(!isExpanded);
 
+  // Effect to handle textarea auto-expansion
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [replyContent]);
+
   return (
     <>
       <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex gap-4">
@@ -335,24 +375,78 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
 
           <div className="space-y-1">
-            {/* Population Health Hazard Badge */}
-            {post.forumSection === 'Population Health' && post.hazard && (
+            {/* POPULATION HEALTH BADGE SECTION */}
+            {post.forumSection === 'Population Health' && (
               <div className="flex items-center flex-wrap gap-2 mb-2">
-                <span 
-                  style={{ 
-                    backgroundColor: `${HAZARD_COLORS[post.hazard.type] || '#94a3b8'}15`, 
-                    color: HAZARD_COLORS[post.hazard.type] || '#94a3b8'
-                  }}
-                  className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
-                >
-                  ⚠️ {post.hazard.type} 
-                </span>
-                <span 
-                  style={{ color: HAZARD_COLORS[post.hazard.type] || '#94a3b8' }}
-                  className="text-[clamp(0.65rem,2vw,0.75rem)] font-medium italic opacity-80"
-                >
-                  {post.hazard.value} 
-                </span>
+                {/* Hazard Badge */}
+                {post.hazard && (
+                  <>
+                    <span 
+                      style={{ 
+                        backgroundColor: `${HAZARD_COLORS[post.hazard.type] || '#94a3b8'}15`, 
+                        color: HAZARD_COLORS[post.hazard.type] || '#94a3b8'
+                      }}
+                      className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                    >
+                      ⚠️ {post.hazard.type} 
+                    </span>
+                    <span 
+                      style={{ color: HAZARD_COLORS[post.hazard.type] || '#94a3b8' }}
+                      className="text-[clamp(0.65rem,2vw,0.75rem)] font-medium italic opacity-80"
+                    >
+                      {post.hazard.value} 
+                    </span>
+                  </>
+                )}
+
+                {/* Help Badge */}
+                {post.help && (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span 
+                        style={{ 
+                          backgroundColor: `${HELP_COLORS[post.help.type] || '#94a3b8'}15`, 
+                          color: HELP_COLORS[post.help.type] || '#94a3b8' 
+                        }}
+                        className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                      >
+                        🤝 {post.help.type}
+                      </span>
+                      <span className="text-[clamp(0.65rem,2vw,0.75rem)] font-medium italic text-slate-500">
+                        {post.help.value}
+                      </span>
+                    </div>
+                    {(post.helpStartDate || post.helpEndDate) && (
+                      <span className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1">
+                        🕒 
+                        {formatHelpDate(post.helpStartDate) || 'Now'} 
+                        {' - '}
+                        {formatHelpDate(post.helpEndDate) || 'TBD'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Public Resource Badge */}
+                {post.public && (
+                  <>
+                    <span 
+                      style={{ 
+                        backgroundColor: `${PUBLIC_COLORS[post.public.type] || '#94a3b8'}15`, 
+                        color: PUBLIC_COLORS[post.public.type] || '#94a3b8'
+                      }}
+                      className="text-[clamp(0.65rem,2vw,0.75rem)] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                    >
+                      📍 {post.public.type} 
+                    </span>
+                    <span 
+                      style={{ color: PUBLIC_COLORS[post.public.type] || '#94a3b8' }}
+                      className="text-[clamp(0.65rem,2vw,0.75rem)] font-medium italic opacity-80"
+                    >
+                      {post.public.value} 
+                    </span>
+                  </>
+                )}
               </div>
             )}
 
@@ -374,8 +468,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             <h2 className="text-xl font-semibold text-gray-900 leading-tight">
               {post.title}
             </h2>
-            <p className="text-sm text-gray-600 leading-relaxed mt-1">
-              {post.content}
+            <p className="text-sm text-gray-600 leading-relaxed mt-1 whitespace-pre-wrap">
+              {renderTextWithLinks(post.content)}
             </p>
           </div>
           
@@ -437,9 +531,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           </div>
 
           {isReplying && (
-            <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3 animate-in fade-in zoom-in-95 duration-200 items-center">
-              <input autoFocus className="flex-1 min-w-37.5 bg-slate-100 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Write a reply..." value={replyContent} onChange={(e) => setReplyContent(e.target.value)} />
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3 animate-in fade-in zoom-in-95 duration-200 items-start">
+              {/* MODIFIED: Input changed to Auto-Expanding Textarea */}
+              <textarea
+                ref={textareaRef}
+                autoFocus
+                rows={1}
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:border-indigo-400 resize-none overflow-hidden min-h-9"
+                placeholder="Write a reply..."
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+              />
+              <div className="flex items-center gap-2 pt-1">
                 <button 
                   onClick={handleToggleRootReplyLocation}
                   className={`p-2 rounded-xl transition-colors ${rootReplyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}

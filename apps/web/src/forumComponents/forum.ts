@@ -1,9 +1,10 @@
+// forum.ts
+
 import React from 'react';
 
 export type ModalMode = "post" | "poll" | "petition";
 
-// 1. Define literal types for your sections
-export type ForumSection = 'Personal Health' | 'Population Health' | 'Off topic';
+export type ForumSection = 'Personal Health' | 'Population Health' | 'Off Topic';
 
 export interface TabItem {
   id: ModalMode;
@@ -39,9 +40,6 @@ export interface PollOption {
   votes: number; 
 }
 
-// 2. Base interface for shared properties
-// IMPROVEMENT: By lifting optional `topic`, `hazard`, and `confirm` to the BasePost, 
-// TypeScript won't throw errors when checking these properties across mixed Post arrays.
 interface BasePost {
   id: string;
   authorId: string;
@@ -55,14 +53,17 @@ interface BasePost {
   replyCount: number;
   location?: [number, number];
   forumSection: ForumSection; 
-  
-  // Properties that might exist depending on section, now accessible safely on any Post
+  // Existing properties
   topic?: string; 
+  help?: { type: string; value: string };
+  public?: { type: string; value: string };
   hazard?: { type: string; value: string };
   confirm?: ConfirmEntry[]; 
+  // Front-end Time-To-Live for Population Health help posts
+  helpStartDate?: any;
+  helpEndDate?: any;
 }
 
-// 3. Define the Discriminated Union cleanly
 export interface StandardPost extends BasePost {
   type: 'post';
 }

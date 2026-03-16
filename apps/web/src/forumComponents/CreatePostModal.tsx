@@ -25,17 +25,35 @@ interface CreatePostModalProps {
   setPollContent: (val: string) => void;
   pollOptions: string[];
   setPollOptions: (options: string[]) => void;
-  // Category States
+  // Population Health States
+  popHealthCategory: 'hazard' | 'help' | 'public';
+  setPopHealthCategory: (val: 'hazard' | 'help' | 'public') => void;
+  // Population Health Category States
   hazardType: string;
   setHazardType: (val: string) => void;
   hazardValue: string;
   setHazardValue: (val: string) => void;
+  helpType: string;
+  setHelpType: (val: string) => void;
+  helpValue: string;
+  setHelpValue: (val: string) => void;
+  publicType: string;
+  setPublicType: (val: string) => void;
+  publicValue: string;
+  setPublicValue: (val: string) => void;
+  helpStartDate: string;
+  setHelpStartDate: (val: string) => void;
+  helpEndDate: string;
+  setHelpEndDate: (val: string) => void;
+  // Personal Health Category States
   postTopic: string;
   setPostTopic: (val: string) => void;
   topicValue: string;
   setTopicValue: (val: string) => void;
   // Constants (or pass these in as props)
   HAZARD_TYPES: string[];
+  HELP_TYPES: string[];
+  PUBLIC_TYPES: string[];
   TOPIC_TYPES: string[];
   // Actions
   postLocation: [number, number] | null;
@@ -58,15 +76,31 @@ export const CreatePostModal = ({
   setPollContent,
   pollOptions,
   setPollOptions,
+  popHealthCategory,
+  setPopHealthCategory,
   hazardType,
   setHazardType,
   hazardValue,
   setHazardValue,
+  helpType,
+  setHelpType,
+  helpValue,
+  setHelpValue,
+  publicType,
+  setPublicType,
+  publicValue,
+  setPublicValue,
+  helpStartDate,
+  setHelpStartDate,
+  helpEndDate,
+  setHelpEndDate,
   postTopic,
   setPostTopic,
   topicValue,
   setTopicValue,
   HAZARD_TYPES,
+  HELP_TYPES,
+  PUBLIC_TYPES,
   TOPIC_TYPES,
   postLocation,
   onToggleLocation,
@@ -77,10 +111,9 @@ export const CreatePostModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white w-full max-w-md rounded-3xl p-6 relative shadow-2xl overflow-y-auto max-h-[90vh]">
-        
+      <div className="bg-white w-full max-w-md rounded-3xl p-3 relative shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">        
         {/* TABS */}
-        <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-2xl">
+        <div className="flex gap-2 mb-0 p-1 bg-slate-100 rounded-2xl">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -96,11 +129,11 @@ export const CreatePostModal = ({
 
         <div className="space-y-4">
           {/* TITLE INPUT */}
-          <div className="space-y-1">
+          <div className="space-y-1 mb-0.5">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Title</label>
             <input 
               autoFocus
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 font-bold text-slate-800 text-lg"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 outline-none focus:border-indigo-500 font-bold text-slate-800 text-lg"
               placeholder={modalMode === 'petition' ? "Petition Title" : modalMode === 'poll' ? "Poll Topic" : "Post Title"}
               value={postTitle}
               onChange={(e) => setPostTitle(e.target.value)}
@@ -110,7 +143,7 @@ export const CreatePostModal = ({
           {/* POLL MODE CONTENT */}
           {modalMode === 'poll' ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="space-y-1">
+              <div className="space-y-1 mb-0.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
                 <input 
                   className="w-full bg-indigo-50/30 border border-slate-200 p-4 rounded-2xl outline-none focus:border-indigo-500 font-normal text-slate-600"
@@ -145,7 +178,7 @@ export const CreatePostModal = ({
                 ))}
               </div>
 
-              {pollOptions.length < 5 && (
+              {pollOptions.length < 4 && (
                 <button 
                   onClick={() => setPollOptions([...pollOptions, ''])} 
                   className="text-indigo-600 text-xs font-bold flex items-center gap-1 mt-1"
@@ -156,7 +189,7 @@ export const CreatePostModal = ({
             </div>
           ) : (
             /* STANDARD POST / PETITION CONTENT */
-            <div className="space-y-1">
+            <div className="space-y-1 mb-0.5">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Content</label>
               <textarea 
                 className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 outline-none min-h-32 resize-none font-normal text-slate-600 leading-relaxed"
@@ -169,23 +202,102 @@ export const CreatePostModal = ({
 
           {/* DYNAMIC SECTION INPUTS */}
           {activeSection === 'Population Health' && (
-            <div className="space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Hazard Reporting</label>
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Reporting Category</label>
+              
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                {(['hazard', 'help', 'public'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setPopHealthCategory(cat)} 
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                      popHealthCategory === cat ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex flex-col gap-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                <select 
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                  value={hazardType}
-                  onChange={(e) => setHazardType(e.target.value)}
-                >
-                  <option value="">Select hazard type...</option>
-                  {HAZARD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-                <input 
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                  placeholder="Specific details..."
-                  value={hazardValue}
-                  onChange={(e) => setHazardValue(e.target.value)}
-                />
+                {popHealthCategory === 'hazard' && (
+                  <>
+                    <select 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      value={hazardType}
+                      onChange={(e) => setHazardType(e.target.value)}
+                    >
+                      <option value="">Select hazard...</option>
+                      {HAZARD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <input 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      placeholder="Detail"
+                      value={hazardValue}
+                      onChange={(e) => setHazardValue(e.target.value)}
+                    />
+                  </>
+                )}
+
+                {/* Replace the Help section inside CreatePostModal */}
+                {popHealthCategory === 'help' && (
+                  <div className="space-y-3">
+                    <select 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      value={helpType}
+                      onChange={(e) => setHelpType(e.target.value)}
+                    >
+                      <option value="">Select help type...</option>
+                      {HELP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <input 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      placeholder="Details (Time/Place)..."
+                      value={helpValue}
+                      onChange={(e) => setHelpValue(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start Time</label>
+                        <input 
+                          type="datetime-local"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                          value={helpStartDate}
+                          onChange={(e) => setHelpStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">End (Expiry)</label>
+                        <input 
+                          type="datetime-local"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                          value={helpEndDate}
+                          onChange={(e) => setHelpEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {popHealthCategory === 'public' && (
+                  <>
+                    <select 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      value={publicType}
+                      onChange={(e) => setPublicType(e.target.value)}
+                    >
+                      <option value="">Select resource...</option>
+                      {PUBLIC_TYPES.map(t => <option key={t} value={t}>{t}</option>)} 
+                    </select>
+                    <input 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
+                      placeholder="Detail"
+                      value={publicValue}
+                      onChange={(e) => setPublicValue(e.target.value)}
+                    />
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -228,7 +340,7 @@ export const CreatePostModal = ({
         </div>
 
         {/* FOOTER BUTTONS */}
-        <div className="flex gap-3 mt-8">
+        <div className="flex gap-3 mt-4">
           <button onClick={onClose} className="flex-1 py-3 text-slate-500 bg-slate-100 rounded-xl font-bold">Cancel</button>
           <button onClick={onCreate} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700">
             Publish

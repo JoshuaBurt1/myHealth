@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, getDoc, updateDoc, 
   serverTimestamp, increment, arrayUnion, arrayRemove, collectionGroup, where 
@@ -11,9 +11,36 @@ import type { Reply } from './forum';
 
 const LEVEL_COLORS = ['border-indigo-200', 'border-blue-300', 'border-sky-300', 'border-cyan-200'];
 
+const LinkifiedText: React.FC<{ text: string }> = ({ text }) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.match(urlRegex)) {
+          return (
+            <a 
+              key={i} 
+              href={part} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-indigo-500 hover:text-indigo-700 underline break-all"
+            >
+              {part}
+            </a>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+};
+
 const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }> = ({ reply, allReplies, postId }) => {
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const { userLocation } = useLocation();
   const [replyLocation, setReplyLocation] = useState<[number, number] | null>(null);
@@ -23,6 +50,14 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
   
   const children = allReplies.filter(r => r.parentId === reply.id);
   const colorClass = LEVEL_COLORS[Math.min(reply.level, LEVEL_COLORS.length - 1)];
+
+  // Auto-expand textarea height
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [replyContent]);
 
   const handleToggleLocation = () => {
     if (replyLocation) {
@@ -74,7 +109,7 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
       console.error("Error adding nested reply: ", err);
     }
   };
-
+  
   const handleReplyReaction = async (reactionType: 'like' | 'dislike') => {
     if (!user) return alert("Please log in!");
     const replyRef = doc(db, reply.fullPath);
@@ -177,8 +212,8 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
           )}
         </div>
         
-        <p className={`text-sm ${reply.isDeleted ? 'text-slate-400 italic' : 'text-slate-600'}`}>
-          {reply.content}
+        <p className={`text-sm whitespace-pre-wrap ${reply.isDeleted ? 'text-slate-400 italic' : 'text-slate-600'}`}>
+          {reply.isDeleted ? reply.content : <LinkifiedText text={reply.content} />}
         </p>
         
         {!reply.isDeleted && (
@@ -212,31 +247,34 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
       </div>
 
       {isReplying && (
-        <div className="flex gap-2 mt-2 ml-2 items-center">
-          <input 
+        <div className="flex gap-2 mt-2 ml-2 items-start">
+          <textarea 
+            ref={textareaRef}
             autoFocus
-            type="text"
-            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+            rows={1}
+            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:border-indigo-400 resize-none overflow-hidden min-h-9"
             placeholder="Write a reply..."
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
           />
-          <button 
-            onClick={handleToggleLocation}
-            className={`p-1.5 rounded-xl transition-colors ${replyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-            title="Attach Location"
-          >
-            <MapPin size={16} />
-          </button>
-          <button 
-            onClick={handleNestedReply}
-            className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700"
-          >
-            Post
-          </button>
-          <button onClick={() => setIsReplying(false)} className="text-slate-400 hover:text-slate-600 p-1">
-            <X size={16}/>
-          </button>
+          <div className="flex gap-1 items-center mt-1">
+            <button 
+              onClick={handleToggleLocation}
+              className={`p-1.5 rounded-xl transition-colors ${replyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+              title="Attach Location"
+            >
+              <MapPin size={16} />
+            </button>
+            <button 
+              onClick={handleNestedReply}
+              className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-indigo-700 h-8"
+            >
+              Post
+            </button>
+            <button onClick={() => setIsReplying(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <X size={16}/>
+            </button>
+          </div>
         </div>
       )}
 
