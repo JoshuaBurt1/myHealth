@@ -102,8 +102,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
           ...dynamicMetrics.map(m => m.key)
         ];
 
-        // Case-insensitive mapping: ensures user-input metrics like "Glucose" 
-        // fall gracefully into the standard "glucose" pipeline and inherit defined units
         allKeys.forEach(targetKey => {
           const actualKey = Object.keys(p).find(k => k.toLowerCase() === targetKey.toLowerCase());
           if (actualKey && p[actualKey]) {
@@ -165,7 +163,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     const now = new Date();
     let threshold = 0;
 
-    // 1. Determine Date Range 
+    // 1. Date Range Filtering
     if (customStart && customEnd) {
       threshold = new Date(customStart).getTime();
       const endTs = new Date(customEnd).getTime();
@@ -183,44 +181,70 @@ const DataScreen: React.FC<DataScreenProps> = ({
       result = result.filter(d => d.timestamp >= threshold);
     }
 
-    // Increased threshold to 0.05 to smoothly fall back to raw precision rendering
+    // 2. STRICTURE DEDUPLICATION (Fixes the zig-zag)
+    const uniqueMap: { [key: number]: any } = {};
+    result.forEach(point => {
+      if (!uniqueMap[point.timestamp]) {
+        uniqueMap[point.timestamp] = { ...point };
+      } else {
+        Object.assign(uniqueMap[point.timestamp], point);
+      }
+    });
+    result = Object.values(uniqueMap).sort((a: any, b: any) => a.timestamp - b.timestamp);
+
+    // 3. Conditional Reduction: Only apply bucketing if we are NOT at maximum detail (reductionFactor < 0.05)
     if (result.length <= 1 || reductionFactor <= 0.05) return result;
 
     const timeSpan = result[result.length - 1].timestamp - result[0].timestamp;
-    if (timeSpan === 0) return result;
-
-    const minPoints = Math.min(10, result.length);
-    const targetPoints = Math.max(minPoints, Math.floor(result.length * (1 - reductionFactor)));
-    
-    if (targetPoints >= result.length) return result;
-
+    const targetPoints = Math.max(10, Math.floor(result.length * (1 - reductionFactor)));
     const adjustedInterval = timeSpan / targetPoints;
-    if (adjustedInterval <= 0) return result;
 
-    const buckets: { [key: number]: any } = {};
-    const baseTimestamp = result[0].timestamp;
+    const bucketsData: { [key: number]: any[] } = {};
     
+    // Group raw points into temporary arrays per bucket
     result.forEach(point => {
-      const offsetTime = point.timestamp - baseTimestamp;
-      const bucketIndex = Math.floor(offsetTime / adjustedInterval);
-      const bucketKey = baseTimestamp + (bucketIndex * adjustedInterval);
-
-      if (!buckets[bucketKey]) {
-        buckets[bucketKey] = { timestamp: bucketKey };
-      }
-
-      Object.keys(point).forEach(key => {
-        if (key === 'timestamp' || key.endsWith('_raw')) return;
-        const val = point[key];
-        
-        if (buckets[bucketKey][key] === undefined || val > buckets[bucketKey][key]) {
-          buckets[bucketKey][key] = val;
-          buckets[bucketKey][`${key}_raw`] = point[`${key}_raw`];
-        }
-      });
+      const bucketKey = Math.floor(point.timestamp / adjustedInterval) * adjustedInterval;
+      if (!bucketsData[bucketKey]) bucketsData[bucketKey] = [];
+      bucketsData[bucketKey].push(point);
     });
 
-    return Object.values(buckets).sort((a: any, b: any) => a.timestamp - b.timestamp);
+    return Object.keys(bucketsData).map(key => {
+      const points = bucketsData[Number(key)];
+      if (points.length === 1) return points[0];
+
+      // Start with a clean slate for the bucketed point
+      const representativePoint: any = { timestamp: Number(key) };
+
+      // Identify all unique metric keys present in this bucket
+      const allKeysInBucket = new Set<string>();
+      points.forEach(p => {
+        Object.keys(p).forEach(k => {
+          if (typeof p[k] === 'number' && k !== 'timestamp') allKeysInBucket.add(k);
+        });
+      });
+
+      allKeysInBucket.forEach(mKey => {
+        const validPoints = points.filter(p => p[mKey] !== undefined);
+        if (validPoints.length === 0) return;
+
+        const values = validPoints.map(p => p[mKey]);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        
+        // Find the specific point object that has the value furthest from the average
+        const outlierPoint = validPoints.reduce((prev, curr) => 
+          Math.abs(curr[mKey] - avg) > Math.abs(prev[mKey] - avg) ? curr : prev
+        );
+
+        representativePoint[mKey] = outlierPoint[mKey];
+        
+        // Critically: Keep the raw metadata linked to the actual outlier point
+        if (outlierPoint[`${mKey}_raw`]) {
+          representativePoint[`${mKey}_raw`] = outlierPoint[`${mKey}_raw`];
+        }
+      });
+
+      return representativePoint;
+    }).sort((a, b) => a.timestamp - b.timestamp);
   }, [vitalsData, timeRange, customStart, customEnd, reductionFactor]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
