@@ -12,6 +12,15 @@ interface ModalWrapperProps {
   children: React.ReactNode;
 }
 
+interface DOBModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  dob: string;
+  setDob: (v: string) => void;
+  onSave: () => Promise<void>;
+  saving: boolean;
+}
+
 interface VitalModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,7 +50,6 @@ interface FollowModalProps {
 }
 
 // --- Components ---
-
 const ModalWrapper: React.FC<ModalWrapperProps> = ({ isOpen, onClose, title, icon, children }) => {
   if (!isOpen) return null;
   return (
@@ -56,6 +64,62 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ isOpen, onClose, title, ico
         {children}
       </div>
     </div>
+  );
+};
+
+export const DOBModal: React.FC<DOBModalProps> = ({ 
+  isOpen, onClose, dob, setDob, onSave, saving 
+}) => {
+  const getTodayDate = () => new Date().toISOString().split('T')[0];
+  
+  // 1. Track if we have already performed the initial default check for this 'open' session
+  const hasInitialized = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      // 2. Only check for a default if we haven't already done so since the modal opened
+      if (!hasInitialized.current) {
+        if (!dob) {
+          const defaultDate = new Date();
+          defaultDate.setFullYear(defaultDate.getFullYear() - 18);
+          setDob(defaultDate.toISOString().split('T')[0]);
+        }
+        // Lock the gate so this block won't run again until the modal is closed and reopened
+        hasInitialized.current = true;
+      }
+    } else {
+      // 3. Reset the gate when the modal closes
+      hasInitialized.current = false;
+    }
+  }, [isOpen, dob, setDob]);
+
+  return (
+    <ModalWrapper 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title="Set Date of Birth" 
+      icon={<User size={20} className="text-indigo-500" />}
+    >
+      <div className="space-y-4 mb-6">
+        <p className="text-xs text-slate-500 font-medium px-1">
+          Your DOB is used to calculate your age and is never shown to other users.
+        </p>
+        <input 
+          type="date" 
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500"
+          value={dob || ""} 
+          max={getTodayDate()}
+          onChange={(e) => setDob(e.target.value)}
+        />
+      </div>
+      <button 
+        onClick={onSave} 
+        disabled={saving || !dob}
+        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:bg-indigo-700"
+      >
+        {saving ? <RefreshCw className="animate-spin" size={20}/> : "Confirm Birthday"}
+      </button>
+    </ModalWrapper>
   );
 };
 

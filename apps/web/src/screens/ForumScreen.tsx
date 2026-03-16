@@ -6,16 +6,16 @@ import { useLocation } from '../context/LocationContext';
 import { MessageSquarePlus, Globe, Search, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 
 // Components & Types
-import { PostCard } from '../forumComponents/PostCard';
-import { CreatePostModal } from '../forumComponents/CreatePostModal';
-import { ExpandableMap } from '../forumComponents/MapComponents';
-import type { Post } from '../forumComponents/forum';
+import { PostCard } from '../componentsForum/PostCard';
+import { CreatePostModal } from '../componentsForum/CreatePostModal';
+import { ExpandableMap } from '../componentsForum/MapComponents';
+import type { Post } from '../componentsForum/forum';
 
 // Constants & Utils
 import { 
   FORUM_SECTIONS, HAZARD_TYPES, HELP_TYPES, PUBLIC_TYPES, TOPIC_TYPES, TABS
-} from '../forumComponents/forumConstants';
-import { setupLeafletDefaults } from '../forumComponents/mapUtils';
+} from '../componentsForum/forumConstants';
+import { setupLeafletDefaults } from '../componentsForum/mapUtils';
 
 setupLeafletDefaults();
 
@@ -183,9 +183,17 @@ const ForumScreen: React.FC = () => {
           commonData.hazard = { type: hazardType, value: hazardValue.trim() };
           commonData.confirm = (postLocation || userLocation) ? [{ userId: user.uid, location: postLocation || userLocation, confirmTime: Timestamp.now() }] : [];
         } else if (popHealthCategory === 'help' && helpType) {
+          if (!helpStartDate || !helpEndDate) {
+            return alert("Both Start and End times are required for Help events.");
+          }
+          const start = new Date(helpStartDate);
+          const end = new Date(helpEndDate);
+          if (end <= start) {
+            return alert("The End time must be after the Start time.");
+          }
           commonData.help = { type: helpType, value: helpValue.trim() };
-          if (helpStartDate) commonData.helpStartDate = Timestamp.fromDate(new Date(helpStartDate));
-          if (helpEndDate) commonData.helpEndDate = Timestamp.fromDate(new Date(helpEndDate));
+          commonData.helpStartDate = Timestamp.fromDate(start);
+          commonData.helpEndDate = Timestamp.fromDate(end);
         } else if (popHealthCategory === 'public' && publicType) {
           commonData.public = { type: publicType, value: publicValue.trim() };
         }

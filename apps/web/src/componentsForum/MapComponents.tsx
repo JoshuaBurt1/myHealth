@@ -5,9 +5,9 @@ import { Search, X, Globe } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 // Constants & Utils
-import { HAZARD_TYPES, HELP_TYPES, PUBLIC_TYPES, TOPIC_TYPES, HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from '../forumComponents/forumConstants';
-import { getShapeIcon } from '../forumComponents/mapUtils';
-import type { Post } from '../forumComponents/forum';
+import { HAZARD_TYPES, HELP_TYPES, PUBLIC_TYPES, TOPIC_TYPES, HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from '../componentsForum/forumConstants';
+import { getShapeIcon } from '../componentsForum/mapUtils';
+import type { Post } from '../componentsForum/forum';
 
 // --- MAP CONTROLLER ---
 export const MapController = ({ userLocation, zoom }: { userLocation: [number, number] | null; zoom: number }) => {

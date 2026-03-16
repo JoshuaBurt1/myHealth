@@ -12,9 +12,9 @@ import ForumScreen from './screens/ForumScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import CartScreen from './storeOrder/CartScreen';
-import PaymentScreen from './storeOrder/PaymentScreen';
-import OrderHistoryScreen from './storeOrder/OrderHistoryScreen';
+import CartScreen from './componentsStore/CartScreen';
+import PaymentScreen from './componentsStore/PaymentScreen';
+import OrderHistoryScreen from './componentsStore/OrderHistoryScreen';
 
 function AppContent({ user }: { user: User | null }) {
   return (

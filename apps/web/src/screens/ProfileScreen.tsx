@@ -12,46 +12,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField, increment } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, Footprints, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
-import { Badge, InputField, CollapsibleSection } from '../profileComponents/ProfileUI';
-import { VitalModal, WorkoutModal, FollowModal } from '../profileComponents/ProfileModals';
-import { useImageUpload } from '../profileComponents/useImageUpload';
-import PrivacyWrapper from '../profileComponents/PrivacyWrapper';
-import FollowButton from '../profileComponents/FollowButton';
-import DataScreen from '../profileComponents/DataScreen';
-
-const VITAL_KEY_MAP: Record<string, string> = {
-  'Blood Pressure (Systolic)': 'bpSyst',
-  'Blood Pressure (Diastolic)': 'bpDias',
-  'Heart Rate (BPM)': 'hr',
-  'SpO2 (%)': 'spo2',
-  'Resp Rate': 'rr',
-  'Temp (°C)': 'temp',
-  'Glucose': 'glucose',
-  'Cholesterol': 'cholesterol',
-  'Ketones': 'ketones',
-  'Uric Acid': 'uricAcid',
-  'Lactate': 'lactate',
-  'Hemoglobin': 'hemoglobin',
-  'Hematocrit': 'hematocrit'
-};
-const STRENGTH_KEY_MAP: Record<string, string> = {
-  'Bench Press': 'benchPress',
-  'Squat': 'squat',
-  'Deadlift': 'deadlift'
-};
-const SPEED_KEY_MAP: Record<string, string> = {
-  '100m': 'speed100m',
-  '400m': 'speed400m',
-  '1 mile': 'speed1Mile',
-  'Steps' : 'steps'
-};
-const VITAL_ADDONS = Object.keys(VITAL_KEY_MAP);
-const STRENGTH_LIST = Object.keys(STRENGTH_KEY_MAP);
-const SPEED_LIST = Object.keys(SPEED_KEY_MAP);
+import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
+import { Badge, InputField, CollapsibleSection } from '../componentsProfile/ProfileUI';
+import { DOBModal, VitalModal, WorkoutModal, FollowModal } from '../componentsProfile/ProfileModals';
+import { useImageUpload } from '../componentsProfile/useImageUpload';
+import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
+import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
+import FollowButton from '../componentsProfile/FollowButton';
+import DataScreen from '../componentsProfile/DataScreen';
+import { 
+  VITAL_KEY_MAP, STRENGTH_KEY_MAP, SPEED_KEY_MAP, 
+  VITAL_ADDONS, STRENGTH_LIST, SPEED_LIST, getStandardUnit 
+} from '../componentsProfile/profileConstants';
 
 const ProfileScreen: React.FC = () => {
-  const [isSyncing, setIsSyncing] = useState(false);
   const [steps, setSteps] = useState(0);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   
@@ -76,6 +50,7 @@ const ProfileScreen: React.FC = () => {
   const [followingList, setFollowingList] = useState<{uid: string, name: string}[]>([]);
   const [modalConfig, setModalConfig] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
 
+  const [showDOBModal, setShowDOBModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
   const [vitalForm, setVitalForm] = useState<{
     type: 'addon' | 'custom';
@@ -110,149 +85,24 @@ const ProfileScreen: React.FC = () => {
 
   const [hiddenOther, setHiddenOther] = useState<string[]>([]);
 
+  const calculateAge = (dobString: string): string => {
+    if (!dobString) return '';
+    const today = new Date();
+    const birthDate = new Date(dobString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age >= 0 ? age.toString() : '0';
+  };
+
   const [formData, setFormData] = useState({
-    name: '', goal: '', gems: '', age: '', height: '', weight: '', bmi: ''
+    name: '', goal: '', gems: '', dob: '', age: '', height: '', weight: '', bmi: ''
   });
 
   const availableVitalAddons = VITAL_ADDONS.filter(addon => !dynamicVitals.some(v => v.label === addon));
   const availableStrengthList = STRENGTH_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
   const availableSpeedList = SPEED_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
   const sanitizeKey = (name: string) => `custom_${name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
-
-  // --- 1. Listen for data coming BACK from Native App ---
-  useEffect(() => {
-    const handleNativeMessage = async (event: any) => {
-      let data = event.data;
-      try {
-        if (typeof data === 'string') data = JSON.parse(data);
-      } catch (e) { return; }
-
-      if (data.type === 'HEALTH_CONNECT_RESULT') {
-        const { payload } = data;
-        setIsSyncing(false);
-        setLastSynced(new Date());
-
-        if (payload.error) {
-          console.error("Sync Error:", payload.error);
-          return;
-        }
-
-        // Update local UI
-        setSteps(payload.today?.steps || 0);
-
-        // --- FIRESTORE WRITE ---
-        if (userId && (payload.today?.steps > 0 || payload.yesterday?.steps > 0 || payload.hr > 0)) {
-          const profileDataRef = doc(db, 'users', userId, 'profile', 'user_data');
-          const userRootRef = doc(db, 'users', userId);
-
-          try {
-            const profileSnap = await getDoc(profileDataRef);
-            const profileData = profileSnap.exists() ? profileSnap.data() : {};
-            
-            const profileUpdates: any = {};
-            let stepsArray = Array.isArray(profileData.steps) ? [...profileData.steps] : [];
-            
-            // Map holding previously rewarded totals (e.g. {"2026-03-12": 4500})
-            let stepRewards = profileData.stepRewards || {}; 
-            let totalNewGems = 0;
-
-            // Helper to process a specific day
-            const processDayData = (dayData: { date: string, steps: number } | undefined) => {
-              if (!dayData || dayData.steps <= 0) return;
-
-              // 1. Array Update: Ensure only one max entry per day
-              const index = stepsArray.findIndex((entry: any) => 
-                entry.dateTime && entry.dateTime.startsWith(dayData.date)
-              );
-
-              // Use current time for today, but artificially set yesterday to 23:59 so line charts display it correctly
-              const isToday = dayData.date === payload.today?.date;
-              const logTime = isToday ? new Date().toISOString() : `${dayData.date}T23:59:59.000Z`;
-
-              if (index >= 0) {
-                const existingSteps = parseInt(stepsArray[index].value, 10);
-                if (dayData.steps > existingSteps) {
-                  stepsArray[index].value = String(dayData.steps);
-                  stepsArray[index].dateTime = logTime;
-                }
-              } else {
-                stepsArray.push({ value: String(dayData.steps), dateTime: logTime });
-              }
-
-              // 2. Gems Calculation (1 gem = 100 steps)
-              const alreadyRewarded = stepRewards[dayData.date] || 0;
-              const unrewardedSteps = dayData.steps - alreadyRewarded;
-
-              if (unrewardedSteps >= 100) {
-                const earnedGems = Math.floor(unrewardedSteps / 100);
-                totalNewGems += earnedGems;
-                
-                // Add the EXACT chunk we converted to gems to the total rewarded.
-                // (e.g. If unrewarded=150 -> earnedGems=1 -> accounted=100. The remaining 50 wait for next sync)
-                stepRewards[dayData.date] = alreadyRewarded + (earnedGems * 100);
-              }
-            };
-
-            processDayData(payload.yesterday);
-            processDayData(payload.today);
-
-            // Reassign updated arrays/objects to payload
-            profileUpdates.steps = stepsArray;
-            profileUpdates.stepRewards = stepRewards;
-
-            if (payload.hr > 0) {
-              profileUpdates.hr = arrayUnion({ value: String(payload.hr), dateTime: new Date().toISOString() });
-            }
-
-            // Root Document payload
-            const rootUpdates: any = {
-              daily_steps: payload.today?.steps || 0,
-              last_step_update: serverTimestamp()
-            };
-
-            // Increment gems securely on the server side
-            if (totalNewGems > 0) {
-              rootUpdates.gems = increment(totalNewGems);
-            }
-
-            // Commit Writes
-            await setDoc(profileDataRef, profileUpdates, { merge: true });
-            await setDoc(userRootRef, rootUpdates, { merge: true });
-
-            if (totalNewGems > 0) {
-              alert(`Sync successful! You earned ${totalNewGems} gems from your steps! 💎`);
-            }
-            
-          } catch (err) {
-            console.error("Firestore Write Error:", err);
-          }
-        }
-      }
-    };
-
-    window.addEventListener('message', handleNativeMessage);
-    document.addEventListener('message', handleNativeMessage);
-
-    return () => {
-      window.removeEventListener('message', handleNativeMessage);
-      document.removeEventListener('message', handleNativeMessage);
-    };
-  }, [userId]);
-
-  // --- 2. Send the command TO the Native App ---
-  const syncWithGoogleFit = () => {
-    setIsSyncing(true);
-    
-    // Check if we are inside the React Native WebView
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ 
-        type: 'SYNC_HEALTH_CONNECT' 
-      }));
-    } else {
-      setIsSyncing(false);
-      alert("Health Connect sync is only available on the mobile app.");
-    }
-  };
 
   //load user data 
   useEffect(() => {
@@ -284,15 +134,16 @@ const ProfileScreen: React.FC = () => {
     const unsubProfile = onSnapshot(profileRef, (docSnap) => {
       if (docSnap.exists()) {
         const profData = docSnap.data();
+        const storedDob = profData.dob || '';
         
         setFormData(prev => ({
           ...prev,
           name: profData.name || prev.name,
           goal: profData.goal || '',
-          age: profData.age?.length > 0 ? profData.age[profData.age.length - 1].value : '',
+          dob: storedDob,
+          age: storedDob ? calculateAge(storedDob) : (profData.age?.length > 0 ? profData.age[profData.age.length - 1].value : ''),
           height: profData.height?.length > 0 ? profData.height[profData.height.length - 1].value : '',
           weight: profData.weight?.length > 0 ? profData.weight[profData.weight.length - 1].value : '',
-
         }));
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
@@ -305,7 +156,10 @@ const ProfileScreen: React.FC = () => {
         if (Array.isArray(profData.customVitalsDefinitions)) {
           profData.customVitalsDefinitions.forEach((def: any) => {
             if (!seenVitals.has(def.key)) {
-              loadedDynamicVitals.push({ key: def.key, label: def.name, isCustom: def.key.startsWith('custom_'), unit: def.unit });
+              const isCustom = def.key.startsWith('custom_');
+              // OVERRIDE: Fetch standard unit if it is a standard vital inadvertently stored here
+              const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
+              loadedDynamicVitals.push({ key: def.key, label: def.name, isCustom, unit: correctUnit });
               newDynamicVitalsInputs[def.key] = '';
               seenVitals.add(def.key);
             }
@@ -315,7 +169,8 @@ const ProfileScreen: React.FC = () => {
         VITAL_ADDONS.forEach(addon => {
           const key = VITAL_KEY_MAP[addon];
           if (profData[key] !== undefined && !seenVitals.has(key)) {
-            loadedDynamicVitals.push({ key, label: addon, isCustom: false });
+            // APPLY STANDARD UNIT
+            loadedDynamicVitals.push({ key, label: addon, isCustom: false, unit: getStandardUnit(key) });
             newDynamicVitalsInputs[key] = '';
             seenVitals.add(key);
           }
@@ -332,7 +187,10 @@ const ProfileScreen: React.FC = () => {
         if (Array.isArray(profData.customWorkoutsDefinitions)) {
           profData.customWorkoutsDefinitions.forEach((def: any) => {
             if (!seenExercises.has(def.key)) {
-              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: def.unit });
+              const isCustom = def.key.startsWith('custom_');
+              // OVERRIDE: Fetch standard unit if it is a standard exercise inadvertently stored here
+              const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
+              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit });
               newExerciseInputs[def.key] = '';
               seenExercises.add(def.key);
             }
@@ -342,7 +200,8 @@ const ProfileScreen: React.FC = () => {
         [...Object.entries(STRENGTH_KEY_MAP), ...Object.entries(SPEED_KEY_MAP)].forEach(([label, key]) => {
           if (profData[key] !== undefined && !seenExercises.has(key)) {
             const isStrength = Object.values(STRENGTH_KEY_MAP).includes(key);
-            loadedExercises.push({ name: key, label: label, type: isStrength ? 'strength' : 'speed', unit: isStrength ? 'kg' : 'min' });
+            // APPLY STANDARD UNIT
+            loadedExercises.push({ name: key, label: label, type: isStrength ? 'strength' : 'speed', unit: getStandardUnit(key) });
             newExerciseInputs[key] = '';
             seenExercises.add(key);
           }
@@ -351,7 +210,7 @@ const ProfileScreen: React.FC = () => {
         setTrackedExercises(loadedExercises);
         setExerciseInputs(newExerciseInputs);
       }
-      setLoading(false); // Stop loading once main profile is fetched
+      setLoading(false); 
     });
 
     // 3. Listen to Profile Image
@@ -489,7 +348,10 @@ const ProfileScreen: React.FC = () => {
     try {
       const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
       const isCustom = isVital ? form.type === 'custom' : (form.type !== 'strength' && form.type !== 'speed');
-      const unit = form.customVarName || (form.type === 'strength' ? 'kg' : 'min');
+      
+      // FIX OVERRIDE: Only default to 'kg' / 'min' or customVarName if it's explicitly a custom field. Otherwise apply standard unit mapping.
+      const standardUnit = getStandardUnit(targetKey);
+      const unit = isCustom ? (form.customVarName || (form.type === 'strength' ? 'kg' : 'min')) : standardUnit;
 
       // 3. Update LOCAL UI STATE
       if (isVital) {
@@ -534,7 +396,7 @@ const ProfileScreen: React.FC = () => {
         (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000;
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
-      const updateData: any = { name: formData.name, goal: formData.goal };
+      const updateData: any = { name: formData.name, goal: formData.goal, dob: formData.dob };
 
       ['age', 'height', 'weight', 'bmi'].forEach(f => {
         if (isValid(formData[f as keyof typeof formData])) 
@@ -681,50 +543,47 @@ const ProfileScreen: React.FC = () => {
           <div className="space-y-4">
             {/* BASIC INFORMATION & STEPS */}
             <CollapsibleSection title="Basic Information" icon={<User size={18}/>}>
-              <div className="space-y-3 mt-3">
-                
-                {/* Sync Fit merged into Basic Info */}
+              <div className="space-y-3 mt-3">                
                 {isMe && !!window.ReactNativeWebView && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-orange-50/60 p-3 rounded-2xl border border-orange-100 gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-orange-100 p-2.5 rounded-xl">
-                        <Footprints className="text-orange-500" size={20} />
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black text-slate-800 leading-none mb-1">{steps.toLocaleString()}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Steps</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:items-end">
-                      <button 
-                        onClick={syncWithGoogleFit}
-                        disabled={isSyncing}
-                        className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                          isSyncing 
-                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                            : 'bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-100 active:scale-95'
-                        }`}
-                      >
-                        <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
-                        {isSyncing ? 'Syncing...' : 'Sync Fit'}
-                      </button>
-                      {lastSynced && (
-                        <span className="mt-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                          Synced: {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <HealthSyncSection 
+                    userId={userId!} 
+                    isMe={isMe} 
+                    steps={steps} 
+                    lastSynced={lastSynced} 
+                    onSyncComplete={(newSteps, syncTime, earnedGems) => {
+                      setSteps(newSteps);
+                      setLastSynced(syncTime);
+                      if (earnedGems > 0) {
+                        setFormData(prev => ({
+                          ...prev,
+                          gems: (parseInt(prev.gems || '0', 10) + earnedGems).toString()
+                        }));
+                      }
+                    }}
+                  />
                 )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
                 <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField label="Age" type="number" value={formData.age} onChange={(v: string) => setFormData({...formData, age: v})} disabled={!isMe} />
+                  <div className="relative">
+                    <InputField 
+                      label="Age" 
+                      value={formData.age} 
+                      onChange={() => {}} 
+                      disabled={true} 
+                    />
+                    {isMe && (
+                      <button 
+                        onClick={() => setShowDOBModal(true)}
+                        className="absolute right-3 top-8.5 p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                      >
+                        <Timer size={14} />
+                      </button>
+                    )}
+                  </div>
                 </PrivacyWrapper>
                 <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
                   <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
@@ -764,7 +623,7 @@ const ProfileScreen: React.FC = () => {
                   {dynamicVitals.length > 0 ? (
                     dynamicVitals.map((vital, idx) => (
                       <PrivacyWrapper key={`vital-${vital.key}-${idx}`} fieldKey={vital.key} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}>
-                        <InputField label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`} type="number" value={dynamicVitalsInputs[vital.key] || ''} onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} disabled={!isMe} icon={<Activity size={16}/>} />
+                        <InputField label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`.trim()} type="number" value={dynamicVitalsInputs[vital.key] || ''} onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} disabled={!isMe} icon={<Activity size={16}/>} />
                       </PrivacyWrapper>
                     ))
                   ) : (
@@ -800,7 +659,7 @@ const ProfileScreen: React.FC = () => {
                   {trackedExercises.length > 0 ? (
                     trackedExercises.map((ex, idx) => (
                       <PrivacyWrapper key={`exercise-${ex.name}-${idx}`} fieldKey={ex.name} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}>
-                        <InputField label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`} type="number" value={exerciseInputs[ex.name] || ''} onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} disabled={!isMe} icon={ex.type === 'speed' ? <Timer size={16}/> : <Dumbbell size={16}/>} />
+                        <InputField label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`.trim()} type="number" value={exerciseInputs[ex.name] || ''} onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} disabled={!isMe} icon={ex.type === 'speed' ? <Timer size={16}/> : <Dumbbell size={16}/>} />
                       </PrivacyWrapper>
                     ))
                   ) : (
@@ -840,11 +699,22 @@ const ProfileScreen: React.FC = () => {
           </div>
         </div>
       </div>
-
     </div>
 
     {/* GLOBAL MODALS */}
     <FollowModal config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
+
+    <DOBModal 
+      isOpen={showDOBModal} 
+      onClose={() => setShowDOBModal(false)}
+      dob={formData.dob}
+      setDob={(v) => setFormData({...formData, dob: v, age: calculateAge(v)})}
+      saving={saving}
+      onSave={async () => {
+        await handleSaveAllHealthData();
+        setShowDOBModal(false);
+      }}
+    />
     
     <VitalModal 
       isOpen={showVitalModal} 

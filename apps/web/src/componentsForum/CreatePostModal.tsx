@@ -109,6 +109,8 @@ export const CreatePostModal = ({
   
   if (!isOpen) return null;
 
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 16);
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white w-full max-w-md rounded-3xl p-3 relative shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">        
@@ -244,6 +246,7 @@ export const CreatePostModal = ({
                 {popHealthCategory === 'help' && (
                   <div className="space-y-3">
                     <select 
+                      required
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
                       value={helpType}
                       onChange={(e) => setHelpType(e.target.value)}
@@ -251,26 +254,36 @@ export const CreatePostModal = ({
                       <option value="">Select help type...</option>
                       {HELP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
+                    
                     <input 
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                      placeholder="Details (Time/Place)..."
+                      placeholder="Details..."
                       value={helpValue}
                       onChange={(e) => setHelpValue(e.target.value)}
                     />
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start Time</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+                          Start Time <span className="text-red-500">*</span>
+                        </label>
                         <input 
                           type="datetime-local"
+                          required
+                          min={yesterday} 
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
                           value={helpStartDate}
                           onChange={(e) => setHelpStartDate(e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">End (Expiry)</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+                          End (Expiry) <span className="text-red-500">*</span>
+                        </label>
                         <input 
                           type="datetime-local"
+                          required
+                          min={helpStartDate || yesterday}
                           className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
                           value={helpEndDate}
                           onChange={(e) => setHelpEndDate(e.target.value)}
@@ -316,7 +329,7 @@ export const CreatePostModal = ({
                 </select>
                 <input 
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600"
-                    placeholder="Specific details..."
+                    placeholder="Details..."
                     value={topicValue}
                     onChange={(e) => setTopicValue(e.target.value)}
                 />
