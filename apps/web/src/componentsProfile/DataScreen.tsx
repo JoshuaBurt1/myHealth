@@ -1,15 +1,15 @@
+// DataScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { doc, onSnapshot, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { 
-  XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line 
-} from 'recharts';
-import { Gauge, RefreshCw, Calendar, PlusCircle, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
+  RefreshCw, Calendar, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+  LayoutGrid, Maximize2, AlertTriangle, AlertCircle, TrendingUp, TrendingDown, Minus, X
 } from 'lucide-react';
+// Add to DataScreen.tsx imports
 import { SINGLE_GRAPHS } from '../componentsProfile/profileConstants';
-
-// Vibrant palette for dynamically fetched custom metrics
-const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
+import { useNotifications } from '../componentsProfile/componentsDataScreen/useNotifications';
+import { MetricChartRenderer } from '../componentsProfile/componentsDataScreen/MetricChartRenderer';
 
 type TimeRange = '24H' | '7D' | '1M' | '3M' | 'YTD' | '1Y' | 'Max';
 
@@ -32,6 +32,13 @@ const toDateTimeLocal = (date: Date) => {
   return localDate.toISOString().slice(0, 16);
 };
 
+const renderTrendArrow = (trend: string) => {
+  if (trend === 'up') return <TrendingUp size={14} />;
+  if (trend === 'down') return <TrendingDown size={14} />;
+  return <Minus size={14} />;
+};
+
+// --- MAIN COMPONENT ---
 const DataScreen: React.FC<DataScreenProps> = ({ 
   userId, 
   isMe, 
@@ -50,6 +57,31 @@ const DataScreen: React.FC<DataScreenProps> = ({
   // View states
   const [showAll, setShowAll] = useState(false);
   const [currentGraphIndex, setCurrentGraphIndex] = useState(0);
+
+  const [expandedAlerts, setExpandedAlerts] = useState<Record<string, boolean>>({});
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+
+  // Derive Notifications
+  const notifications = useNotifications(vitalsData);
+
+  // Helper functions
+  const toggleExpand = (id: string) => {
+    setExpandedAlerts(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const dismissAlert = (id: string) => {
+    setDismissedAlerts(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  // Filter out dismissed alerts
+  const activeAlerts = useMemo(() => 
+    notifications.filter(a => !dismissedAlerts.has(a.id)),
+    [notifications, dismissedAlerts]
+  );
 
   const handleOpenDatePicker = () => {
     if (!customStart) setCustomStart(toDateTimeLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
@@ -296,28 +328,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
     }
   };
 
-  const formatDateTime = (tickItem: any) => {
-    const d = new Date(tickItem);
-    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-  };
-
-  // Replaced manual hardcoded ticks logic with native robust Recharts configurations
-  const rotatedXAxisProps = {
-    dataKey: "timestamp",
-    type: "number" as const,
-    scale: "time" as const,
-    domain: ['auto', 'auto'] as [any, any],
-    tickFormatter: formatDateTime,
-    minTickGap: 30, 
-    fontSize: 9,
-    fontWeight: "bold",
-    axisLine: false,
-    tickLine: false,
-    dy: 15, 
-    angle: -45, 
-    textAnchor: "end" as "end",
-  };
-
   const getModalTitle = (fieldName: string) => {
     const matchedGraph = SINGLE_GRAPHS.find(g => g.key === fieldName);
     if (matchedGraph) return matchedGraph.title;
@@ -328,142 +338,12 @@ const DataScreen: React.FC<DataScreenProps> = ({
     return fieldName.replace('_', ' ');
   };
 
-  const renderCustomActiveDot = (props: any, color: string, dataKey: string) => {
-    const { cx, cy, payload } = props;
-    return (
-      <g 
-        key={`act-${dataKey}-${payload.timestamp}`} 
-        style={{ cursor: 'pointer', outline: 'none' }}
-        onClick={() => handlePointClick(payload, dataKey, dataKey)}
-      >
-        <circle cx={cx} cy={cy} r={5} fill={color} stroke="#fff" strokeWidth={2} />
-      </g>
-    );
-  };
-
-  const commonDotProps = (color: string, key: string) => ({
-    r: 5,
-    fill: color,
-    style: { cursor: 'pointer', pointerEvents: 'all' as const },
-    onClick: (props: any) => handlePointClick(props.payload, key, key)
-  });
-
   const handleNextGraph = () => {
     setCurrentGraphIndex((prev) => (prev + 1) % visibleGraphs.length);
   };
 
   const handlePrevGraph = () => {
     setCurrentGraphIndex((prev) => (prev - 1 + visibleGraphs.length) % visibleGraphs.length);
-  };
-
-  const renderGraphComponent = (graph: any) => {
-    if (!graph) return null;
-
-    if (graph.type === 'bp') {
-      return (
-        <MetricGraph key="bp" title="BLOOD PRESSURE" unit="mmHg" icon={<Gauge className="text-violet-500" />}>
-          <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-            <XAxis {...rotatedXAxisProps} />
-            <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
-            <Tooltip 
-              cursor={false} 
-              wrapperStyle={{ pointerEvents: 'none' }} 
-              labelFormatter={(val) => new Date(val).toLocaleString()} 
-              // FIXED: Added type safety and handled undefined name/value
-              formatter={(value: any, name: any) => [`${value} mmHg`, String(name || '')]}
-              itemSorter={(item) => (item.dataKey === 'bpSyst' ? -1 : 1)}
-            />
-            
-            <Line 
-              type="monotone" 
-              dataKey="bpSyst" 
-              name="Systolic" 
-              stroke="#8b5cf6" 
-              strokeWidth={3} 
-              connectNulls={true} 
-              style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps("#8b5cf6", "bpSyst")}
-              activeDot={(props: any) => renderCustomActiveDot(props, "#8b5cf6", "bpSyst")}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="bpDias" 
-              name="Diastolic" 
-              stroke="#c084fc" 
-              strokeWidth={3} 
-              connectNulls={true}
-              style={{ pointerEvents: 'none' }}
-              dot={commonDotProps("#c084fc", "bpDias")}
-              activeDot={(props: any) => renderCustomActiveDot(props, "#c084fc", "bpDias")}
-            />
-          </LineChart>
-        </MetricGraph>
-      );
-    }
-
-    if (graph.type === 'standard') {
-      const { config } = graph;
-      const domain = config.domain || ['auto', 'auto'];
-
-      return (
-        <MetricGraph key={config.key} title={config.title} unit={config.unit} icon={config.icon}>
-          <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-            <XAxis {...rotatedXAxisProps} />
-            <YAxis domain={domain} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
-            <Tooltip 
-              cursor={false} 
-              wrapperStyle={{ pointerEvents: 'none' }} 
-              labelFormatter={(val) => new Date(val).toLocaleString()}
-              // FIXED: Handled potential undefined values
-              formatter={(value: any) => [`${value ?? ''} ${config.unit}`, config.title]} 
-            />
-            <Line 
-              type="monotone" 
-              dataKey={config.key} 
-              stroke={config.color} 
-              strokeWidth={3} 
-              connectNulls 
-              style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps(config.color, config.key)}
-              activeDot={(props: any) => renderCustomActiveDot(props, config.color, config.key)}
-            />
-          </LineChart>
-        </MetricGraph>
-      );
-    }
-
-    if (graph.type === 'custom') {
-      const { m, index } = graph;
-      const customColor = CUSTOM_COLORS[index % CUSTOM_COLORS.length];
-
-      return (
-        <MetricGraph key={m.key} title={m.name.toUpperCase()} unit={m.unit} icon={<PlusCircle style={{ color: customColor }} />}>
-          <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-            <XAxis {...rotatedXAxisProps} />
-            <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
-            <Tooltip 
-              cursor={false} 
-              wrapperStyle={{ pointerEvents: 'none' }} 
-              labelFormatter={(val) => new Date(val).toLocaleString()}
-              // FIXED: Handled potential undefined values
-              formatter={(value: any) => [`${value ?? ''} ${m.unit}`, m.name.toUpperCase()]} 
-            />
-            <Line 
-              type="monotone" 
-              dataKey={m.key} 
-              stroke={customColor} 
-              strokeWidth={3} 
-              connectNulls 
-              style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps(customColor, m.key)}
-              activeDot={(props: any) => renderCustomActiveDot(props, customColor, m.key)}
-            />
-          </LineChart>
-        </MetricGraph>
-      );
-    }
-
-    return null;
   };
 
   if (loading || !isReady) return (
@@ -474,6 +354,85 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8 pb-10">
+      
+      {/* 3. NOTIFICATIONS PANEL (Now placed below Analytics) */}
+      {activeAlerts.length > 0 && (
+        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
+          {activeAlerts.map((alert) => {
+            const isExpanded = !!expandedAlerts[alert.id];
+            const alertDate = alert.timestamp ? alert.timestamp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Time';
+
+            return (
+              <div 
+                key={alert.id}
+                className={`group flex flex-col rounded-2xl border transition-all duration-300 overflow-hidden ${
+                  alert.type === 'critical' 
+                    ? 'bg-red-50/50 border-red-100' 
+                    : 'bg-yellow-50/50 border-yellow-100'
+                }`}
+              >
+                {/* Header: Clickable to Expand */}
+                <div 
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-black/5"
+                  onClick={() => toggleExpand(alert.id)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={alert.type === 'critical' ? 'text-red-500' : 'text-yellow-500'}>
+                      {alert.type === 'critical' ? <AlertTriangle size={20} /> : <AlertCircle size={20} />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold uppercase tracking-tight text-xs text-slate-900">
+                          {alert.title}
+                        </h4>
+                        <span className="text-[10px] font-medium opacity-40 px-2 py-0.5 bg-black/5 rounded-full">
+                          {alertDate}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* Trends displayed in header */}
+                    <div className="flex gap-1">
+                      {alert.trends.map((trend: string, i: number) => (
+                        <span key={i} className={alert.type === 'critical' ? 'text-red-600' : 'text-yellow-600'}>
+                          {renderTrendArrow(trend)}
+                        </span>
+                      ))}
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); dismissAlert(alert.id); }}
+                      className="p-1.5 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={16} />
+                    </button>
+                    <div className="text-slate-400">
+                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expandable Body */}
+                {isExpanded && (
+                  <div className="px-12 pb-5 pt-0 animate-in slide-in-from-top-2 duration-300">
+                    <p className={`text-xs font-bold mb-2 ${alert.type === 'critical' ? 'text-red-700/80' : 'text-yellow-700/80'}`}>
+                      {alert.metricText}
+                    </p>
+                    <p className={`text-sm leading-relaxed ${alert.type === 'critical' ? 'text-red-800' : 'text-yellow-800'}`}>
+                      {alert.reasoning}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* REMAINDER OF YOUR UI (Controls & Graphs) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div className="flex flex-col items-start gap-4 mb-2 w-full">
           <div className="flex items-center w-full max-w-full overflow-x-auto whitespace-nowrap bg-slate-100/80 p-1 rounded-2xl border border-slate-200/50 backdrop-blur-md no-scrollbar">
@@ -545,37 +504,49 @@ const DataScreen: React.FC<DataScreenProps> = ({
           No metrics to display.
         </div>
       ) : (
-        <div className={showAll ? "grid grid-cols-1 gap-8" : "relative"}>
+        <div className={showAll ? "grid grid-cols-1 gap-8 w-full" : "relative w-full"}>
           
-          {showAll && visibleGraphs.map(graph => renderGraphComponent(graph))}
+  {showAll && visibleGraphs.map((graph, idx) => (
+    <div key={idx} className="w-full h-125"> 
+      <MetricChartRenderer 
+        graph={graph} 
+        filteredData={filteredData} 
+        onPointClick={handlePointClick} 
+      />
+    </div>
+  ))}
 
-          {!showAll && (
-            <div className="relative flex items-center group">
-              {visibleGraphs.length > 1 && (
-                <button 
-                  onClick={handlePrevGraph} 
-                  className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-              )}
+  {!showAll && (
+    <div className="relative flex items-center group w-full h-125"> 
+      {visibleGraphs.length > 1 && (
+        <button 
+          onClick={handlePrevGraph} 
+          className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+        >
+          <ChevronLeft size={24} />
+        </button>
+      )}
 
-              <div className="w-full flex-1">
-                {renderGraphComponent(visibleGraphs[currentGraphIndex])}
-              </div>
+      {/* Added h-full wrapper for the single graph */}
+      <div className="w-full h-full">
+        <MetricChartRenderer 
+          graph={visibleGraphs[currentGraphIndex]} 
+          filteredData={filteredData} 
+          onPointClick={handlePointClick} 
+        />
+      </div>
 
-              {visibleGraphs.length > 1 && (
-                <button 
-                  onClick={handleNextGraph} 
-                  className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
-                >
-                  <ChevronRight size={24} />
-                </button>
-              )}
-            </div>
-          )}
-
-        </div>
+      {visibleGraphs.length > 1 && (
+        <button 
+          onClick={handleNextGraph} 
+          className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+        >
+          <ChevronRight size={24} />
+        </button>
+      )}
+    </div>
+  )}
+</div>
       )}
 
       {selectedPoint && (
@@ -670,26 +641,5 @@ const DataScreen: React.FC<DataScreenProps> = ({
   );
 };
 
-const MetricGraph = ({ title, unit, icon, children }: any) => (
-  <div 
-    className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col min-w-0"
-    style={{ height: '450px' }} 
-  >
-    <div className="flex items-center justify-between mb-2">
-      <div className="flex items-center gap-3">
-        <div className="bg-slate-50 p-3 rounded-2xl">{icon}</div>
-        <div>
-          <h3 className="text-sm font-black text-slate-900 tracking-widest uppercase">{title}</h3>
-          <p className="text-[10px] text-slate-400 font-bold uppercase">{unit}</p>
-        </div>
-      </div>
-    </div>
-    <div className="flex-1 w-full min-h-0 pointer-events-auto">
-      <ResponsiveContainer width="100%" height="100%">
-        {children}
-      </ResponsiveContainer>
-    </div>
-  </div>
-);
 
 export default DataScreen;
