@@ -12,17 +12,22 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField, increment } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, RefreshCw, Dumbbell, Timer, PlusCircle } from 'lucide-react';
-import { Badge, InputField, CollapsibleSection } from '../componentsProfile/ProfileUI';
-import { DOBModal, VitalModal, WorkoutModal, FollowModal } from '../componentsProfile/ProfileModals';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, RefreshCw, Dumbbell, Calendar } from 'lucide-react';
+import { Badge, InputField, CollapsibleSection, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
+import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
+import { ModalSchedule } from '../componentsProfile/ModalSchedule';
+import { ModalVitals } from '../componentsProfile/ModalVitals';
+import { ModalExercises } from '../componentsProfile/ModalExercises';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
 import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
 import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
 import FollowButton from '../componentsProfile/FollowButton';
 import DataScreen from '../componentsProfile/DataScreen';
+
 import { 
   VITAL_KEY_MAP, STRENGTH_KEY_MAP, SPEED_KEY_MAP, 
-  VITAL_ADDONS, STRENGTH_LIST, SPEED_LIST, getStandardUnit 
+  PHYSIO_KEY_MAP, YOGA_KEY_MAP, MOBILITY_KEY_MAP,
+  getStandardUnit 
 } from '../componentsProfile/profileConstants';
 
 const ProfileScreen: React.FC = () => {
@@ -51,34 +56,12 @@ const ProfileScreen: React.FC = () => {
   const [modalConfig, setModalConfig] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
 
   const [showDOBModal, setShowDOBModal] = useState(false);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
-  const [vitalForm, setVitalForm] = useState<{
-    type: 'addon' | 'custom';
-    name: string;
-    value: string;
-    customVarName: string;
-  }>({
-    type: 'addon',
-    name: '',
-    value: '',
-    customVarName: ''
-  });
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   const [dynamicVitals, setDynamicVitals] = useState<{key: string, label: string, isCustom: boolean, unit?: string}[]>([]);
   const [dynamicVitalsInputs, setDynamicVitalsInputs] = useState<Record<string, string>>({});
-
-  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
-  const [workoutForm, setWorkoutForm] = useState<{
-    type: 'strength' | 'speed' | 'custom';
-    name: string;
-    value: string;
-    customVarName: string;
-  }>({
-    type: 'strength',
-    name: '',
-    value: '',
-    customVarName: ''
-  });
     
   const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string}[]>([]);
   const [exerciseInputs, setExerciseInputs] = useState<Record<string, string>>({});
@@ -96,13 +79,8 @@ const ProfileScreen: React.FC = () => {
   };
 
   const [formData, setFormData] = useState({
-    name: '', goal: '', gems: '', dob: '', age: '', height: '', weight: '', bmi: ''
+    name: '', goal: '', sex: '', dob: '', age: '', height: '', weight: '', bmi: '', gems: ''
   });
-
-  const availableVitalAddons = VITAL_ADDONS.filter(addon => !dynamicVitals.some(v => v.label === addon));
-  const availableStrengthList = STRENGTH_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
-  const availableSpeedList = SPEED_LIST.filter(item => !trackedExercises.some(ex => ex.name === item));
-  const sanitizeKey = (name: string) => `custom_${name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
 
   //load user data 
   useEffect(() => {
@@ -140,6 +118,7 @@ const ProfileScreen: React.FC = () => {
           ...prev,
           name: profData.name || prev.name,
           goal: profData.goal || '',
+          sex: profData.sex || '',
           dob: storedDob,
           age: storedDob ? calculateAge(storedDob) : (profData.age?.length > 0 ? profData.age[profData.age.length - 1].value : ''),
           height: profData.height?.length > 0 ? profData.height[profData.height.length - 1].value : '',
@@ -153,11 +132,11 @@ const ProfileScreen: React.FC = () => {
         const newDynamicVitalsInputs: Record<string, string> = {};
         const seenVitals = new Set<string>();
 
+        // 1. Custom Definitions
         if (Array.isArray(profData.customVitalsDefinitions)) {
           profData.customVitalsDefinitions.forEach((def: any) => {
             if (!seenVitals.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
-              // OVERRIDE: Fetch standard unit if it is a standard vital inadvertently stored here
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
               loadedDynamicVitals.push({ key: def.key, label: def.name, isCustom, unit: correctUnit });
               newDynamicVitalsInputs[def.key] = '';
@@ -166,11 +145,15 @@ const ProfileScreen: React.FC = () => {
           });
         }
 
-        VITAL_ADDONS.forEach(addon => {
-          const key = VITAL_KEY_MAP[addon];
+        // 2. Standard Vitals (Replaces the VITAL_LIST.forEach loop)
+        Object.entries(VITAL_KEY_MAP).forEach(([label, key]) => {
           if (profData[key] !== undefined && !seenVitals.has(key)) {
-            // APPLY STANDARD UNIT
-            loadedDynamicVitals.push({ key, label: addon, isCustom: false, unit: getStandardUnit(key) });
+            loadedDynamicVitals.push({ 
+              key, 
+              label, 
+              isCustom: false, 
+              unit: getStandardUnit(key) 
+            });
             newDynamicVitalsInputs[key] = '';
             seenVitals.add(key);
           }
@@ -184,27 +167,47 @@ const ProfileScreen: React.FC = () => {
         const newExerciseInputs: Record<string, string> = {};
         const seenExercises = new Set<string>();
 
+        // 1. Process Custom Definitions (including those that might be standard)
         if (Array.isArray(profData.customWorkoutsDefinitions)) {
           profData.customWorkoutsDefinitions.forEach((def: any) => {
             if (!seenExercises.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
-              // OVERRIDE: Fetch standard unit if it is a standard exercise inadvertently stored here
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
-              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit });
+              loadedExercises.push({ 
+                name: def.key, 
+                label: def.name, 
+                type: def.type, 
+                unit: correctUnit 
+              });
               newExerciseInputs[def.key] = '';
               seenExercises.add(def.key);
             }
           });
         }
 
-        [...Object.entries(STRENGTH_KEY_MAP), ...Object.entries(SPEED_KEY_MAP)].forEach(([label, key]) => {
-          if (profData[key] !== undefined && !seenExercises.has(key)) {
-            const isStrength = Object.values(STRENGTH_KEY_MAP).includes(key);
-            // APPLY STANDARD UNIT
-            loadedExercises.push({ name: key, label: label, type: isStrength ? 'strength' : 'speed', unit: getStandardUnit(key) });
-            newExerciseInputs[key] = '';
-            seenExercises.add(key);
-          }
+        // 2. Process all standard categories from profileConstants
+        const allStandardMaps = [
+          { map: STRENGTH_KEY_MAP, type: 'strength' },
+          { map: SPEED_KEY_MAP, type: 'speed' },
+          { map: PHYSIO_KEY_MAP, type: 'physio' },
+          { map: YOGA_KEY_MAP, type: 'yoga' },
+          { map: MOBILITY_KEY_MAP, type: 'mobility' }
+        ];
+
+        allStandardMaps.forEach(({ map, type }) => {
+          Object.entries(map).forEach(([label, key]) => {
+            // If the user has data for this key in Firestore and we haven't added it yet
+            if (profData[key] !== undefined && !seenExercises.has(key)) {
+              loadedExercises.push({ 
+                name: key, 
+                label: label, 
+                type: type, 
+                unit: getStandardUnit(key) 
+              });
+              newExerciseInputs[key] = '';
+              seenExercises.add(key);
+            }
+          });
         });
 
         setTrackedExercises(loadedExercises);
@@ -319,66 +322,6 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const handleSaveItem = async (mode: 'vital' | 'workout') => {
-    const isVital = mode === 'vital';
-    const form = isVital ? vitalForm : workoutForm;
-    if (!userId || !form.name) return;
-
-    const displayName = form.name.trim();
-    let targetKey: string;
-
-    // 1. Determine the key (Standard Map or Sanitize Custom)
-    if (isVital) {
-      targetKey = VITAL_KEY_MAP[displayName] || sanitizeKey(displayName);
-    } else {
-      targetKey = STRENGTH_KEY_MAP[displayName] || SPEED_KEY_MAP[displayName] || sanitizeKey(displayName);
-    }
-
-    // 2. Duplicate Check
-    const isDuplicate = isVital 
-      ? dynamicVitals.some(v => v.key === targetKey)
-      : trackedExercises.some(ex => ex.name === targetKey);
-
-    if (isDuplicate) {
-      alert(`This ${mode} is already being tracked.`);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-      const isCustom = isVital ? form.type === 'custom' : (form.type !== 'strength' && form.type !== 'speed');
-      
-      // FIX OVERRIDE: Only default to 'kg' / 'min' or customVarName if it's explicitly a custom field. Otherwise apply standard unit mapping.
-      const standardUnit = getStandardUnit(targetKey);
-      const unit = isCustom ? (form.customVarName || (form.type === 'strength' ? 'kg' : 'min')) : standardUnit;
-
-      // 3. Update LOCAL UI STATE
-      if (isVital) {
-        setDynamicVitals(prev => [...prev, { key: targetKey, label: displayName, isCustom, unit }]);
-        setDynamicVitalsInputs(prev => ({ ...prev, [targetKey]: '' }));
-      } else {
-        setTrackedExercises(prev => [...prev, { name: targetKey, label: displayName, type: form.type, unit }]);
-        setExerciseInputs(prev => ({ ...prev, [targetKey]: '' }));
-      }
-
-      // 4. Construct FIRESTORE PAYLOAD
-      const definition = { name: displayName, key: targetKey, unit, type: form.type };
-      const payload = {
-        [targetKey]: [], // Initialize the top-level array for logs
-        [isVital ? 'customVitalsDefinitions' : 'customWorkoutsDefinitions']: arrayUnion(definition)
-      };
-
-      await setDoc(profileRef, payload, { merge: true });
-      isVital ? setShowVitalModal(false) : setShowWorkoutModal(false);
-    } catch (err) {
-      console.error(err);
-      alert(`Failed to add ${mode}.`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleSaveAllHealthData = async () => {
     if (!userId) return;
     setSaving(true);
@@ -396,7 +339,7 @@ const ProfileScreen: React.FC = () => {
         (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000;
 
       const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
-      const updateData: any = { name: formData.name, goal: formData.goal, dob: formData.dob };
+      const updateData: any = { name: formData.name, goal: formData.goal, sex: formData.sex, dob: formData.dob };
 
       ['age', 'height', 'weight', 'bmi'].forEach(f => {
         if (isValid(formData[f as keyof typeof formData])) 
@@ -501,7 +444,6 @@ const ProfileScreen: React.FC = () => {
               )}
             </div>
 
-
             {/* Right/Stats & Badges */}
             <div className="flex-1 w-full flex flex-col justify-center">
               {/* Followers / Following Container on Top Right */}
@@ -540,6 +482,49 @@ const ProfileScreen: React.FC = () => {
             />
           )}
 
+          {/* QUICK ACTIONS DASHBOARD */}
+          {isMe && (
+            <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Stars size={14} className="text-indigo-400"/> Quick Logs & Actions
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                {/* Exercises Button */}
+                <button 
+                  onClick={() => setShowExerciseModal(true)} 
+                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md transition-all group"
+                >
+                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                    <Dumbbell className="text-indigo-600" size={20}/>
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Exercises</span>
+                </button>
+
+                {/* Vitals Button */}
+                <button 
+                  onClick={() => setShowVitalModal(true)} 
+                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-rose-50/50 rounded-2xl border border-rose-100 shadow-sm hover:bg-rose-50 hover:border-rose-300 hover:shadow-md transition-all group"
+                >
+                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                    <Activity className="text-rose-500" size={20}/>
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Vitals</span>
+                </button>
+
+                {/* Schedule Button */}
+                <button 
+                  onClick={() => setShowScheduleModal(true)} 
+                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all group"
+                >
+                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                    <Calendar className="text-blue-500" size={20}/>
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Schedule</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
             {/* BASIC INFORMATION & STEPS */}
             <CollapsibleSection title="Basic Information" icon={<User size={18}/>}>
@@ -562,182 +547,134 @@ const ProfileScreen: React.FC = () => {
                     }}
                   />
                 )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
-                <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <div className="relative">
-                    <InputField 
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
+                  <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {/* SEX FIELD */}
+                  <PrivacyWrapper fieldKey="sex" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <SexInputField 
+                      label="Sex" 
+                      value={formData.sex} 
+                      onChange={(v) => setFormData({ ...formData, sex: v })} 
+                      disabled={!isMe} 
+                    />
+                  </PrivacyWrapper>
+
+                  {/* AGE FIELD */}
+                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <AgeInputField 
                       label="Age" 
                       value={formData.age} 
-                      onChange={() => {}} 
-                      disabled={true} 
+                      isMe={isMe} 
+                      onIconClick={() => setShowDOBModal(true)} 
                     />
-                    {isMe && (
-                      <button 
-                        onClick={() => setShowDOBModal(true)}
-                        className="absolute right-3 top-8.5 p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                      >
-                        <Timer size={14} />
-                      </button>
-                    )}
+                  </PrivacyWrapper>
+
+                  {/* HEIGHT FIELD */}
+                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
+                  </PrivacyWrapper>
+
+                  {/* WEIGHT FIELD */}
+                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
+                  </PrivacyWrapper>
+
+                  {/* BMI FIELD */}
+                  <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
+                  </PrivacyWrapper>
+                </div>
+
+                {/* SAVE BASIC INFO BUTTON (Moved inside here) */}
+                {isMe && (
+                  <div className="pt-3 mt-4 border-t border-slate-100">
+                    <button 
+                      onClick={handleSaveAllHealthData}
+                      disabled={saving}
+                      className={`w-full py-3.5 rounded-2xl font-black text-white shadow-md flex justify-center items-center gap-2 transition-all ${
+                        saving ? 'bg-indigo-400 cursor-not-allowed scale-95' : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:scale-95'
+                      }`}
+                    >
+                      {saving ? <RefreshCw className="animate-spin" size={18}/> : <UploadCloud size={18}/>}
+                      {saving ? 'SAVING PROGRESS...' : 'SAVE BASIC INFO UPDATES'}
+                    </button>
                   </div>
-                </PrivacyWrapper>
-                <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
-                </PrivacyWrapper>
-                <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
-                </PrivacyWrapper>
-                <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
-                </PrivacyWrapper>
+                )}
               </div>
+            </CollapsibleSection>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Analytics/Charts */}
+        <div className="lg:sticky lg:top-4 h-full">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
+            <div className="p-3 border-b border-slate-50 bg-slate-50/50 shrink-0">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <TrendingUp size={14} /> Analytics
+              </h3>
             </div>
-          </CollapsibleSection>
-
-          {/* VITAL SIGNS */}
-          {isMe && (
-            <CollapsibleSection 
-              title="Vital Signs" 
-              icon={<Activity size={18}/>} 
-              defaultOpen={false}
-              badge={isMe && (
-                <button 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    if (dynamicVitals.filter(v => v.isCustom).length >= 10) return alert('Maximum of 10 custom vitals allowed.');
-                    setShowVitalModal(true); 
-                    setVitalForm({ ...vitalForm, name: availableVitalAddons[0] || '', type: 'addon' });
-                  }} 
-                  className="ml-2 flex items-center gap-1 text-[9px] font-bold bg-red-500 text-white px-2 py-1 rounded-full hover:bg-red-600 transition-colors"
-                >
-                  <PlusCircle size={10} /> ADD VITAL
-                </button>
-              )}
-            >
-              <div className="mt-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-red-50/30 p-3 rounded-2xl border border-red-50">
-                  {dynamicVitals.length > 0 ? (
-                    dynamicVitals.map((vital, idx) => (
-                      <PrivacyWrapper key={`vital-${vital.key}-${idx}`} fieldKey={vital.key} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}>
-                        <InputField label={`${vital.label} ${vital.unit ? `(${vital.unit})` : ''}`.trim()} type="number" value={dynamicVitalsInputs[vital.key] || ''} onChange={(v: string) => setDynamicVitalsInputs(prev => ({...prev, [vital.key]: v}))} disabled={!isMe} icon={<Activity size={16}/>} />
-                      </PrivacyWrapper>
-                    ))
-                  ) : (
-                    <div className="col-span-full text-center text-slate-400 py-3 text-sm font-medium">No vital signs tracked yet.</div>
-                  )}
-                </div>
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* FITNESS TRACKER */}
-          {isMe && (
-            <CollapsibleSection 
-              title="Fitness Tracker" 
-              icon={<Dumbbell size={18}/>}
-              defaultOpen={false} 
-              badge={(
-                <button 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    if (trackedExercises.length >= 10) return alert('Maximum of 10 workouts allowed.');
-                    setShowWorkoutModal(true);
-                    setWorkoutForm({ ...workoutForm, name: availableStrengthList[0] || '', type: 'strength' });
-                  }} 
-                  className="ml-2 flex items-center gap-1 text-[9px] font-bold bg-emerald-500 text-white px-2 py-1 rounded-full hover:bg-emerald-600 transition-colors"
-                >
-                  <PlusCircle size={10} /> ADD EXERCISE
-                </button>
-              )}
-            >
-              <div className="mt-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-emerald-50/30 p-3 rounded-2xl border border-emerald-50">
-                  {trackedExercises.length > 0 ? (
-                    trackedExercises.map((ex, idx) => (
-                      <PrivacyWrapper key={`exercise-${ex.name}-${idx}`} fieldKey={ex.name} isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther} onDelete={() => handleDeleteField(ex.label, ex.name, 'workout')}>
-                        <InputField label={`${ex.label} ${ex.unit ? `(${ex.unit})` : ''}`.trim()} type="number" value={exerciseInputs[ex.name] || ''} onChange={(v: string) => setExerciseInputs(prev => ({...prev, [ex.name]: v}))} disabled={!isMe} icon={ex.type === 'speed' ? <Timer size={16}/> : <Dumbbell size={16}/>} />
-                      </PrivacyWrapper>
-                    ))
-                  ) : (
-                    <div className="col-span-full text-center text-slate-400 py-3 text-sm font-medium">No exercises tracked yet.</div>
-                  )}
-                </div>
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* SAVE ALL UPDATES */}
-          {isMe && (
-            <button 
-              onClick={handleSaveAllHealthData}
-              disabled={saving}
-              className={`w-full py-3.5 rounded-2xl font-black text-white shadow-md flex justify-center items-center gap-2 transition-all ${
-                saving ? 'bg-indigo-400 cursor-not-allowed scale-95' : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] active:scale-95'
-              }`}
-            >
-              {saving ? <RefreshCw className="animate-spin" size={18}/> : <UploadCloud size={18}/>}
-              {saving ? 'SAVING PROGRESS...' : 'SAVE ALL UPDATES'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT COLUMN: Analytics/Charts */}
-      <div className="lg:sticky lg:top-4 h-full">
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
-          <div className="p-3 border-b border-slate-50 bg-slate-50/50 shrink-0">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <TrendingUp size={14} /> Analytics
-            </h3>
-          </div>
-          <div className="flex-1">
-            <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
+            <div className="flex-1">
+              <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* GLOBAL MODALS */}
+      <ModalFollow config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
+
+      <ModalDOB 
+        isOpen={showDOBModal} 
+        onClose={() => setShowDOBModal(false)}
+        dob={formData.dob}
+        setDob={(v) => setFormData({...formData, dob: v, age: calculateAge(v)})}
+        saving={saving}
+        onSave={async () => {
+          await handleSaveAllHealthData();
+          setShowDOBModal(false);
+        }}
+      />
+
+      <ModalVitals 
+        isOpen={showVitalModal}
+        onClose={() => setShowVitalModal(false)}
+        userId={userId!}
+        onSuccess={() => setRefreshTrigger(p => p + 1)}
+        dynamicVitals={dynamicVitals}
+        dynamicVitalsInputs={dynamicVitalsInputs}
+        setDynamicVitalsInputs={setDynamicVitalsInputs}
+        hiddenOther={hiddenOther}
+        toggleVisibilityOther={toggleVisibilityOther}
+        handleDeleteField={handleDeleteField}
+        isMe={isMe}
+      />
+
+      <ModalExercises 
+        isOpen={showExerciseModal}
+        onClose={() => setShowExerciseModal(false)}
+        userId={userId!}
+        onSuccess={() => setRefreshTrigger(p => p + 1)}
+        trackedExercises={trackedExercises}
+        exerciseInputs={exerciseInputs}
+        setExerciseInputs={setExerciseInputs}
+        hiddenOther={hiddenOther}
+        toggleVisibilityOther={toggleVisibilityOther}
+        handleDeleteField={handleDeleteField}
+        isMe={isMe}
+      />
+
+      <ModalSchedule 
+        isOpen={showScheduleModal} 
+        onClose={() => setShowScheduleModal(false)} 
+        userId={userId!} 
+      />
     </div>
-
-    {/* GLOBAL MODALS */}
-    <FollowModal config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
-
-    <DOBModal 
-      isOpen={showDOBModal} 
-      onClose={() => setShowDOBModal(false)}
-      dob={formData.dob}
-      setDob={(v) => setFormData({...formData, dob: v, age: calculateAge(v)})}
-      saving={saving}
-      onSave={async () => {
-        await handleSaveAllHealthData();
-        setShowDOBModal(false);
-      }}
-    />
-    
-    <VitalModal 
-      isOpen={showVitalModal} 
-      onClose={() => setShowVitalModal(false)} 
-      form={vitalForm} 
-      setForm={setVitalForm as any} 
-      addons={availableVitalAddons} 
-      onSave={() => handleSaveItem('vital')} 
-      saving={saving} 
-    />
-
-    <WorkoutModal 
-      isOpen={showWorkoutModal} 
-      onClose={() => setShowWorkoutModal(false)} 
-      form={workoutForm} 
-      setForm={setWorkoutForm as any} 
-      strengthList={availableStrengthList} 
-      speedList={availableSpeedList} 
-      onSave={() => handleSaveItem('workout')} 
-      saving={saving} 
-    />
-  </div>
-);
-};
+  );
+}
 
 export default ProfileScreen;
