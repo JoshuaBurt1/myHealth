@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { StyleSheet, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { googleWebClientId } from '../../packages/shared/index';
 import { 
   initialize, 
   requestPermission, 
@@ -8,6 +10,17 @@ import {
   getSdkStatus,
   SdkAvailabilityStatus 
 } from 'react-native-health-connect';
+
+try {
+  GoogleSignin.configure({
+    webClientId: googleWebClientId,
+    offlineAccess: true,
+    forceCodeForRefreshToken: true,
+  });
+console.log("[GoogleSignin]: Configuration successful");
+} catch (error) {
+  console.error("[GoogleSignin Config Error]:", error);
+}
 
 export default function App() {
   const webViewRef = useRef(null);
@@ -91,8 +104,31 @@ export default function App() {
   // --- 2. The Bridge Listener ---
   const onMessage = async (event) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
+      // Safety check for event data
+      const rawData = event.nativeEvent.data;
+      if (!rawData) return;
+      
+      const data = JSON.parse(rawData);
       console.log("[Bridge Message Received]:", data.type);
+
+      if (data.type === 'TRIGGER_GOOGLE_LOGIN') {
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        
+        // Safety: check if idToken exists before sending back
+        if (userInfo.data?.idToken) {
+          const jsCode = `
+            window.dispatchEvent(new MessageEvent('message', { 
+              data: { 
+                type: 'GOOGLE_LOGIN_SUCCESS', 
+                payload: "${userInfo.data.idToken}" 
+              } 
+            }));
+            true;
+          `;
+          webViewRef.current?.injectJavaScript(jsCode);
+        }
+      }
       
       if (data.type === 'SYNC_HEALTH_CONNECT') {
         const healthStats = await fetchHealthData();

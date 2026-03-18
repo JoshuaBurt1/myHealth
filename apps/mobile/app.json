@@ -25,6 +25,7 @@
     ],
     "android": {
       "package": "com.squarehexagon.myhealth",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"

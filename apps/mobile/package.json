@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@my-health/shared": "file:../../packages/shared",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "expo": "^54.0.33",
     "expo-asset": "^12.0.12",
     "expo-build-properties": "~1.0.10",

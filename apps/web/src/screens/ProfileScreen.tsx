@@ -12,12 +12,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, RefreshCw, Dumbbell, Calendar } from 'lucide-react';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, RefreshCw, Dumbbell, Calendar, Users } from 'lucide-react';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
+import { ModalGroups } from '../componentsProfile/ModalGroups';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
 import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
 import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
@@ -54,6 +55,7 @@ const ProfileScreen: React.FC = () => {
   const [followingList, setFollowingList] = useState<{uid: string, name: string}[]>([]);
   const [modalConfig, setModalConfig] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
 
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [showDOBModal, setShowDOBModal] = useState(false);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
@@ -411,6 +413,16 @@ const ProfileScreen: React.FC = () => {
                     <div className="text-xl font-black text-slate-800">{followingCount}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
                   </div>
+                  
+                  <div 
+                    className="bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center flex flex-col justify-center"
+                    onClick={() => setShowGroupsModal(true)}
+                  >
+                    <div className="text-xl font-black text-slate-800 flex justify-center h-7 items-center">
+                      <Users size={20} className="text-emerald-700"/>
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Groups</div>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap justify-center sm:justify-start gap-2">
@@ -587,6 +599,11 @@ const ProfileScreen: React.FC = () => {
 
       {/* GLOBAL MODALS */}
       <ModalFollow config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
+      
+      <ModalGroups 
+        isOpen={showGroupsModal} 
+        onClose={() => setShowGroupsModal(false)} 
+      />
 
       <ModalDOB 
         isOpen={showDOBModal} 

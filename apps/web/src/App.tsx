@@ -12,6 +12,7 @@ import ForumScreen from './screens/ForumScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import { GroupScreen } from './screens/GroupScreen';
 import CartScreen from './componentsStore/CartScreen';
 import PaymentScreen from './componentsStore/PaymentScreen';
 import OrderHistoryScreen from './componentsStore/OrderHistoryScreen';
@@ -34,6 +35,7 @@ function AppContent({ user }: { user: User | null }) {
             path="profile/:userId" 
             element={user ? <ProfileScreen /> : <Navigate to="/login" replace />} 
           />
+          <Route path="/group/:groupId" element={<GroupScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

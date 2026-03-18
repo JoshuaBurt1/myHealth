@@ -2,26 +2,12 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 const getEnvVar = (key: string) => {
-  const viteKey = `VITE_FIREBASE_${key}`;
   const expoKey = `EXPO_PUBLIC_FIREBASE_${key}`;
+  const viteKey = `VITE_FIREBASE_${key}`;
 
-  // 1. Check for Mobile (Process/Expo) first
-  // This is safer for Hermes/Native environments
-  if (typeof process !== 'undefined' && process.env && process.env[expoKey]) {
-    return process.env[expoKey];
-  }
-
-  // 2. Fallback to Vite (Web)
-  // We use an indirect check to help some parsers skip this if they don't support it,
-  // but Vite is still smart enough to replace the values during build.
-  try {
-    // @ts-ignore
-    const env = import.meta.env;
-    if (env) {
-      return env[viteKey];
-    }
-  } catch (e) {
-    // Fail silently on native if import.meta is totally absent
+  // This works natively in Expo and via 'define' in Vite
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[expoKey] || process.env[viteKey];
   }
 
   return undefined;
@@ -37,5 +23,6 @@ const firebaseConfig = {
   measurementId: getEnvVar('MEASUREMENT_ID')
 };
 
+export const googleWebClientId = getEnvVar('GOOGLE_WEB_CLIENT_ID');
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
