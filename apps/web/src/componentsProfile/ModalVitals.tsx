@@ -203,16 +203,26 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
           {/* Top Section: Add New Vital Dropdown / Inputs */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 max-w-2xl">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full">
             <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2">
               <PlusCircle size={16}/> TRACK A NEW VITAL
             </h3>
             
-            <div className="flex bg-slate-200/50 p-1 rounded-xl mb-3 w-fit">
-              <button className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${mode === 'standard' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`} onClick={() => setMode('standard')}>Standard</button>
-              <button className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${mode === 'custom' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`} onClick={() => setMode('custom')}>Custom</button>
+            {/* Changed w-fit to w-full and flex to grid (or flex-1 on buttons) to stretch the toggle */}
+            <div className="flex flex-wrap bg-slate-200/50 p-1 rounded-xl mb-4 gap-1 w-fit">
+              <button 
+                className={`flex-1 px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${mode === 'standard' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`} 
+                onClick={() => setMode('standard')}
+              >
+                Standard
+              </button>
+              <button 
+                className={`flex-1 px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${mode === 'custom' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`} 
+                onClick={() => setMode('custom')}
+              >
+                Custom
+              </button>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -231,12 +241,28 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
                 </select>
               ) : (
                 <>
-                  <input type="text" placeholder="Vital Name (e.g. Sleep)" className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500" value={customName} onChange={(e) => setCustomName(e.target.value)}/>
-                  <input type="text" placeholder="Unit (hrs)" className="w-24 p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500" value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}/>
+                  <input 
+                    type="text" 
+                    placeholder="Vital Name (e.g. Sleep)" 
+                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500" 
+                    value={customName} 
+                    onChange={(e) => setCustomName(e.target.value)}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Unit (hrs)" 
+                    className="w-24 p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500" 
+                    value={customUnit} 
+                    onChange={(e) => setCustomUnit(e.target.value)}
+                  />
                 </>
               )}
               
-              <button onClick={handleAddEntry} disabled={mode === 'standard' && availableStandardVitals.length === 0} className="px-6 py-3 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 transition-colors whitespace-nowrap">
+              <button 
+                onClick={handleAddEntry} 
+                disabled={mode === 'standard' && availableStandardVitals.length === 0} 
+                className="px-6 py-3 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 transition-colors whitespace-nowrap"
+              >
                 Add to Grid
               </button>
             </div>
@@ -254,8 +280,7 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
                 <p className="font-medium">No vital signs tracked yet. Add one above to get started.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                
+              <div className="grid grid-cols-2 lg:grid-cols-4 sm:gap-4 gap-2">
                 {/* 1. Existing Vitals (Passed from ProfileScreen, Supports Privacy/Delete) */}
                 {dynamicVitals.map((vital, idx) => (
                   <PrivacyWrapper 

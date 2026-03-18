@@ -130,6 +130,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
         const allKeys = [
           'bpSyst', 'bpDias',
+          'bmi',
           ...SINGLE_GRAPHS.map(g => g.key),
           ...dynamicMetrics.map(m => m.key)
         ];
@@ -167,6 +168,19 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
     if ((hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias')))) {
       graphs.push({ type: 'bp', id: 'bp' });
+    }
+
+    if (hasData('bmi') && (isMe || !hiddenOther.includes('bmi'))) {
+      graphs.push({ 
+        type: 'standard', 
+        id: 'bmi', 
+        config: { 
+          key: 'bmi', 
+          title: 'BMI', 
+          unit: '', 
+          color: '#818cf8'
+        } 
+      });
     }
 
     SINGLE_GRAPHS.forEach(config => {

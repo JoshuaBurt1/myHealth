@@ -1,6 +1,8 @@
 import React from 'react';
 import { X, RefreshCw, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { doc, setDoc, arrayUnion } from 'firebase/firestore';
+import { db } from '../firebase';
 
 // --- Interfaces ---
 
@@ -15,10 +17,10 @@ interface ModalWrapperProps {
 interface ModalDOBProps {
   isOpen: boolean;
   onClose: () => void;
+  userId: string;
   dob: string;
   setDob: (v: string) => void;
-  onSave: () => Promise<void>;
-  saving: boolean;
+  onSuccess: () => void;
 }
 
 interface ModalFollowProps {
@@ -47,30 +49,58 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ isOpen, onClose, title, ico
 };
 
 export const ModalDOB: React.FC<ModalDOBProps> = ({ 
-  isOpen, onClose, dob, setDob, onSave, saving 
+  isOpen, onClose, userId, dob, setDob, onSuccess 
 }) => {
-  const getTodayDate = () => new Date().toISOString().split('T')[0];
-  
-  // 1. Track if we have already performed the initial default check for this 'open' session
+  const [saving, setSaving] = React.useState(false);
   const hasInitialized = React.useRef(false);
+
+  const getTodayDate = () => new Date().toISOString().split('T')[0];
 
   React.useEffect(() => {
     if (isOpen) {
-      // 2. Only check for a default if we haven't already done so since the modal opened
       if (!hasInitialized.current) {
         if (!dob) {
           const defaultDate = new Date();
           defaultDate.setFullYear(defaultDate.getFullYear() - 18);
           setDob(defaultDate.toISOString().split('T')[0]);
         }
-        // Lock the gate so this block won't run again until the modal is closed and reopened
         hasInitialized.current = true;
       }
     } else {
-      // 3. Reset the gate when the modal closes
       hasInitialized.current = false;
     }
   }, [isOpen, dob, setDob]);
+
+  const handleInternalSave = async () => {
+    if (!userId || !dob) return;
+    setSaving(true);
+
+    try {
+      const calculateAge = (dobString: string): string => {
+        const today = new Date();
+        const birthDate = new Date(dobString);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+        return age.toString();
+      };
+
+      const ageValue = calculateAge(dob);
+      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+      
+      await setDoc(profileRef, { 
+        dob: dob,
+        age: arrayUnion({ value: ageValue, dateTime: new Date().toISOString() }) 
+      }, { merge: true });
+
+      onSuccess(); 
+    } catch (err) {
+      console.error("Save DOB error:", err);
+      alert("Failed to save birthday.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <ModalWrapper 
@@ -92,7 +122,7 @@ export const ModalDOB: React.FC<ModalDOBProps> = ({
         />
       </div>
       <button 
-        onClick={onSave} 
+        onClick={handleInternalSave}
         disabled={saving || !dob}
         className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:bg-indigo-700"
       >

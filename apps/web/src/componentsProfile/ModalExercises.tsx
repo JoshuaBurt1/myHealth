@@ -190,7 +190,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
             {/* Top Section: Add New Vital Dropdown / Inputs */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 max-w-2xl">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full">
             <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2">
                 <PlusCircle size={16}/> TRACK A NEW EXERCISE
             </h3>       
@@ -257,7 +257,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 <p className="font-medium">No exercises tracked yet. Add one above to get started.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 sm:gap-4 gap-2">
                 
                 {/* 1. Existing Exercises */}
                 {trackedExercises.map((ex, idx) => (

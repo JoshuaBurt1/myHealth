@@ -10,10 +10,10 @@ declare global {
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, collection, query, serverTimestamp, arrayUnion, onSnapshot, writeBatch, deleteField, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, UploadCloud, RefreshCw, Dumbbell, Calendar } from 'lucide-react';
-import { Badge, InputField, CollapsibleSection, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, RefreshCw, Dumbbell, Calendar } from 'lucide-react';
+import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
@@ -43,7 +43,6 @@ const ProfileScreen: React.FC = () => {
     userId, 
     (base64) => setProfileImage(base64)
   );
-  const [saving, setSaving] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -251,15 +250,6 @@ const ProfileScreen: React.FC = () => {
     };
   }, [userId, isMe, currentUserId]);
 
-  useEffect(() => {
-    const h = parseFloat(formData.height);
-    const w = parseFloat(formData.weight);
-    if (h > 0 && w > 0) {
-      const bmiVal = w / ((h / 100) ** 2);
-      setFormData(prev => ({ ...prev, bmi: bmiVal.toFixed(1) }));
-    }
-  }, [formData.height, formData.weight]);
-
   const handleFollowUpdate = (delta: number, followingStatus: boolean) => {
     setFollowerCount(prev => Math.max(0, prev + delta));
     setIsFollowing(followingStatus);
@@ -322,77 +312,34 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const handleSaveAllHealthData = async () => {
-    if (!userId) return;
-    setSaving(true);
+  const updateBasicInfo = async (field: string, value: any) => {
+    if (!userId || !isMe) return;
 
     try {
-      const now = new Date();
-      const nowISO = now.toISOString();
-      const userRootRef = doc(db, 'users', userId);
       const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-
-      const rootSnap = await getDoc(userRootRef);
-      const rootData = rootSnap.data() || {};
+      const timestamp = new Date().toISOString();
+      const historicalFields = ['height', 'weight'];
       
-      const isEligible = !rootData.last_vitals_update || 
-        (now.getTime() - rootData.last_vitals_update.toDate().getTime()) > 6 * 60 * 60 * 1000;
-
-      const isValid = (v: any) => v && v.toString().trim() !== '' && v.toString().trim() !== '0' && !isNaN(Number(v));
-      const updateData: any = { name: formData.name, goal: formData.goal, sex: formData.sex, dob: formData.dob };
-
-      ['age', 'height', 'weight', 'bmi'].forEach(f => {
-        if (isValid(formData[f as keyof typeof formData])) 
-          updateData[f] = arrayUnion({ value: formData[f as keyof typeof formData], dateTime: nowISO });
-      });
-
-      dynamicVitals.forEach(v => {
-        const val = dynamicVitalsInputs[v.key];
-        if (isValid(val)) {
-          updateData[v.key] = arrayUnion({ value: Number(val), dateTime: nowISO });
-        }
-      });
-
-      // 3. Exercises
-      trackedExercises.forEach(ex => {
-        const val = exerciseInputs[ex.name];
-        if (isValid(val)) {
-          updateData[ex.name] = arrayUnion({ 
-            value: Number(val), 
-            dateTime: nowISO,
-            unit: ex.unit || null 
-          });
-        }
-      });
-
-      const hasNewData = Object.keys(updateData).some(key => !['name', 'goal'].includes(key));
+      let updates: any = {};
       
-      if (!hasNewData) {
-        alert('No new values to update.');
-        setSaving(false);
-        return;
+      if (historicalFields.includes(field)) {
+        updates[field] = arrayUnion({ value: value, dateTime: timestamp });
+        
+        // Calculate and sync BMI immediately when height or weight is blurred
+        const h = parseFloat(field === 'height' ? value : formData.height);
+        const w = parseFloat(field === 'weight' ? value : formData.weight);
+        
+        if (h > 0 && w > 0) {
+          const bmiVal = (w / ((h / 100) ** 2)).toFixed(1);
+          updates['bmi'] = arrayUnion({ value: bmiVal, dateTime: timestamp });
+        }
+      } else {
+        updates[field] = value;
       }
 
-      const batch = writeBatch(db);
-      batch.set(profileRef, updateData, { merge: true });
-
-      if (isEligible) {
-        batch.update(userRootRef, { 
-          gems: increment(10),
-          last_vitals_update: serverTimestamp()
-        });
-      }
-      
-      await batch.commit();
-
-      setRefreshTrigger(p => p + 1);
-      alert(`Data updated!${isEligible ? ' +10 gems (6h recharge)' : ''}`);
-
+      await setDoc(profileRef, updates, { merge: true });
     } catch (err) {
-      console.error("Save Error:", err);
-      alert('Failed to save data.');
-    } finally {
-      setSaving(false);
+      console.error(`Error autosaving ${field}:`, err);
     }
   };
 
@@ -415,61 +362,158 @@ const ProfileScreen: React.FC = () => {
         <div className="space-y-4">
           
           {/* COMPACT PROFILE HEADER */}
-          <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center sm:items-start gap-5">
-            {/* Left/Avatar */}
-            <div className="relative shrink-0">
-              <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-md flex items-center justify-center">
-                {profileImage ? (
-                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <User size={48} className="text-slate-400" />
-                )}
-                {imageUploading && (
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
-                    <Activity className="animate-spin text-white" />
-                  </div>
+          <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100">
+            {/* TOP SECTION: Avatar + Stats side-by-side */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              {/* Left/Avatar */}
+              <div className="relative shrink-0">
+                <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-md flex items-center justify-center">
+                  {profileImage ? (
+                    <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    /* Increased icon size from 48 to 64 to fill the larger circle */
+                    <User size={64} className="text-slate-400" />
+                  )}
+                  {imageUploading && (
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
+                      <Activity className="animate-spin text-white" />
+                    </div>
+                  )}
+                </div>
+                {isMe && (
+                  <label className="absolute bottom-0 right-0 bg-blue-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-sm transition-colors">
+                    {imageUploading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handlePickImage} 
+                      disabled={imageUploading} 
+                    />
+                  </label>
                 )}
               </div>
-              {isMe && (
-                <label className="absolute bottom-0 right-0 bg-blue-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-sm transition-colors">
-                  {imageUploading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handlePickImage} 
-                    disabled={imageUploading} 
-                  />
-                </label>
-              )}
+
+              {/* Right/Stats & Badges */}
+              <div className="flex-1 w-full flex flex-col justify-center">
+                <div className="flex justify-center sm:justify-start gap-3 mb-3">
+                  <div 
+                    className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                    onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
+                  >
+                    <div className="text-xl font-black text-slate-800">{followerCount}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Followers</div>
+                  </div>
+                  <div 
+                    className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                    onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
+                  >
+                    <div className="text-xl font-black text-slate-800">{followingCount}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                  <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
+                  {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}
+                  {profileImage && <Badge icon={<Camera size={14}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
+                  {followingCount > 0 && <Badge icon={<TrendingUp size={14}/>} color="bg-green-100 text-green-600" label="Networker" />}
+                </div>
+              </div>
             </div>
 
-            {/* Right/Stats & Badges */}
-            <div className="flex-1 w-full flex flex-col justify-center">
-              {/* Followers / Following Container on Top Right */}
-              <div className="flex justify-center sm:justify-start gap-3 mb-3">
-                <div 
-                  className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
-                  onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
-                >
-                  <div className="text-xl font-black text-slate-800">{followerCount}</div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Followers</div>
-                </div>
-                <div 
-                  className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
-                  onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
-                >
-                  <div className="text-xl font-black text-slate-800">{followingCount}</div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
-                </div>
-              </div>
+            {/* BOTTOM SECTION: Basic Information Fields */}
+            <div className="pt-2 mt-4 border-t border-slate-50 space-y-4">
+              {/* Header added here */}
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <User size={14} className="text-blue-400"/> Basic Information
+              </h3>
 
-              <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
-                {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}
-                {profileImage && <Badge icon={<Camera size={14}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
-                {followingCount > 0 && <Badge icon={<TrendingUp size={14}/>} color="bg-green-100 text-green-600" label="Networker" />}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <InputField 
+                  label="Name" 
+                  value={formData.name} 
+                  onChange={(v) => setFormData({...formData, name: v})} 
+                  onBlur={() => updateBasicInfo('name', formData.name)}
+                  disabled={!isMe}
+                />
+                <InputField 
+                  label="Goal" 
+                  value={formData.goal} 
+                  onChange={(v) => setFormData({...formData, goal: v})} 
+                  onBlur={() => updateBasicInfo('goal', formData.goal)}
+                  icon={<Flag size={16}/>} 
+                  disabled={!isMe}
+                />
               </div>
+              
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+                {/* SEX FIELD */}
+                <PrivacyWrapper fieldKey="sex" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                  <SexInputField 
+                    label="Sex" 
+                    value={formData.sex} 
+                    onChange={(v) => {
+                      setFormData({ ...formData, sex: v });
+                      updateBasicInfo('sex', v);
+                    }} 
+                    disabled={!isMe} // Pass disabled to child
+                  />
+                </PrivacyWrapper>
+
+                {/* AGE FIELD */}
+                <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                  <AgeInputField 
+                    label="Age" 
+                    value={formData.age} 
+                    isMe={isMe} 
+                    onIconClick={() => isMe && setShowDOBModal(true)} 
+                    disabled={!isMe}
+                  />
+                </PrivacyWrapper>
+
+                {/* HEIGHT FIELD */}
+                <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                  <InputField 
+                    label="Height (cm)" 
+                    type="number" 
+                    value={formData.height} 
+                    onChange={(v) => setFormData({...formData, height: v})} 
+                    onBlur={() => updateBasicInfo('height', formData.height)}
+                    disabled={!isMe}
+                  />
+                </PrivacyWrapper>
+
+                {/* WEIGHT FIELD */}
+                <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                  <InputField 
+                    label="Weight (kg)" 
+                    type="number" 
+                    value={formData.weight} 
+                    onChange={(v) => setFormData({...formData, weight: v})} 
+                    onBlur={() => updateBasicInfo('weight', formData.weight)}
+                    disabled={!isMe}
+                  />
+                </PrivacyWrapper>
+              </div>
+              {isMe && !!window.ReactNativeWebView && (
+                  <HealthSyncSection 
+                    userId={userId!} 
+                    isMe={isMe} 
+                    steps={steps} 
+                    lastSynced={lastSynced} 
+                    onSyncComplete={(newSteps, syncTime, earnedGems) => {
+                      setSteps(newSteps);
+                      setLastSynced(syncTime);
+                      if (earnedGems > 0) {
+                        setFormData(prev => ({
+                          ...prev,
+                          gems: (parseInt(prev.gems || '0', 10) + earnedGems).toString()
+                        }));
+                      }
+                    }}
+                  />
+                )}
             </div>
           </div>
 
@@ -524,90 +568,6 @@ const ProfileScreen: React.FC = () => {
               </div>
             </div>
           )}
-
-          <div className="space-y-4">
-            {/* BASIC INFORMATION & STEPS */}
-            <CollapsibleSection title="Basic Information" icon={<User size={18}/>}>
-              <div className="space-y-3 mt-3">                
-                {isMe && !!window.ReactNativeWebView && (
-                  <HealthSyncSection 
-                    userId={userId!} 
-                    isMe={isMe} 
-                    steps={steps} 
-                    lastSynced={lastSynced} 
-                    onSyncComplete={(newSteps, syncTime, earnedGems) => {
-                      setSteps(newSteps);
-                      setLastSynced(syncTime);
-                      if (earnedGems > 0) {
-                        setFormData(prev => ({
-                          ...prev,
-                          gems: (parseInt(prev.gems || '0', 10) + earnedGems).toString()
-                        }));
-                      }
-                    }}
-                  />
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <InputField label="Name" value={formData.name} onChange={(v: string) => setFormData({...formData, name: v})} disabled={!isMe} />
-                  <InputField label="Goal" value={formData.goal} onChange={(v: string) => setFormData({...formData, goal: v})} disabled={!isMe} icon={<Flag size={16}/>} />
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {/* SEX FIELD */}
-                  <PrivacyWrapper fieldKey="sex" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                    <SexInputField 
-                      label="Sex" 
-                      value={formData.sex} 
-                      onChange={(v) => setFormData({ ...formData, sex: v })} 
-                      disabled={!isMe} 
-                    />
-                  </PrivacyWrapper>
-
-                  {/* AGE FIELD */}
-                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                    <AgeInputField 
-                      label="Age" 
-                      value={formData.age} 
-                      isMe={isMe} 
-                      onIconClick={() => setShowDOBModal(true)} 
-                    />
-                  </PrivacyWrapper>
-
-                  {/* HEIGHT FIELD */}
-                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                    <InputField label="Height (cm)" type="number" value={formData.height} onChange={(v: string) => setFormData({...formData, height: v})} disabled={!isMe} />
-                  </PrivacyWrapper>
-
-                  {/* WEIGHT FIELD */}
-                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                    <InputField label="Weight (kg)" type="number" value={formData.weight} onChange={(v: string) => setFormData({...formData, weight: v})} disabled={!isMe} />
-                  </PrivacyWrapper>
-
-                  {/* BMI FIELD */}
-                  <PrivacyWrapper fieldKey="bmi" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                    <InputField label="BMI" value={formData.bmi} onChange={() => {}} disabled={true} />
-                  </PrivacyWrapper>
-                </div>
-
-                {/* SAVE BASIC INFO BUTTON (Moved inside here) */}
-                {isMe && (
-                  <div className="pt-3 mt-4 border-t border-slate-100">
-                    <button 
-                      onClick={handleSaveAllHealthData}
-                      disabled={saving}
-                      className={`w-full py-3.5 rounded-2xl font-black text-white shadow-md flex justify-center items-center gap-2 transition-all ${
-                        saving ? 'bg-indigo-400 cursor-not-allowed scale-95' : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 active:scale-95'
-                      }`}
-                    >
-                      {saving ? <RefreshCw className="animate-spin" size={18}/> : <UploadCloud size={18}/>}
-                      {saving ? 'SAVING PROGRESS...' : 'SAVE BASIC INFO UPDATES'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-          </div>
         </div>
 
         {/* RIGHT COLUMN: Analytics/Charts */}
@@ -631,11 +591,10 @@ const ProfileScreen: React.FC = () => {
       <ModalDOB 
         isOpen={showDOBModal} 
         onClose={() => setShowDOBModal(false)}
+        userId={userId!}
         dob={formData.dob}
-        setDob={(v) => setFormData({...formData, dob: v, age: calculateAge(v)})}
-        saving={saving}
-        onSave={async () => {
-          await handleSaveAllHealthData();
+        setDob={(v) => setFormData({...formData, dob: v})} 
+        onSuccess={() => {
           setShowDOBModal(false);
         }}
       />

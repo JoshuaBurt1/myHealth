@@ -29,28 +29,36 @@ interface InputFieldProps {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   type?: string;
   disabled?: boolean;
   icon?: React.ReactNode;
+  placeholder?: string;
 }
 
 export const InputField: React.FC<InputFieldProps> = ({ 
-  label, value, onChange, type = 'text', disabled = false, icon 
-}) => (
-  <div className="flex flex-col space-y-1">
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">{label}</label>
-    <div className="relative flex items-center">
-      {icon && <div className="absolute left-4 text-slate-300">{icon}</div>}
-      <input 
-        type={type} 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)} 
-        disabled={disabled}
-        className={`w-full p-4 ${icon ? 'pl-11' : 'pl-4'} bg-white border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all shadow-sm disabled:bg-slate-50 disabled:text-slate-400`}
-      />
+  label, value, onChange, onBlur, type = "text", disabled, icon, placeholder 
+}) => {
+  return (
+    <div className="flex flex-col gap-1.5 flex-1">
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">
+        {label}
+      </label>
+      <div className="relative">
+        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon}</div>}
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          disabled={disabled}
+          placeholder={placeholder}
+          className={`w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-indigo-500 transition-all ${icon ? 'pl-10' : ''} ${disabled ? 'opacity-60' : ''}`}
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // 4. Sex Input Field (Select Dropdown)
 interface SexInputFieldProps {
@@ -87,6 +95,7 @@ interface AgeInputFieldProps {
   value: string;
   onIconClick?: () => void;
   isMe?: boolean;
+  disabled?: boolean;
 }
 
 export const AgeInputField: React.FC<AgeInputFieldProps> = ({ label, value, onIconClick, isMe }) => (
