@@ -4,7 +4,6 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
 import { LocationProvider } from './context/LocationContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
-
 import Navbar from './components/Navbar';
 import HomeScreen from './screens/HomeScreen';
 import StoreScreen from './screens/StoreScreen';
@@ -16,7 +15,6 @@ import { GroupScreen } from './screens/GroupScreen';
 import CartScreen from './componentsStore/CartScreen';
 import PaymentScreen from './componentsStore/PaymentScreen';
 import OrderHistoryScreen from './componentsStore/OrderHistoryScreen';
-
 function AppContent({ user }: { user: User | null }) {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:pt-16">
@@ -31,9 +29,9 @@ function AppContent({ user }: { user: User | null }) {
           <Route path="forum" element={<ForumScreen />} />
           <Route path="login" element={<LoginScreen />} />
           <Route path="register" element={<RegisterScreen />} />
-          <Route 
-            path="profile/:userId" 
-            element={user ? <ProfileScreen /> : <Navigate to="/login" replace />} 
+          <Route
+            path="profile/:userId"
+            element={user ? <ProfileScreen /> : <Navigate to="/login" replace />}
           />
           <Route path="/group/:groupId" element={<GroupScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -42,24 +40,20 @@ function AppContent({ user }: { user: User | null }) {
     </div>
   );
 }
-
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
   const paypalOptions = {
     clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
     currency: "USD",
     intent: "capture"
   };
-
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
     });
   }, []);
-
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4">
@@ -68,7 +62,6 @@ export default function App() {
       </div>
     );
   }
-
   return (
     <PayPalScriptProvider options={paypalOptions}>
       <LocationProvider>

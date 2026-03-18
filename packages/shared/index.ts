@@ -1,17 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-
-const getEnvVar = (key: string) => {
-  const expoKey = `EXPO_PUBLIC_FIREBASE_${key}`;
-  const viteKey = `VITE_FIREBASE_${key}`;
-
-  // This works natively in Expo and via 'define' in Vite
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[expoKey] || process.env[viteKey];
-  }
-
-  return undefined;
-};
+import { getEnvVar } from './env'; // Bundler picks .web.ts for web, .ts for native
 
 const firebaseConfig = {
   apiKey: getEnvVar('API_KEY'),

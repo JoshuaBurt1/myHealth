@@ -5,11 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
-  // 1. Set the root of the web project to this folder
   root: __dirname,
-  
-  // 2. Point to the .env file at the absolute root of MY-HEALTH
-  envDir: '../../',
+  envDir: '../../', 
   
   plugins: [
     react(),
@@ -28,21 +25,11 @@ export default defineConfig({
         start_url: '/',
         orientation: 'portrait',
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable' 
-          }
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
       },
       workbox: {
-        // Caches your charts and health data logic for offline use on your Pixel 10
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'], 
         runtimeCaching: [
           {
@@ -50,13 +37,8 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
             }
           }
         ]
@@ -64,20 +46,23 @@ export default defineConfig({
     })
   ],
   resolve: {
+    // --- ADDED THIS SECTION ---
+    // This ensures Vite prefers the .web.ts version of shared files
+    extensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.jsx', '.js'],
     alias: {
-      // Force all imports to use the React version in apps/web
       'react': path.resolve(__dirname, 'node_modules/react'),
+      '@shared': path.resolve(__dirname, '../../packages/shared'),
     },
   },
   server: {
     port: 5173,
-    strictPort: true, // Prevents Vite from trying other ports if 5173 is busy
+    strictPort: true, 
     hmr: {
       protocol: 'ws',
       host: 'localhost',
     },
     fs: {
-      allow: ['../..'] // Allows Vite to reach up to the root node_modules and shared package
+      allow: ['../..'] 
     }
   }
 });
