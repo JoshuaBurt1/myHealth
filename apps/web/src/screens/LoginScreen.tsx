@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { Download, LogIn } from 'lucide-react';
+
 const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -16,6 +17,7 @@ const LoginScreen: React.FC = () => {
   // --- PWA Logic State ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
+
   useEffect(() => {
     // 1. Check if already installed (Standalone Mode)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
@@ -26,6 +28,7 @@ const LoginScreen: React.FC = () => {
       setShowInstallButton(false);
       return;
     }
+    
     // 2. Android/Chrome/Desktop Install Prompt logic
     const handleBeforeInstallPrompt = (e: any) => {
       // Prevent the browser's default mini-infobar from appearing
@@ -34,6 +37,7 @@ const LoginScreen: React.FC = () => {
       setDeferredPrompt(e);
       setShowInstallButton(true);
     };
+  
     // 3. iOS Detection (iOS doesn't support 'beforeinstallprompt')
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
     if (isIOS && !isIosStandalone) {
@@ -50,24 +54,45 @@ const LoginScreen: React.FC = () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
+
   useEffect(() => {
     const handleNativeMessage = async (event: any) => {
-      const { type, payload } = event.data;
-      if (type === 'GOOGLE_LOGIN_SUCCESS') {
+      // 1. Safe Parse: Handle both string and object data
+      let data;
+      try {
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch (e) {
+        console.error("[Web] Failed to parse message:", e);
+        return;
+      }
+
+      if (!data || !data.type) return;
+
+      if (data.type === 'GOOGLE_LOGIN_SUCCESS') {
         try {
-          // Create a Firebase credential from the token passed by the Native app
-          const credential = GoogleAuthProvider.credential(payload);
+          console.log("[Web] Token received, authenticating with Firebase...");
+          const credential = GoogleAuthProvider.credential(data.payload);
           const userCredential = await signInWithCredential(auth, credential);
+          
           notifyMobileApp(userCredential.user.uid);
           navigate(`/profile/${userCredential.user.uid}`);
-        } catch (err) {
-          setError('Firebase Authentication failed');
+        } catch (err: any) {
+          console.error("Firebase Auth Error:", err);
+          setError(`Login failed: ${err.message}`);
         }
       }
     };
+
+    // Android WebViews often require listening on both window AND document
     window.addEventListener('message', handleNativeMessage);
-    return () => window.removeEventListener('message', handleNativeMessage);
+    document.addEventListener('message', handleNativeMessage as any);
+
+    return () => {
+      window.removeEventListener('message', handleNativeMessage);
+      document.removeEventListener('message', handleNativeMessage as any);
+    };
   }, [navigate]);
+
   const handlePWAInstall = async () => {
     if (deferredPrompt) {
       // Logic for Chrome/Android
@@ -123,30 +148,7 @@ const LoginScreen: React.FC = () => {
       }
     }
   };
-  // Updated Listener inside your useEffect
-  useEffect(() => {
-    const handleNativeMessage = async (event: any) => {
-      // In some environments, event.data is already an object; in others, it's a JSON string.
-      let data;
-      try {
-        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      } catch (e) { return; }
-      if (data.type === 'GOOGLE_LOGIN_SUCCESS') {
-        try {
-          console.log("[Web] Received ID Token from Native, signing into Firebase...");
-          const credential = GoogleAuthProvider.credential(data.payload);
-          const userCredential = await signInWithCredential(auth, credential);
-          notifyMobileApp(userCredential.user.uid);
-          navigate(`/profile/${userCredential.user.uid}`);
-        } catch (err: any) {
-          console.error("Firebase Auth Error:", err);
-          setError(`Native Auth Failed: ${err.message}`);
-        }
-      }
-    };
-    window.addEventListener('message', handleNativeMessage);
-    return () => window.removeEventListener('message', handleNativeMessage);
-  }, [navigate]);
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#F8F9FE] p-4">
       <div className="w-full max-w-100 flex flex-col items-center">

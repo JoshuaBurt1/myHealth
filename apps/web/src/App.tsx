@@ -15,6 +15,7 @@ import { GroupScreen } from './screens/GroupScreen';
 import CartScreen from './componentsStore/CartScreen';
 import PaymentScreen from './componentsStore/PaymentScreen';
 import OrderHistoryScreen from './componentsStore/OrderHistoryScreen';
+
 function AppContent({ user }: { user: User | null }) {
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:pt-16">
@@ -40,6 +41,7 @@ function AppContent({ user }: { user: User | null }) {
     </div>
   );
 }
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);

@@ -12,11 +12,12 @@ import {
 } from 'react-native-health-connect';
 try {
   GoogleSignin.configure({
+    // Type 3: The actual Web Client ID
     webClientId: '702841156351-28u6bar82g96trp3nje8ro14m7nrn885.apps.googleusercontent.com',
     offlineAccess: true,
     forceCodeForRefreshToken: true,
   });
-console.log("[GoogleSignin]: Configuration successful");
+  console.log("[GoogleSignin]: Configuration successful");
 } catch (error) {
   console.error("[GoogleSignin Config Error]:", error);
 }
@@ -97,12 +98,13 @@ export default function App() {
         const userInfo = await GoogleSignin.signIn();
         // Safety: check if idToken exists before sending back
         if (userInfo.data?.idToken) {
+          // Use JSON.stringify for the payload to handle escaping automatically
           const jsCode = `
             window.dispatchEvent(new MessageEvent('message', {
-              data: {
+              data: JSON.stringify({
                 type: 'GOOGLE_LOGIN_SUCCESS',
-                payload: "${userInfo.data.idToken}"
-              }
+                payload: ${JSON.stringify(userInfo.data.idToken)}
+              })
             }));
             true;
           `;
