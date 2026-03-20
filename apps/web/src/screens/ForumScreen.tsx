@@ -24,6 +24,7 @@ const ForumScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
+  const [lastLogin, setLastLogin] = useState<Timestamp | null>(null);
   
   // App State
   const [activeSection, setActiveSection] = useState<string>('Personal Health');
@@ -57,6 +58,7 @@ const ForumScreen: React.FC = () => {
   const [radius, setRadius] = useState(20000); 
   const [currentPage, setCurrentPage] = useState(1);
   const [showTypes, setShowTypes] = useState({ post: true, poll: true, petition: true });
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
 
   // Population Health "help" type Post Deletion
   const [helpStartDate, setHelpStartDate] = useState('');
@@ -65,8 +67,20 @@ const ForumScreen: React.FC = () => {
   const POSTS_PER_PAGE = 10;
   const mapZoom = useMemo(() => radiusToZoom(radius), [radius]);
 
+  // Fetch user's last login
+  useEffect(() => {
+    if (!user) return;
+    const fetchUserData = async () => {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        setLastLogin(userDoc.data().last_login);
+      }
+    };
+    fetchUserData();
+  }, [user]);
+
   const DropdownGroup = ({ label, items, current, setter, closer }: { label: string, items: string[], current: string, setter: (val: string) => void, closer: () => void }) => (
-    <div className="mt-0"> {/* Reduced from pt-2 */}
+    <div className="mt-0">
       <div className="px-3 py-0 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-0">
         <span className="h-px flex-1 bg-slate-100"></span>
         {label}
@@ -96,13 +110,10 @@ const ForumScreen: React.FC = () => {
       // FRONTEND AUTO-DELETE: Check for expired "Help" posts
       allPosts.forEach(async (post) => {
         if (post.help && post.helpEndDate) {
-          // Firestore Timestamps need to be converted to JS Dates
           const expiry = post.helpEndDate.toDate ? post.helpEndDate.toDate() : new Date(post.helpEndDate);
-          
           if (now > expiry) {
             console.log(`Post ${post.id} expired. Deleting...`);
             await deleteDoc(doc(db, 'myHealth_posts', post.id));
-            // Note: This only deletes the post doc. Cleanup of replies requires a Cloud Function.
           }
         }
       });
@@ -123,6 +134,10 @@ const ForumScreen: React.FC = () => {
     return posts.filter(post => {
       if (!showTypes[post.type as keyof typeof showTypes]) return false;
       if (post.forumSection !== activeSection) return false;
+
+      if (showOnlyNew && lastLogin && post.createdAt) {
+        if (post.createdAt.toMillis() <= lastLogin.toMillis()) return false;
+      }
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -145,7 +160,7 @@ const ForumScreen: React.FC = () => {
       }
       return true;
     });
-  }, [posts, showTypes, activeSection, searchQuery, filterHazard, filterTopic, userLocation, radius]);
+  }, [posts, showTypes, activeSection, searchQuery, filterHazard, filterTopic, userLocation, radius, showOnlyNew, lastLogin]);
 
   const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
@@ -164,6 +179,10 @@ const ForumScreen: React.FC = () => {
     setPostLocation(null); setHazardType(''); setHazardValue(''); setPostTopic('');
     setHelpType(''); setHelpValue(''); setPublicType(''); setPublicValue('');
     setIsModalOpen(false); setModalMode('post'); setHelpStartDate(''); setHelpEndDate('');
+    
+    // FIX: Ensure topicValue and popHealthCategory are properly reset
+    setTopicValue(''); 
+    setPopHealthCategory('hazard');
   };
 
   const handleCreate = async () => {
@@ -179,10 +198,10 @@ const ForumScreen: React.FC = () => {
       };
 
       if (activeSection === 'Population Health') {
-        if (popHealthCategory === 'hazard' && hazardType) {
+        if (popHealthCategory === 'hazard') {
           commonData.hazard = { type: hazardType, value: hazardValue.trim() };
           commonData.confirm = (postLocation || userLocation) ? [{ userId: user.uid, location: postLocation || userLocation, confirmTime: Timestamp.now() }] : [];
-        } else if (popHealthCategory === 'help' && helpType) {
+        } else if (popHealthCategory === 'help') {
           if (!helpStartDate || !helpEndDate) {
             return alert("Both Start and End times are required for Help events.");
           }
@@ -194,23 +213,25 @@ const ForumScreen: React.FC = () => {
           commonData.help = { type: helpType, value: helpValue.trim() };
           commonData.helpStartDate = Timestamp.fromDate(start);
           commonData.helpEndDate = Timestamp.fromDate(end);
-        } else if (popHealthCategory === 'public' && publicType) {
+        } else if (popHealthCategory === 'public') {
           commonData.public = { type: publicType, value: publicValue.trim() };
         }
-      } else if (activeSection === 'Personal Health' && postTopic) {
-        commonData.topic = postTopic;
+      } else if (activeSection === 'Personal Health') {
+        // FIX: Removed the restrictive && postTopic check. Assigns a fallback 'General' if skipped.
+        commonData.topic = postTopic || 'General';
+        commonData.detail = topicValue.trim();
       }
 
       let finalPostData = { ...commonData };
       if (modalMode === 'post') {
         if (!newPostContent.trim() || !postTitle.trim()) return alert("Please fill out the title and content.");
-        finalPostData = { ...finalPostData, type: 'post', title: postTitle, content: newPostContent };
+        finalPostData = { ...finalPostData, type: 'post', title: postTitle.trim(), content: newPostContent.trim() };
       } else if (modalMode === 'poll') {
         if (!pollContent.trim() || pollOptions.some(opt => !opt.trim())) return alert("Please provide a question and fill all option fields.");
-        finalPostData = { ...finalPostData, type: 'poll', title: postTitle, content: pollContent, options: pollOptions.map(text => ({ text, votes: 0 })), userVotes: {} };
+        finalPostData = { ...finalPostData, type: 'poll', title: postTitle.trim(), content: pollContent.trim(), options: pollOptions.map(text => ({ text: text.trim(), votes: 0 })), userVotes: {} };
       } else if (modalMode === 'petition') {
         if (!newPostContent.trim() || !postTitle.trim()) return alert("Please fill out the title and content.");
-        finalPostData = { ...finalPostData, type: 'petition', title: postTitle, content: newPostContent, signatures: [] };
+        finalPostData = { ...finalPostData, type: 'petition', title: postTitle.trim(), content: newPostContent.trim(), signatures: [] };
       }
 
       await addDoc(collection(db, 'myHealth_posts'), finalPostData);
@@ -241,19 +262,62 @@ const ForumScreen: React.FC = () => {
           </button>
         </header>
 
-        {/* SECTION TABS */}
-        <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
-          {FORUM_SECTIONS.map((section) => (
-            <button
-              key={section.id}
-              onClick={() => { setActiveSection(section.id); setFilterHazard('none'); setFilterTopic('none'); setSearchQuery(''); }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                activeSection === section.id ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
-            >
-              {section.icon} {section.id}
-            </button>
-          ))}
+        {/* SECTION TABS WITH NEW POST BADGES */}
+        <div className="flex gap-1 sm:gap-2 mb-6 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+          {FORUM_SECTIONS.map((section) => {
+            // Calculate new posts for this specific section
+            const newCount = posts.filter(p => 
+              p.forumSection === section.id && 
+              lastLogin && 
+              p.createdAt && 
+              p.createdAt.toMillis() > lastLogin.toMillis()
+            ).length;
+
+            return (
+              <div key={section.id} className="relative flex-1">
+                <button
+                  onClick={() => { 
+                    setActiveSection(section.id); 
+                    setFilterHazard('none'); 
+                    setFilterTopic('none'); 
+                    setSearchQuery('');
+                    setShowOnlyNew(false); // Reset "New" filter when changing tabs normally
+                  }}
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                    activeSection === section.id && !showOnlyNew
+                      ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' 
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                  }`}
+                >
+                  <span className="shrink-0">{section.icon}</span>
+                  <span className="hidden sm:inline">{section.id}</span>
+                  <span className="inline sm:hidden">
+                    {section.id === 'Personal Health' && 'Personal'}
+                    {section.id === 'Population Health' && 'Population'}
+                    {section.id === 'Off Topic' && 'Misc'}
+                  </span>
+                </button>
+
+                {/* NEW POST BADGE */}
+                {newCount > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSection(section.id);
+                      setShowOnlyNew(true);
+                    }}
+                    className={`absolute -top-2 -right-1 min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full text-[10px] font-black border-2 border-white shadow-sm transition-transform active:scale-90 z-10 ${
+                      showOnlyNew && activeSection === section.id 
+                        ? 'bg-emerald-500 text-white scale-110' 
+                        : 'bg-indigo-600 text-white'
+                    }`}
+                  >
+                    {newCount}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* POST FEED & PAGINATION */}
@@ -285,23 +349,6 @@ const ForumScreen: React.FC = () => {
       {/* --- SIDEBAR --- */}
       <div className="w-full lg:w-96 order-1 lg:order-2">
         <div className="lg:sticky lg:top-4 space-y-4 h-fit">
-          
-          {/* COMMUNITY PULSE */}
-          <div className="bg-linear-to-br from-indigo-600 to-violet-700 p-5 rounded-3xl shadow-lg text-white">
-            <h3 className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-4 flex items-center gap-2"> {activeSection} Pulse</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/5">
-                <span className="block text-2xl font-black">{filteredPosts.length}</span>
-                <span className="text-[10px] font-bold uppercase opacity-60">Active Now</span>
-              </div>
-              <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/5">
-                <span className="block text-2xl font-black">
-                  {activeSection === 'Population Health' ? filteredPosts.filter(p => p.hazard).length : filteredPosts.reduce((acc, p) => acc + (p.replyCount || 0), 0)}
-                </span>
-                <span className="text-[10px] font-bold uppercase opacity-60">{activeSection === 'Population Health' ? 'Hazards' : 'Total Replies'}</span>
-              </div>
-            </div>
-          </div>
 
           {/* FILTER DISCOVERY & MAP */}
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -319,52 +366,59 @@ const ForumScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* DYNAMIC FILTERS */}
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-600 ml-1">Filter By Topic</label>
-                <div className="relative">
-                  {/* Trigger Button */}
-                  <button 
-                    onClick={() => activeSection === 'Population Health' ? setIsHazardOpen(!isHazardOpen) : setIsTopicOpen(!isTopicOpen)}
-                    className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-4 flex items-center justify-between text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 transition-all"
-                  >
-                    <span className="truncate">
-                      {activeSection === 'Population Health' 
-                        ? (filterHazard === 'none' ? 'All Topics' : filterHazard)
-                        : (filterTopic === 'none' ? 'All Topics' : filterTopic)}
-                    </span>
-                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${ (activeSection === 'Population Health' ? isHazardOpen : isTopicOpen) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                  </button>
+              {/* DYNAMIC FILTERS - Only renders for specific sections */}
+              {(activeSection === 'Population Health' || activeSection === 'Personal Health') && (
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-600 ml-1">Filter By Topic</label>
+                  <div className="relative">
+                    <button 
+                      onClick={() => activeSection === 'Population Health' ? setIsHazardOpen(!isHazardOpen) : setIsTopicOpen(!isTopicOpen)}
+                      className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-4 flex items-center justify-between text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 transition-all"
+                    >
+                      <span className="truncate">
+                        {activeSection === 'Population Health' 
+                          ? (filterHazard === 'none' ? 'All Topics' : filterHazard)
+                          : (filterTopic === 'none' ? 'All Topics' : filterTopic)}
+                      </span>
+                      <svg 
+                        className={`w-4 h-4 text-slate-400 transition-transform ${ (activeSection === 'Population Health' ? isHazardOpen : isTopicOpen) ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
 
-                  {/* Custom Dropdown List */}
-                  {(activeSection === 'Population Health' ? isHazardOpen : isTopicOpen) && (
-                    <>
-                      {/* Backdrop to close when clicking away */}
-                      <div className="fixed inset-0 z-10" onClick={() => { setIsHazardOpen(false); setIsTopicOpen(false); }} />
-                      
-                      <div className="absolute z-20 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-60 overflow-y-auto p-2 space-y-1 animate-in fade-in zoom-in duration-100">
+                    {/* Custom Dropdown List */}
+                    {(activeSection === 'Population Health' ? isHazardOpen : isTopicOpen) && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => { setIsHazardOpen(false); setIsTopicOpen(false); }} />
                         
-                        <button 
-                          onClick={() => { setFilterHazard('none'); setFilterTopic('none'); setIsHazardOpen(false); setIsTopicOpen(false); }}
-                          className="w-full text-left px-3 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        >
-                          All Topics
-                        </button>
+                        <div className="absolute z-20 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-60 overflow-y-auto p-2 space-y-1 animate-in fade-in zoom-in duration-100">
+                          
+                          <button 
+                            onClick={() => { setFilterHazard('none'); setFilterTopic('none'); setIsHazardOpen(false); setIsTopicOpen(false); }}
+                            className="w-full text-left px-3 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            All Topics
+                          </button>
 
-                        {activeSection === 'Population Health' ? (
-                          <>
-                            <DropdownGroup label="Hazards" items={HAZARD_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
-                            <DropdownGroup label="Events" items={HELP_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
-                            <DropdownGroup label="Public Access" items={PUBLIC_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
-                          </>
-                        ) : (
-                          <DropdownGroup label="Categories" items={TOPIC_TYPES} current={filterTopic} setter={setFilterTopic} closer={() => setIsTopicOpen(false)} />
-                        )}
-                      </div>
-                    </>
-                  )}
+                          {activeSection === 'Population Health' ? (
+                            <>
+                              <DropdownGroup label="Hazards" items={HAZARD_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
+                              <DropdownGroup label="Events" items={HELP_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
+                              <DropdownGroup label="Public Access" items={PUBLIC_TYPES} current={filterHazard} setter={setFilterHazard} closer={() => setIsHazardOpen(false)} />
+                            </>
+                          ) : (
+                            <DropdownGroup label="Categories" items={TOPIC_TYPES} current={filterTopic} setter={setFilterTopic} closer={() => setIsTopicOpen(false)} />
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* POST TYPE CHECKBOXES */}
               <div className="space-y-2">
@@ -402,18 +456,15 @@ const ForumScreen: React.FC = () => {
                 {userLocation ? (
                   <input 
                     type="range"
-                    // We use the Zoom levels as the min/max/step (18 is closest, 2 is farthest)
                     min="2"
                     max="18"
                     step="1"
-                    // We reverse the value logic because lower zoom = larger radius
                     value={radiusToZoom(radius)}
                     onChange={(e) => {
                       const zoom = parseInt(e.target.value);
                       setRadius(zoomToRadius(zoom));
                     }}
                     className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 scale-x-[-1]" 
-                    /* Note: scale-x-[-1] makes the slider feel natural: right = zoom in (smaller radius), left = zoom out (larger radius) */
                   />
                 ) : (
                   <div className="text-[10px] font-bold text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-100">

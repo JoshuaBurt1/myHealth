@@ -355,7 +355,7 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
             }`}
           >
             {saving ? <RefreshCw className="animate-spin" size={20}/> : <CheckCircle size={20}/>}
-            {saving ? 'SAVING DATA...' : 'SAVE VITAL LOGS & CLAIM REWARD'}
+            {saving ? 'SAVING DATA...' : 'SAVE VITAL LOG'}
           </button>
         </div>
       </div>

@@ -1,0 +1,58 @@
+// storeData.ts
+export interface StoreItem {
+  id: string;
+  name: string;
+  description: string;
+  category: 'Supplements' | 'Diagnostic Equipment' | 'Medical Supplies' | 'Specialized Care' | 'Environmental Safety' | 'Personnel';
+  price: string;
+}
+
+export const storeItems: StoreItem[] = [
+  // Supplements
+  { id: 's1', name: 'Multivitamin', category: 'Supplements', price: '$24.99', description: 'Daily essential nutrients to support overall health and immune function.' },
+  { id: 's2', name: 'Protein Powder', category: 'Supplements', price: '$45.00', description: 'High-quality protein source for muscle recovery and nutritional supplementation.' },
+  
+  // Diagnostic Equipment
+  { id: 'd1', name: 'Blood Glucose Tester', category: 'Diagnostic Equipment', price: '$29.99', description: 'Digital meter for monitoring blood sugar levels in real-time.' },
+  { id: 'd2', name: 'Blood Glucose Strips', category: 'Diagnostic Equipment', price: '$15.00', description: 'Compatible test strips for accurate glucose level measurement.' },
+  { id: 'd3', name: 'Pulse Oximeter', category: 'Diagnostic Equipment', price: '$19.00', description: 'Non-invasive device to measure oxygen saturation and heart rate.' },
+  { id: 'd4', name: 'Automatic Blood Pressure Cuff', category: 'Diagnostic Equipment', price: '$49.99', description: 'Upper-arm monitor for quick and accurate blood pressure readings.' },
+  { id: 'd5', name: 'Portable EKG/ECG Monitor', category: 'Diagnostic Equipment', price: '$89.00', description: 'Compact device for recording heart rhythm and detecting irregularities.' },
+  { id: 'd6', name: 'Digital Stethoscope', category: 'Diagnostic Equipment', price: '$299.00', description: 'Amplified heart and lung sounds with visual waveform display and recording capabilities.' },
+  { id: 'd7', name: 'Handheld Ultrasound', category: 'Diagnostic Equipment', price: '$1,850.00', description: 'Portable imaging probe that connects to mobile devices for real-time internal visualization.' },
+  { id: 'd8', name: 'Mouth Thermometer', category: 'Diagnostic Equipment', price: '$12.50', description: 'Fast-acting digital thermometer for accurate body temperature monitoring.' },
+  { id: 'd9', name: 'Smart Pill Dispenser', category: 'Diagnostic Equipment', price: '$120.00', description: 'Automated organizer with alerts to ensure consistent medication timing.' },
+  { id: 'd10', name: 'Medical Alert Bracelet', category: 'Diagnostic Equipment', price: '$25.00', description: 'Wearable identifier to communicate critical health info in emergencies.' },
+  
+  // Medical Supplies
+  { id: 'm1', name: 'First Aid Kit', category: 'Medical Supplies', price: '$35.00', description: 'Comprehensive emergency response kit for minor injuries and wound care.' },
+  { id: 'm2', name: 'Gauze Pads', category: 'Medical Supplies', price: '$8.50', description: 'Sterile absorbent pads for cleaning and protecting wounds.' },
+  { id: 'm3', name: 'Packing Gauze', category: 'Medical Supplies', price: '$12.00', description: 'Long-strip cotton gauze designed for packing deep wounds and managing drainage.' },
+  { id: 'm4', name: 'Iodine Antiseptic Solution', category: 'Medical Supplies', price: '$11.00', description: 'Povidone-iodine solution for topical skin preparation and infection prevention in minor cuts.' },
+  { id: 'm5', name: 'Kling Wrap', category: 'Medical Supplies', price: '$5.00', description: 'Conforming stretch bandage used to hold primary dressings in place.' },
+  { id: 'm6', name: 'Pressure Wrap', category: 'Medical Supplies', price: '$12.00', description: 'Elastic compression bandage to reduce swelling and support joints.' },
+
+  // Specialized Care
+  { id: 'sc1', name: 'Aero Chamber', category: 'Specialized Care', price: '$30.00', description: 'Valved holding chamber to improve effective delivery of inhaler medication.' },
+  { id: 'sc2', name: 'Catheter Bag', category: 'Specialized Care', price: '$18.00', description: 'Standard drainage bag with secure anti-reflux valves for hygiene.' },
+  { id: 'sc3', name: 'Ostomy Kit (Small)', category: 'Specialized Care', price: '$45.00', description: 'Compact pouching system including skin barrier and adhesive for pediatric or low-profile use.' },
+  { id: 'sc4', name: 'Ostomy Kit (Medium)', category: 'Specialized Care', price: '$48.00', description: 'Standard-sized pouching system with a flexible skin barrier for daily management and comfort.' },
+  { id: 'sc5', name: 'Ostomy Kit (Large)', category: 'Specialized Care', price: '$52.00', description: 'High-capacity pouching system designed for extended wear and secure effluent management.' },
+  
+  // Environmental Safety
+  { id: 'e1', name: 'Masks (N95/KN95)', category: 'Environmental Safety', price: '$15.00', description: 'High-filtration respirators to protect against airborne particles.' },
+  { id: 'e2', name: 'Surgical Masks', category: 'Environmental Safety', price: '$8.00', description: 'Standard 3-ply disposable masks for general fluid resistance and breathability.' },
+  { id: 'e3', name: 'Gloves (Nitrile)', category: 'Environmental Safety', price: '$12.00', description: 'Powder-free, latex-free gloves for sterile handling and protection.' },
+  { id: 'e4', name: 'Standard Exam Gloves', category: 'Environmental Safety', price: '$9.00', description: 'Ambidextrous vinyl or latex-free gloves for non-sterile everyday protection.' },
+  { id: 'e5', name: 'Face Shield', category: 'Environmental Safety', price: '$7.00', description: 'Transparent barrier to protect the face from splashes and debris.' },
+  { id: 'e6', name: 'Yellow Isolation Gown', category: 'Environmental Safety', price: '$22.00', description: 'Fluid-resistant protective apparel with elastic cuffs for full-body coverage.' },
+  { id: 'e7', name: 'TDS Meter', category: 'Environmental Safety', price: '$14.00', description: 'Tester for Total Dissolved Solids to check drinking water purity.' },
+  { id: 'e8', name: 'Water Filter System', category: 'Environmental Safety', price: '$150.00', description: 'Multi-stage filtration system to remove contaminants from tap water.' },
+  { id: 'e9', name: 'Indoor Air Quality Monitor', category: 'Environmental Safety', price: '$95.00', description: 'Sensors for CO2, VOCs, and particulate matter levels in your home.' },
+  { id: 'e10', name: 'Radon Detector', category: 'Environmental Safety', price: '$130.00', description: 'Continuous monitoring device for detecting dangerous radon gas levels.' },
+  { id: 'e11', name: 'Geiger Counter', category: 'Environmental Safety', price: '$180.00', description: 'Professional-grade instrument for measuring ionizing radiation.' },
+  { id: 'e12', name: 'Handheld Spectrometer', category: 'Environmental Safety', price: '$450.00', description: 'Advanced tool for analyzing light spectra and material composition.' },
+  
+  // Personnel
+  { id: 'p1', name: 'Robot Healthcare Worker', category: 'Personnel', price: '$12,500.00', description: 'Autonomous AI assistant for patient monitoring and basic care tasks.' },
+];

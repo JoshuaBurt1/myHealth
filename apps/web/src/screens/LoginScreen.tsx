@@ -6,7 +6,8 @@ import {
   GoogleAuthProvider,
   signInWithCredential
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Download, LogIn } from 'lucide-react';
 
 const LoginScreen: React.FC = () => {
@@ -73,6 +74,10 @@ const LoginScreen: React.FC = () => {
           console.log("[Web] Token received, authenticating with Firebase...");
           const credential = GoogleAuthProvider.credential(data.payload);
           const userCredential = await signInWithCredential(auth, credential);
+
+          await setDoc(doc(db, 'users', userCredential.user.uid), {
+            last_login: serverTimestamp(),
+          }, { merge: true });
           
           notifyMobileApp(userCredential.user.uid);
           navigate(`/profile/${userCredential.user.uid}`);
@@ -124,6 +129,11 @@ const LoginScreen: React.FC = () => {
     setError('');
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        last_login: serverTimestamp(),
+      }, { merge: true });
+
       notifyMobileApp(userCredential.user.uid);
       navigate(`/profile/${userCredential.user.uid}`);
     } catch (err: any) {
@@ -140,8 +150,12 @@ const LoginScreen: React.FC = () => {
       // 2. Standard Web fallback (e.g., Chrome on Desktop)
       try {
         const provider = new GoogleAuthProvider();
-        // Only use Popup on Desktop/Full Browsers
         const userCredential = await signInWithPopup(auth, provider);
+        
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          last_login: serverTimestamp(),
+        }, { merge: true });
+
         navigate(`/profile/${userCredential.user.uid}`);
       } catch (err: any) {
         setError('Google Sign-In failed');

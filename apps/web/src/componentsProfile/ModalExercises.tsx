@@ -336,7 +336,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             }`}
           >
             {saving ? <RefreshCw className="animate-spin" size={20}/> : <CheckCircle size={20}/>}
-            {saving ? 'SAVING...' : 'SAVE EXERCISE LOGS'}
+            {saving ? 'SAVING DATA...' : 'SAVE EXERCISE LOG'}
           </button>
         </div>
       </div>

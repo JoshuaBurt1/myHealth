@@ -55,6 +55,7 @@ interface BasePost {
   forumSection: ForumSection; 
   // Existing properties
   topic?: string; 
+  detail?: string;
   help?: { type: string; value: string };
   public?: { type: string; value: string };
   hazard?: { type: string; value: string };
