@@ -15,7 +15,7 @@ import type { Post } from '../componentsForum/forum';
 import { 
   FORUM_SECTIONS, HAZARD_TYPES, HELP_TYPES, PUBLIC_TYPES, TOPIC_TYPES, TABS
 } from '../componentsForum/forumConstants';
-import { setupLeafletDefaults } from '../componentsForum/mapUtils';
+import { setupLeafletDefaults, zoomToRadius, radiusToZoom } from '../componentsForum/mapUtils';
 
 setupLeafletDefaults();
 
@@ -63,7 +63,7 @@ const ForumScreen: React.FC = () => {
   const [helpEndDate, setHelpEndDate] = useState('');
   
   const POSTS_PER_PAGE = 10;
-  const mapZoom = Math.max(2, Math.round(15 - Math.log2(radius === 20000 ? 50000 : radius)));
+  const mapZoom = useMemo(() => radiusToZoom(radius), [radius]);
 
   const DropdownGroup = ({ label, items, current, setter, closer }: { label: string, items: string[], current: string, setter: (val: string) => void, closer: () => void }) => (
     <div className="mt-0"> {/* Reduced from pt-2 */}
@@ -395,19 +395,25 @@ const ForumScreen: React.FC = () => {
                     <MapPin size={14} className="text-indigo-500" /> Nearby Range
                   </label>
                   <span className="text-sm font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
-                    {radius === 20000 ? "Global" : `${radius}km`}
+                    {radius >= 20000 ? "Global" : `${radius}km`}
                   </span>
                 </div>
                 
                 {userLocation ? (
                   <input 
                     type="range"
-                    min="5"
-                    max="20000"
-                    step="50"
-                    value={radius}
-                    onChange={(e) => setRadius(parseInt(e.target.value))}
-                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    // We use the Zoom levels as the min/max/step (18 is closest, 2 is farthest)
+                    min="2"
+                    max="18"
+                    step="1"
+                    // We reverse the value logic because lower zoom = larger radius
+                    value={radiusToZoom(radius)}
+                    onChange={(e) => {
+                      const zoom = parseInt(e.target.value);
+                      setRadius(zoomToRadius(zoom));
+                    }}
+                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 scale-x-[-1]" 
+                    /* Note: scale-x-[-1] makes the slider feel natural: right = zoom in (smaller radius), left = zoom out (larger radius) */
                   />
                 ) : (
                   <div className="text-[10px] font-bold text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-100">
@@ -415,7 +421,6 @@ const ForumScreen: React.FC = () => {
                   </div>
                 )}
               </div>
-
               <hr className="border-slate-50" />
             </div>
           </div>

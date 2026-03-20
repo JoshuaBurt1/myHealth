@@ -1,6 +1,7 @@
+// ModalGroups.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2 } from 'lucide-react';
-import { collection, query, orderBy, startAt, endAt, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc, collectionGroup, limit } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 
@@ -56,7 +57,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     return () => unsubscribe();
   }, [isOpen]);
 
-  // Handle User Search (Debounced)
+  // Handle User Search (Debounced & Lowercase via collectionGroup)
   useEffect(() => {
     const performSearch = async () => {
       if (searchQuery.trim().length < 2) {
@@ -65,24 +66,33 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
       }
       setIsSearching(true);
       try {
-        const usersRef = collection(db, 'users');
+        const lowerTerm = searchQuery.toLowerCase();
+        
+        // Search across 'profile' subcollections for matching 'name_lowercase'
         const q = query(
-          usersRef,
-          orderBy('display_name'),
-          startAt(searchQuery),
-          endAt(searchQuery + '\uf8ff')
+          collectionGroup(db, 'profile'),
+          where('name_lowercase', '>=', lowerTerm),
+          where('name_lowercase', '<=', lowerTerm + '\uf8ff'),
+          limit(10)
         );
+        
         const snapshot = await getDocs(q);
         const results: SearchUser[] = [];
 
         for (const userDoc of snapshot.docs) {
           const userData = userDoc.data();
-          const uid = userDoc.id;
+          // The document is user_data inside the profile subcollection. 
+          // The grandparent is the user's root document.
+          const uid = userDoc.ref.parent.parent?.id;
           
-          if (uid === auth.currentUser?.uid || selectedMembers.some(m => m.uid === uid)) continue;
+          if (!uid || uid === auth.currentUser?.uid || selectedMembers.some(m => m.uid === uid)) continue;
+          
+          // Prevent duplicates if multiple docs match under the same user
+          if (results.some(r => r.uid === uid)) continue;
 
           let imageId = null;
           try {
+            // Fetch the user's avatar image independently
             const imgDocRef = doc(db, 'users', uid, 'profile', 'image_data');
             const imgSnap = await getDoc(imgDocRef);
             if (imgSnap.exists()) {
@@ -94,7 +104,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
 
           results.push({
             uid,
-            displayName: userData.display_name || 'Unknown User',
+            displayName: userData.name || userData.display_name || 'Unknown User',
             imageId
           });
         }
@@ -166,6 +176,11 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     navigate(`/group/${groupId}`);
   };
 
+  const handleProfileClick = (uid: string) => {
+    onClose();
+    navigate(`/profile/${uid}`);
+  };
+
   const handleLeaveGroup = async (e: React.MouseEvent, group: Group) => {
     e.stopPropagation(); // Prevents navigating to group
     if (!auth.currentUser) return;
@@ -206,7 +221,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
       <div className="bg-white rounded-3xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[95vh]">
         
         {/* Header */}
-        <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <h2 className="text-xl font-black text-slate-800 flex items-center gap-3 tracking-tight uppercase">
             <Users className="text-emerald-500" size={24} /> Group Management
           </h2>
@@ -215,17 +230,19 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
           </button>
         </div>
 
-        {/* Two-column layout body */}
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Two-column layout body 
+            Updated for mobile: The entire main flex area becomes scrollable on mobile so content naturally stacks 
+            and the user easily accesses the bottom sections without internal clipping. */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
           
           {/* LEFT COLUMN: MY GROUPS */}
-          <div className="w-full md:w-1/2 flex flex-col border-r border-slate-100 bg-slate-50/30">
-            <div className="p-5 border-b border-slate-100">
+          <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/30">
+            <div className="p-5 border-b border-slate-100 shrink-0">
               <h3 className="text-lg font-bold text-slate-800">My Groups</h3>
               <p className="text-sm text-slate-500">Manage and access your current groups</p>
             </div>
             
-            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+            <div className="p-5 overflow-y-auto flex-1 space-y-4 max-h-[40vh] md:max-h-none">
               {isLoadingGroups ? (
                 <div className="flex justify-center p-8"><Loader2 className="animate-spin text-emerald-500" /></div>
               ) : userGroups.length === 0 ? (
@@ -261,7 +278,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                         {group.adminId === auth.currentUser?.uid && (
                           <button 
                             onClick={(e) => handleDeleteGroup(e, group.id)} 
-                            className="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors opacity-0 group-hover:opacity-100" 
+                            className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
                             title="Delete Group"
                           >
                             <Trash2 size={18} />
@@ -269,7 +286,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                         )}
                         <button 
                           onClick={(e) => handleLeaveGroup(e, group)} 
-                          className="p-2 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors opacity-0 group-hover:opacity-100" 
+                          className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
                           title="Leave Group"
                         >
                           <LogOut size={18} />
@@ -285,7 +302,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
 
           {/* RIGHT COLUMN: CREATE GROUP */}
           <div className="w-full md:w-1/2 flex flex-col bg-white">
-            <div className="p-5 border-b border-slate-100">
+            <div className="p-5 border-b border-slate-100 shrink-0">
               <h3 className="text-lg font-bold text-slate-800">Create New Group</h3>
               <p className="text-sm text-slate-500">Form a group and invite members</p>
             </div>
@@ -318,25 +335,45 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                   {isSearching && <Loader2 className="absolute right-3 top-3.5 text-slate-400 animate-spin" size={18} />}
                 </div>
 
-                {searchResults.length > 0 && (
-                  <div className="absolute w-full mt-2 bg-white border border-slate-200 shadow-xl rounded-xl z-20 max-h-56 overflow-y-auto">
-                    {searchResults.map(user => (
-                      <div key={user.uid} className="flex items-center justify-between p-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
-                        <div className="flex items-center gap-3">
-                          {user.imageId ? (
-                            <img src={user.imageId} alt={user.displayName} className="w-8 h-8 rounded-full object-cover bg-slate-200" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><UserIcon size={14} className="text-slate-400" /></div>
-                          )}
-                          <span className="font-medium text-sm text-slate-700">{user.displayName}</span>
-                        </div>
-                        <button onClick={() => addMember(user)} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors">
-                          <Plus size={16} />
-                        </button>
+                {/* Changed to in-flow block element to avoid scrolling overlap on mobile */}
+                {searchResults.map(user => (
+                  <div key={user.uid} className="flex items-center p-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
+                    
+                    {/* 1. Main container for the interactive profile part */}
+                    <div className="flex items-center gap-3 flex-1 justify-between">
+                      
+                      {/* Group the Image and Name together on the left */}
+                      <div 
+                        className="flex items-center gap-3 cursor-pointer group/name" 
+                        onClick={() => handleProfileClick(user.uid)}
+                      >
+                        {user.imageId ? (
+                          <img src={user.imageId} alt={user.displayName} className="w-8 h-8 rounded-full object-cover bg-slate-200" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                            <UserIcon size={14} className="text-slate-400" />
+                          </div>
+                        )}
+                        <span className="font-medium text-sm text-slate-700 group-hover/name:text-emerald-600 transition-colors">
+                          {user.displayName}
+                        </span>
                       </div>
-                    ))}
+
+                      {/* 2. The Add button is now pushed to the far right because of justify-between above */}
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation(); // Safety first
+                          addMember(user);
+                        }} 
+                        className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors"
+                        title="Add user to group"
+                      >
+                        <Plus size={16} />
+                      </button>
+
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
 
               {/* Selected Members */}
@@ -367,7 +404,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
             </div>
 
             {/* Create Group Footer Action */}
-            <div className="p-5 border-t border-slate-100 bg-slate-50/50">
+            <div className="p-5 border-t border-slate-100 bg-slate-50/50 shrink-0">
               <button 
                 onClick={handleSaveGroup}
                 disabled={!groupName.trim() || selectedMembers.length === 0 || isSaving}

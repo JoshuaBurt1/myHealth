@@ -4,6 +4,38 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+/**
+ * Mapping of Leaflet Zoom levels to Search Radius in KM.
+ */
+export const ZOOM_RADIUS_MAP: Record<number, number> = {
+  2: 20000, 3: 5000, 4: 2500, 5: 1000, 6: 500, 7: 250,
+  8: 100, 9: 75, 10: 50, 11: 25, 12: 10, 13: 5, 
+  14: 2.5, 15: 1.5, 16: 1, 17: 0.5, 18: 0.25
+};
+
+/**
+ * Converts a zoom level to KM radius.
+ */
+export function zoomToRadius(zoom: number): number {
+  const roundedZoom = Math.round(zoom);
+  return ZOOM_RADIUS_MAP[roundedZoom] || 100;
+}
+
+/**
+ * Finds the closest zoom level for a given KM radius.
+ */
+export function radiusToZoom(radius: number): number {
+  if (radius >= 20000) return 2;
+  if (radius <= 0.25) return 18;
+
+  const entries = Object.entries(ZOOM_RADIUS_MAP);
+  const closest = entries.reduce((prev, curr) => {
+    return Math.abs(curr[1] - radius) < Math.abs(prev[1] - radius) ? curr : prev;
+  });
+
+  return parseInt(closest[0]);
+}
+
 export const setupLeafletDefaults = () => {
   const DefaultIcon = L.icon({
     iconUrl: markerIcon,

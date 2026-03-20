@@ -12,7 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, RefreshCw, Dumbbell, Calendar, Users } from 'lucide-react';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users } from 'lucide-react';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
@@ -337,6 +337,9 @@ const ProfileScreen: React.FC = () => {
         }
       } else {
         updates[field] = value;
+        if (field === 'name') {
+          updates['name_lowercase'] = value.toLowerCase();
+        }
       }
 
       await setDoc(profileRef, updates, { merge: true });
@@ -378,7 +381,7 @@ const ProfileScreen: React.FC = () => {
                   )}
                   {imageUploading && (
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
-                      <Activity className="animate-spin text-white" />
+                      <Loader2 className="animate-spin text-white" />
                     </div>
                   )}
                 </div>
@@ -399,32 +402,36 @@ const ProfileScreen: React.FC = () => {
               {/* Right/Stats & Badges */}
               <div className="flex-1 w-full flex flex-col justify-center">
                 <div className="flex justify-center sm:justify-start gap-3 mb-3">
+                  {/* Followers Button */}
                   <div 
-                    className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                    className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
                     onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
                   >
-                    <div className="text-xl font-black text-slate-800">{followerCount}</div>
+                    <div className="text-xl font-black text-slate-800 leading-7">{followerCount}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Followers</div>
                   </div>
+
+                  {/* Following Button */}
                   <div 
-                    className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center"
+                    className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
                     onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
                   >
-                    <div className="text-xl font-black text-slate-800">{followingCount}</div>
+                    <div className="text-xl font-black text-slate-800 leading-7">{followingCount}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
                   </div>
                   
+                  {/* Groups Button */}
                   <div 
-                    className="bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none text-center flex flex-col justify-center"
+                    className="bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
                     onClick={() => setShowGroupsModal(true)}
                   >
-                    <div className="text-xl font-black text-slate-800 flex justify-center h-7 items-center">
-                      <Users size={20} className="text-emerald-700"/>
+                    {/* h-7 matches the leading-7 (28px) of the text numbers exactly */}
+                    <div className="h-7 flex items-center justify-center">
+                      <Users size={20} className="text-emerald-600"/>
                     </div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Groups</div>
                   </div>
                 </div>
-
                 <div className="flex flex-wrap justify-center sm:justify-start gap-2">
                   <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
                   {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}

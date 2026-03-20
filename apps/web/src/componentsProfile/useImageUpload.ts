@@ -4,7 +4,7 @@ import { db } from '../firebase';
 
 export const useImageUpload = (
   userId: string | undefined, 
-  onUploadSuccess: (base64: string) => void // <--- The callback
+  onUploadSuccess: (base64: string) => void
 ) => {
   const [isUploading, setUploading] = useState(false);
 
