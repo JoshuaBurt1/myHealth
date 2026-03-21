@@ -1,8 +1,11 @@
+//ModalGroups.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
 import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
+import { useNotifications } from '../context/NotificationContext';
+
 
 interface SearchUser {
   uid: string;
@@ -28,12 +31,9 @@ interface ModalGroupsProps {
 
 export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const [userGroups, setUserGroups] = useState<Group[]>([]);
-  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const { userData, userGroups } = useNotifications();
 
   // User Data State (for tracking read receipts)
-  const [userData, setUserData] = useState<any>(null);
-
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
@@ -41,45 +41,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch Current User's Profile Data
-  useEffect(() => {
-    if (!isOpen || !auth.currentUser) return;
-    
-    // Listen for read receipts to conditionally render badges next to specific groups
-    const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        setUserData(docSnap.data());
-      }
-    });
-    return () => unsubscribe();
-  }, [isOpen]);
-
-  // Fetch User's Groups
-  useEffect(() => {
-    if (!isOpen || !auth.currentUser) return;
-
-    const groupsRef = collection(db, 'myHealth_groups');
-    const q = query(groupsRef, where('memberUids', 'array-contains', auth.currentUser.uid));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const groupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Group[];
-      
-      // Sort groups by last updated
-      groupsData.sort((a, b) => {
-         const timeA = a.lastUpdated?.toMillis() || 0;
-         const timeB = b.lastUpdated?.toMillis() || 0;
-         return timeB - timeA;
-      });
-
-      setUserGroups(groupsData);
-      setIsLoadingGroups(false);
-    });
-
-    return () => unsubscribe();
-  }, [isOpen]);
+  const isLoadingGroups = userGroups === null || userData === null;
 
   // === NEW HANDLER: Use this to wrap your group link/click ===
   // This updates the specific read receipt and THEN navigates
@@ -101,22 +63,13 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     onClose();
   };
 
-
-  // Fetch Current User's Profile Data & CLEAR GLOBAL BADGE
   useEffect(() => {
     if (!isOpen || !auth.currentUser) return;
-    
-    // 1. Listen for read receipts
-    const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        setUserData(docSnap.data());
-      }
-    });
 
-    // 2. Mark the modal as "opened" to clear the Navbar notification immediately
     const clearGlobalBadge = async () => {
       try {
         const userRef = doc(db, 'users', auth.currentUser!.uid);
+        // This is a write, but it's necessary to sync the Navbar
         await setDoc(userRef, { 
           groups_modal_last_opened: serverTimestamp() 
         }, { merge: true });
@@ -124,36 +77,8 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
         console.error("Error clearing global badge:", err);
       }
     };
+    
     clearGlobalBadge();
-
-    return () => unsubscribe();
-  }, [isOpen]);
-
-  // Fetch User's Groups
-  useEffect(() => {
-    if (!isOpen || !auth.currentUser) return;
-
-    const groupsRef = collection(db, 'myHealth_groups');
-    const q = query(groupsRef, where('memberUids', 'array-contains', auth.currentUser.uid));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const groupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Group[];
-      
-      // Sort groups by last updated
-      groupsData.sort((a, b) => {
-         const timeA = a.lastUpdated?.toMillis() || 0;
-         const timeB = b.lastUpdated?.toMillis() || 0;
-         return timeB - timeA;
-      });
-
-      setUserGroups(groupsData);
-      setIsLoadingGroups(false);
-    });
-
-    return () => unsubscribe();
   }, [isOpen]);
 
   // Handle User Search

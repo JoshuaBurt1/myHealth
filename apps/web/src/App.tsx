@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
 import { LocationProvider } from './context/LocationContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import Navbar from './components/Navbar';
 import HomeScreen from './screens/HomeScreen';
@@ -67,9 +68,11 @@ export default function App() {
   return (
     <PayPalScriptProvider options={paypalOptions}>
       <LocationProvider>
-        <Router>
-          <AppContent user={user} />
-        </Router>
+        <NotificationProvider>
+          <Router>
+            <AppContent user={user} />
+          </Router>
+        </NotificationProvider>
       </LocationProvider>
     </PayPalScriptProvider>
   );

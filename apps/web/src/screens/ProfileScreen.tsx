@@ -13,6 +13,7 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, where, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users, Bell } from 'lucide-react';
+import { useNotifications } from '../context/NotificationContext';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
@@ -62,8 +63,7 @@ const ProfileScreen: React.FC = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   // Unread Groups State
-  const [myGroups, setMyGroups] = useState<any[]>([]);
-  const [myUserData, setMyUserData] = useState<any>(null);
+  const { userData: myUserData, userGroups: myGroups } = useNotifications();
 
   const [dynamicVitals, setDynamicVitals] = useState<{key: string, label: string, isCustom: boolean, unit?: string}[]>([]);
   const [dynamicVitalsInputs, setDynamicVitalsInputs] = useState<Record<string, string>>({});
@@ -103,7 +103,6 @@ const ProfileScreen: React.FC = () => {
     const unsubRoot = onSnapshot(userRootRef, (docSnap) => {
       if (docSnap.exists()) {
         const rootData = docSnap.data();
-        if (isMe) setMyUserData(rootData); // Store local user data for badge calc
         
         setFormData(prev => ({ 
           ...prev, 
@@ -257,25 +256,6 @@ const ProfileScreen: React.FC = () => {
       unsubStatus();
     };
   }, [userId, isMe, currentUserId]);
-
-  // 6. Listen to Logged-In User's Groups (For Notification Badge)
-  useEffect(() => {
-    if (!isMe || !currentUserId) {
-      setMyGroups([]);
-      return;
-    }
-
-    const q = query(
-      collection(db, 'myHealth_groups'),
-      where('memberUids', 'array-contains', currentUserId)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      setMyGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => unsub();
-  }, [isMe, currentUserId]);
 
   // Compute Unread Badge for Groups
   const hasNewGroupMessages = useMemo(() => {

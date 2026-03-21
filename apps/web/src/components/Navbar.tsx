@@ -4,6 +4,7 @@ import { signOut, type User } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, collection, query, where, onSnapshot, disableNetwork } from 'firebase/firestore';
 import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn, Bell } from 'lucide-react';
+import { useNotifications } from '../context/NotificationContext';
 
 interface NavbarProps {
   user: User | null;
@@ -11,9 +12,7 @@ interface NavbarProps {
 
 const Navbar = ({ user }: NavbarProps) => {
   const location = useLocation();
-  const [userData, setUserData] = useState<any>(null);
-  const [userPosts, setUserPosts] = useState<any[]>([]);
-  const [userGroups, setUserGroups] = useState<any[]>([]);
+  const { userData, userPosts, userGroups } = useNotifications();
 
   const handleLogout = async () => {
     try {
@@ -22,86 +21,6 @@ const Navbar = ({ user }: NavbarProps) => {
       console.error("Error signing out:", error);
     }
   };
-
-  // 1. Listen to User Document
-  useEffect(() => {
-    if (!user || !auth.currentUser) {
-      setUserData(null);
-      return;
-    }
-
-    const unsub = onSnapshot(
-      doc(db, 'users', user.uid), 
-      (docSnap) => {
-        try {
-          if (docSnap.exists()) {
-            setUserData(docSnap.data());
-          }
-        } catch (err: any) {
-          if (err?.code === 'permission-denied') return;
-          console.error("Snapshot crash:", err);
-        }
-      },
-      (error) => {
-        if (error.code === 'permission-denied') return;
-        console.error("Listener error:", error);
-      }
-    );
-
-    return () => unsub();
-  }, [user]);
-
-  // 2. Listen to User's Original Posts
-  useEffect(() => {
-    if (!user || !auth.currentUser) {
-      setUserPosts([]);
-      return;
-    }
-
-    const q = query(
-      collection(db, 'myHealth_posts'),
-      where('authorId', '==', user.uid)
-    );
-
-    const unsub = onSnapshot(
-      q, 
-      (snapshot) => {
-        setUserPosts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      },
-      (error) => {
-        if (error.code === 'permission-denied') return;
-        console.error("Listener error:", error);
-      }
-    );
-
-    return () => unsub();
-  }, [user]);
-
-  // 3. Listen to User's Groups
-  useEffect(() => {
-    if (!user || !auth.currentUser) {
-      setUserGroups([]);
-      return;
-    }
-
-    const q = query(
-      collection(db, 'myHealth_groups'),
-      where('memberUids', 'array-contains', user.uid)
-    );
-
-    const unsub = onSnapshot(
-      q, 
-      (snapshot) => {
-        setUserGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      },
-      (error) => {
-        if (error.code === 'permission-denied') return;
-        console.error("Listener error:", error);
-      }
-    );
-
-    return () => unsub();
-  }, [user]);
 
   // Compute Unread Badges
   const { hasNewReplies, hasNewGroupMessages } = useMemo(() => {
