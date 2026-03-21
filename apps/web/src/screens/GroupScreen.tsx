@@ -1,6 +1,7 @@
+// GroupScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
@@ -66,6 +67,21 @@ export const GroupScreen: React.FC = () => {
     }
   }, [messages, activeTab]);
 
+  // Mark this group as "Read" to clear notifications when viewing
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user || !groupId) return;
+
+    const updateReadReceipt = async () => {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        [`last_read_group_${groupId}`]: serverTimestamp()
+      }, { merge: true });
+    };
+
+    updateReadReceipt();
+  }, [groupId]); 
+
   useEffect(() => {
     const currentUid = auth.currentUser?.uid;
     if (!groupId || !currentUid) return;
@@ -115,26 +131,46 @@ export const GroupScreen: React.FC = () => {
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const user = auth.currentUser;
-    if (!newMessage.trim() || !groupId || !user) return;
+  if (e) e.preventDefault();
+  const user = auth.currentUser;
+  if (!newMessage.trim() || !groupId || !user) return;
 
-    setIsSending(true);
-    try {
-      const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
-      await addDoc(messagesRef, {
-        text: newMessage.trim(),
-        authorId: user.uid,
-        authorName: getMemberDisplayName(user.uid), 
-        createdAt: serverTimestamp()
-      });
-      setNewMessage('');
-    } catch (error) {
-      console.error("Error sending message:", error);
-    } finally {
-      setIsSending(false);
-    }
-  };
+  setIsSending(true);
+  try {
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+    const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
+    const userRef = doc(db, 'users', user.uid);
+
+    // 1. Create the message
+    const messagePromise = addDoc(messagesRef, {
+      text: newMessage.trim(),
+      authorId: user.uid,
+      authorName: getMemberDisplayName(user.uid), 
+      createdAt: serverTimestamp()
+    });
+
+    // 2. Update parent Group metadata
+    const groupUpdatePromise = updateDoc(groupRef, {
+      lastUpdated: serverTimestamp(),
+      lastUpdatedBy: user.uid
+    });
+
+    // 3. Update user read receipt & login info
+    const userUpdatePromise = setDoc(userRef, {
+      last_login: serverTimestamp(),
+      [`last_read_group_${groupId}`]: serverTimestamp()
+    }, { merge: true });
+
+    // Execute all updates in parallel for better performance
+    await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
+
+    setNewMessage('');
+  } catch (error) {
+    console.error("Error sending message:", error);
+  } finally {
+    setIsSending(false);
+  }
+};
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -152,8 +188,8 @@ export const GroupScreen: React.FC = () => {
   if (!group) return null;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      
+    <div className="flex h-screen max-h-screen bg-slate-50 overflow-hidden">
+
       {/* Left Vertical Tab Bar */}
       <nav className="w-20 md:w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 shrink-0 z-20 shadow-sm">
         <button onClick={() => navigate(-1)} className="p-3 mb-8 hover:bg-slate-100 rounded-xl transition-colors text-slate-500">
@@ -251,9 +287,9 @@ export const GroupScreen: React.FC = () => {
             
             {/* --- MESSAGES TAB --- */}
             {activeTab === 'messages' && (
-              <section className="flex-1 flex flex-col min-h-0 relative">
-                {/* Scrollable Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 space-y-6 scroll-smooth">
+              <section className="flex-1 flex flex-col min-h-0"> 
+                {/* 1. Scrollable Messages Area - Now truly flexible */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scroll-smooth">
                   <div className="max-w-4xl mx-auto w-full space-y-6">
                     {messages.length === 0 ? (
                       <div className="text-center py-20 text-slate-400">
@@ -293,12 +329,12 @@ export const GroupScreen: React.FC = () => {
                         );
                       })
                     )}
-                    <div ref={messagesEndRef} className="h-4 w-full" />
+                    <div ref={messagesEndRef} />
                   </div>
                 </div>
 
-                {/* Fixed Input Area */}
-                <div className="absolute bottom-0 w-full p-4 bg-white border-t border-slate-200 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+                {/* 2. Fixed Input Area - Removed "absolute", added "shrink-0" */}
+                <div className="shrink-0 p-4 bg-white border-t border-slate-200 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
                   <div className="max-w-4xl mx-auto">
                     <form onSubmit={handleSendMessage} className="relative flex items-center">
                       <input
@@ -330,7 +366,6 @@ export const GroupScreen: React.FC = () => {
                     <CalendarDays className="text-emerald-500" /> Group Schedule
                   </h2>
                   <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">
-                    {/* Placeholder for Schedule implementation */}
                     <CalendarDays size={48} className="mx-auto mb-4 opacity-20" />
                     <p className="font-medium text-slate-600">No events scheduled yet.</p>
                     <p className="text-sm mt-2">Sync up with your group to add workouts, runs, or events.</p>
@@ -350,7 +385,6 @@ export const GroupScreen: React.FC = () => {
                     <Activity className="text-emerald-500" /> Z-Score Comparisons
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Placeholder for Data implementation */}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                       <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
                         <Activity size={18} className="text-blue-500"/> Exercise Z-Scores
@@ -360,8 +394,7 @@ export const GroupScreen: React.FC = () => {
                           <div key={member.userId} className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-slate-600">{member.display_name}</span>
                             <div className="flex-1 mx-4 h-2 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                               {/* Mock bar relative to a zero baseline */}
-                               <div className="h-full bg-blue-400 rounded-full w-[60%]"></div>
+                              <div className="h-full bg-blue-400 rounded-full w-[60%]"></div>
                             </div>
                             <span className="text-xs font-bold text-slate-400">+1.2</span>
                           </div>
@@ -374,12 +407,11 @@ export const GroupScreen: React.FC = () => {
                         <Activity size={18} className="text-rose-500"/> Vitals Z-Scores
                       </h3>
                       <div className="space-y-4">
-                         {group.members.map(member => (
+                        {group.members.map(member => (
                           <div key={member.userId} className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-slate-600">{member.display_name}</span>
                             <div className="flex-1 mx-4 h-2 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                               {/* Mock bar relative to a zero baseline */}
-                               <div className="h-full bg-rose-400 rounded-full w-[40%]"></div>
+                              <div className="h-full bg-rose-400 rounded-full w-[40%]"></div>
                             </div>
                             <span className="text-xs font-bold text-slate-400">-0.4</span>
                           </div>

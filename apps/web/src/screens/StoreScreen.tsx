@@ -4,8 +4,8 @@ import { Loader2, Plus, Minus, Search, History, ChevronDown, ChevronRight, Shopp
 import { db, auth } from '../firebase';
 import { doc, setDoc, increment, serverTimestamp, collection, onSnapshot } from 'firebase/firestore';
 import CartScreen from '../componentsStore/CartScreen';
+import OrderHistoryScreen from '../componentsStore/OrderHistoryScreen';
 import { storeItems, type StoreItem } from '../componentsStore/storeData';
-import { Link } from 'react-router-dom';
 
 const categories: StoreItem['category'][] = [
   'Supplements', 'Diagnostic Equipment', 'Medical Supplies', 
@@ -21,6 +21,7 @@ const StoreScreen: React.FC = () => {
   const [isCartMobileOpen, setIsCartMobileOpen] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [cartAnimating, setCartAnimating] = useState(false);
+  const [isOrdersMobileOpen, setIsOrdersMobileOpen] = useState(false);
   
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>(
     Object.fromEntries(categories.map(cat => [cat, false]))
@@ -48,24 +49,23 @@ const StoreScreen: React.FC = () => {
 
   // Handle auto-expansion based on search input
   useEffect(() => {
-    const isSearchEmpty = searchQuery.trim() === '';
-    const newExpandedState: Record<string, boolean> = {};
-    
-    categories.forEach(cat => {
-      if (isSearchEmpty) {
-        newExpandedState[cat] = false;
-      } else {
-        const hasMatch = storeItems.some(item => 
-          item.category === cat && 
-          (item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           item.description.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-        newExpandedState[cat] = hasMatch;
-      }
-    });
+  const isSearchEmpty = searchQuery.trim() === '';
+  const newExpandedState: Record<string, boolean> = {};
+  
+  categories.forEach(cat => {
+    if (isSearchEmpty) {
+      newExpandedState[cat] = false;
+    } else {
+      const hasMatch = storeItems.some(item => 
+        item.category === cat && 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      newExpandedState[cat] = hasMatch;
+    }
+  });
 
-    setExpandedCats(newExpandedState);
-  }, [searchQuery]);
+  setExpandedCats(newExpandedState);
+}, [searchQuery]);
 
   const toggleCategory = (cat: string) => {
     setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
@@ -111,43 +111,50 @@ const StoreScreen: React.FC = () => {
   };
 
   return (
-    <div className={`flex flex-col lg:flex-row gap-6 p-4 bg-slate-50 min-h-screen ${!user ? 'justify-center' : ''} overflow-x-hidden`}>
-      <div className={`flex-1 ${!user ? 'max-w-4xl w-full mx-auto' : ''}`}>
-        <header className={`mb-8 flex justify-between items-start ${!user ? 'text-center' : ''}`}>
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
-            <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
-          </div>
+  <div className="flex flex-col lg:flex-row gap-6 p-4 bg-slate-50 min-h-screen overflow-x-hidden">    
+    <div className={`flex-1 ${!user ? 'max-w-4xl w-full' : ''}`}>      
+      <header className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
+          <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
+        </div>
           
           {user && (
-            <div className="flex flex-col items-end gap-2">
-              <Link 
-                to="/orders" 
-                className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-              >
-                <History size={18} />
-                Orders
-              </Link>
-              
-              {/* Mobile "Cart" Button */}
-              <button 
-                onClick={() => setIsCartMobileOpen(true)}
-                className={`lg:hidden relative flex items-center justify-center gap-2 w-full px-4 py-2 bg-indigo-600 border border-indigo-700 rounded-xl text-sm font-bold text-white shadow-sm transition-all duration-300
-                  ${cartAnimating ? 'scale-110 -translate-y-1 shadow-lg bg-indigo-500' : 'hover:bg-indigo-700'}
-                `}
-              >
-                <ShoppingCart size={18} />
-                Cart
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-in zoom-in duration-200">
-                    {cartItemCount}
-                  </span>
-                )}
-              </button>
-            </div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+            {/* Mobile "Cart" Button */}
+            <button 
+              onClick={() => setIsCartMobileOpen(true)}
+              className={`lg:hidden relative flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-indigo-600 rounded-2xl text-sm sm:text-base font-bold text-white shadow-lg shadow-indigo-100 transition-all duration-300 active:scale-95
+                ${cartAnimating ? 'scale-110 -translate-y-1 bg-indigo-500 shadow-xl' : 'hover:bg-indigo-700'}
+              `}
+            >
+              <ShoppingCart size={20} />
+              <span>Cart</span>
+              {cartItemCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-in zoom-in duration-200">
+                  {cartItemCount}
+                </span>
+              )}
+            </button>
+
+            {/* Orders Button */}
+            <button 
+              onClick={() => {
+                if (window.innerWidth < 1024) { // lg breakpoint
+                  setIsOrdersMobileOpen(true);
+                } else {
+                  window.location.href = '/orders';
+                }
+              }} 
+              className="flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-white border border-slate-200 rounded-2xl text-sm sm:text-base font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            >
+              <History size={20} className="text-indigo-600" />
+              <span>Orders</span>
+            </button>
+          </div>
           )}
         </header>
-
+        
         {/* Search Bar */}
         <div className="relative mb-10 max-w-2xl mx-auto lg:mx-0">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -164,8 +171,7 @@ const StoreScreen: React.FC = () => {
         {categories.map((cat) => {
           const filteredItems = storeItems.filter(item => 
             item.category === cat && 
-            (item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-             item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+            item.name.toLowerCase().includes(searchQuery.toLowerCase())
           );
 
           const isOpen = expandedCats[cat];
@@ -241,10 +247,37 @@ const StoreScreen: React.FC = () => {
         />
       )}
 
-      {/* Mobile Cart Drawer (Sliding from left) */}
-      <div className={`fixed top-0 right-0 h-dvh w-[85%] max-w-90 bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${isCartMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      {/* Mobile Cart Drawer (Sliding from right) */}
+      <div className={`fixed top-0 right-0 h-dvh w-[90%] max-w-90 bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${isCartMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           <CartScreen isEmbedded={true} onClose={() => setIsCartMobileOpen(false)} />
       </div>
+
+      {/* Mobile Orders Drawer Overlay */}
+      {isOrdersMobileOpen && (
+  <div 
+    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
+    onClick={() => setIsOrdersMobileOpen(false)}
+  />
+)}
+
+{/* Mobile Orders Drawer (Sliding from right) */}
+<div className={`fixed top-0 right-0 h-dvh w-[90%] max-w-md bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl flex flex-col ${isOrdersMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+  {/* Header inside the drawer */}
+  <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10 shrink-0">
+    <h2 className="font-bold text-xl text-slate-900">My Orders</h2>
+    <button 
+      onClick={() => setIsOrdersMobileOpen(false)} 
+      className="p-2 text-slate-500 font-bold hover:text-slate-800 transition-colors"
+    >
+      Close
+    </button>
+  </div>
+  
+  {/* Scrollable Content Area */}
+  <div className="flex-1 overflow-y-auto">
+    <OrderHistoryScreen isEmbedded={true} />
+  </div>
+</div>
 
     </div>
   );

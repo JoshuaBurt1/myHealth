@@ -8,11 +8,11 @@ declare global {
   }
 }
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users } from 'lucide-react';
+import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users, Bell } from 'lucide-react';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
@@ -61,6 +61,10 @@ const ProfileScreen: React.FC = () => {
   const [showVitalModal, setShowVitalModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
+  // Unread Groups State
+  const [myGroups, setMyGroups] = useState<any[]>([]);
+  const [myUserData, setMyUserData] = useState<any>(null);
+
   const [dynamicVitals, setDynamicVitals] = useState<{key: string, label: string, isCustom: boolean, unit?: string}[]>([]);
   const [dynamicVitalsInputs, setDynamicVitalsInputs] = useState<Record<string, string>>({});
     
@@ -83,7 +87,7 @@ const ProfileScreen: React.FC = () => {
     name: '', goal: '', sex: '', dob: '', age: '', height: '', weight: '', bmi: '', gems: ''
   });
 
-  //load user data 
+  // Load user data 
   useEffect(() => {
     if (!userId) return;
 
@@ -95,10 +99,12 @@ const ProfileScreen: React.FC = () => {
     const followersRef = query(collection(db, 'users', userId, 'followers'));
     const followingRef = query(collection(db, 'users', userId, 'following'));
 
-    // 1. Listen to Root User Doc (Steps, Gems, Display Name)
+    // 1. Listen to Root User Doc (Steps, Gems, Display Name, Groups Meta)
     const unsubRoot = onSnapshot(userRootRef, (docSnap) => {
       if (docSnap.exists()) {
         const rootData = docSnap.data();
+        if (isMe) setMyUserData(rootData); // Store local user data for badge calc
+        
         setFormData(prev => ({ 
           ...prev, 
           name: rootData.display_name || prev.name,
@@ -251,6 +257,40 @@ const ProfileScreen: React.FC = () => {
       unsubStatus();
     };
   }, [userId, isMe, currentUserId]);
+
+  // 6. Listen to Logged-In User's Groups (For Notification Badge)
+  useEffect(() => {
+    if (!isMe || !currentUserId) {
+      setMyGroups([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'myHealth_groups'),
+      where('memberUids', 'array-contains', currentUserId)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      setMyGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => unsub();
+  }, [isMe, currentUserId]);
+
+  // Compute Unread Badge for Groups
+  const hasNewGroupMessages = useMemo(() => {
+    if (!myUserData || !myGroups.length || !currentUserId) return false;
+
+    return myGroups.some(group => {
+      const updatedTime = group.lastUpdated?.toMillis() || 0;
+      const readTime = myUserData[`last_read_group_${group.id}`]?.toMillis() || 0;
+      
+      const isNotMe = group.lastUpdatedBy !== currentUserId;
+
+      // Only check if updatedTime is greater than the specific group's readTime
+      return updatedTime > readTime && isNotMe;
+    });
+  }, [myUserData, myGroups, currentUserId]);
 
   const handleFollowUpdate = (delta: number, followingStatus: boolean) => {
     setFollowerCount(prev => Math.max(0, prev + delta));
@@ -422,9 +462,19 @@ const ProfileScreen: React.FC = () => {
                   
                   {/* Groups Button */}
                   <div 
-                    className="bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
+                    className="relative bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
                     onClick={() => setShowGroupsModal(true)}
                   >
+                    {/* Unread Message Bell Badge */}
+                    {isMe && hasNewGroupMessages && (
+                      <div className="absolute top-1 right-1 flex items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping bg-emerald-600" />
+                        <div className="relative flex items-center justify-center w-4 h-4 rounded-full border-2 border-white shadow-sm bg-emerald-600">
+                          <Bell size={8} className="text-white fill-white" />
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* h-7 matches the leading-7 (28px) of the text numbers exactly */}
                     <div className="h-7 flex items-center justify-center">
                       <Users size={20} className="text-emerald-600"/>

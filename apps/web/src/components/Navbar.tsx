@@ -1,7 +1,9 @@
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { signOut, type User } from 'firebase/auth';
-import { auth } from '../firebase';
-import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn } from 'lucide-react';
+import { auth, db } from '../firebase';
+import { doc, collection, query, where, onSnapshot, disableNetwork } from 'firebase/firestore';
+import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn, Bell } from 'lucide-react';
 
 interface NavbarProps {
   user: User | null;
@@ -9,37 +11,167 @@ interface NavbarProps {
 
 const Navbar = ({ user }: NavbarProps) => {
   const location = useLocation();
-  
-  // Dynamic profile path based on login status
+  const [userData, setUserData] = useState<any>(null);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [userGroups, setUserGroups] = useState<any[]>([]);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  // 1. Listen to User Document
+  useEffect(() => {
+    if (!user || !auth.currentUser) {
+      setUserData(null);
+      return;
+    }
+
+    const unsub = onSnapshot(
+      doc(db, 'users', user.uid), 
+      (docSnap) => {
+        try {
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
+          }
+        } catch (err: any) {
+          if (err?.code === 'permission-denied') return;
+          console.error("Snapshot crash:", err);
+        }
+      },
+      (error) => {
+        if (error.code === 'permission-denied') return;
+        console.error("Listener error:", error);
+      }
+    );
+
+    return () => unsub();
+  }, [user]);
+
+  // 2. Listen to User's Original Posts
+  useEffect(() => {
+    if (!user || !auth.currentUser) {
+      setUserPosts([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'myHealth_posts'),
+      where('authorId', '==', user.uid)
+    );
+
+    const unsub = onSnapshot(
+      q, 
+      (snapshot) => {
+        setUserPosts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      },
+      (error) => {
+        if (error.code === 'permission-denied') return;
+        console.error("Listener error:", error);
+      }
+    );
+
+    return () => unsub();
+  }, [user]);
+
+  // 3. Listen to User's Groups
+  useEffect(() => {
+    if (!user || !auth.currentUser) {
+      setUserGroups([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'myHealth_groups'),
+      where('memberUids', 'array-contains', user.uid)
+    );
+
+    const unsub = onSnapshot(
+      q, 
+      (snapshot) => {
+        setUserGroups(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      },
+      (error) => {
+        if (error.code === 'permission-denied') return;
+        console.error("Listener error:", error);
+      }
+    );
+
+    return () => unsub();
+  }, [user]);
+
+  // Compute Unread Badges
+  const { hasNewReplies, hasNewGroupMessages } = useMemo(() => {
+    if (!userData || !user) return { hasNewReplies: false, hasNewGroupMessages: false };
+
+    // 1. Check for replies to MY posts
+    const unreadPost = userPosts.some(post => {
+      const updatedTime = post.lastUpdated?.toMillis() || 0;
+      const createdTime = post.createdAt?.toMillis() || 0;
+      const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
+      
+      const isNotMe = post.lastUpdatedBy !== user.uid;
+      const hasUpdates = updatedTime > createdTime;
+
+      return hasUpdates && updatedTime > readTime && isNotMe;
+    });
+
+    // 2. Check for new messages in MY groups (SINGLE-TIER CHECK NOW)
+    const unreadGroup = userGroups.some(group => {
+      const updatedTime = group.lastUpdated?.toMillis() || 0;
+      const readTime = userData[`last_read_group_${group.id}`]?.toMillis() || 0;
+      
+      const isNotMe = group.lastUpdatedBy !== user.uid;
+
+      // SINGLE-TIER CHECK: 
+      // Has it been updated since I last read the specific group?
+      return updatedTime > readTime && isNotMe;
+    });
+
+    return { hasNewReplies: unreadPost, hasNewGroupMessages: unreadGroup };
+  }, [userData, userPosts, userGroups, user]);
+
   const profilePath = user ? `/profile/${user.uid}` : '/login';
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    { path: '/', icon: Home, label: 'Home' },
-    { path: '/forum', icon: MessageSquare, label: 'Forum' },
-    { path: profilePath, icon: UserIcon, label: 'Profile' },
-    { path: '/store', icon: Store, label: 'Store' },
+    { path: '/', icon: Home, label: 'Home', hasBadge: false },
+    { path: '/forum', icon: MessageSquare, label: 'Forum', hasBadge: hasNewReplies, badgeColor: 'bg-blue-600' },
+    { path: profilePath, icon: UserIcon, label: 'Profile', hasBadge: hasNewGroupMessages, badgeColor: 'bg-emerald-600' },
+    { path: '/store', icon: Store, label: 'Store', hasBadge: false },
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe pt-2 px-4 flex justify-around items-center md:top-0 md:bottom-auto md:border-b md:h-16 md:px-8 z-50">
-      {/* Navigation Links */}
       <div className="flex justify-around flex-1 md:justify-start md:gap-8">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
-            className={`flex flex-col items-center p-2 transition-colors ${
-              isActive(item.path) ? 'text-blue-600' : 'text-slate-500 hover:text-blue-400'
+            className={`relative flex flex-col items-center p-2 transition-colors ${
+              isActive(item.path) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-400'
             }`}
           >
             <item.icon size={24} strokeWidth={isActive(item.path) ? 2.5 : 2} />
+            
+            {/* Enhanced Notification Badge */}
+            {item.hasBadge && (
+              <div className="absolute top-1 right-1 sm:right-2 flex items-center justify-center">
+                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${item.badgeColor}`} />
+                <div className={`relative flex items-center justify-center w-4 h-4 rounded-full border-2 border-white shadow-sm ${item.badgeColor}`}>
+                  <Bell size={8} className="text-white fill-white" />
+                </div>
+              </div>
+            )}
+            
             <span className="text-xs mt-1 font-medium">{item.label}</span>
           </Link>
         ))}
       </div>
 
-      {/* User Info & Auth Action */}
       <div className="md:absolute md:right-8 flex items-center gap-3">
         {user ? (
           <>
@@ -51,8 +183,8 @@ const Navbar = ({ user }: NavbarProps) => {
             </div>
             
             <button 
-              onClick={() => signOut(auth)}
-              className="flex flex-col items-center p-2 text-slate-500 hover:text-red-600 transition-colors"
+              onClick={handleLogout}
+              className="flex flex-col items-center p-2 text-slate-500 hover:text-rose-600 transition-colors"
               title="Logout"
             >
               <LogOut size={24} />
@@ -62,7 +194,7 @@ const Navbar = ({ user }: NavbarProps) => {
         ) : (
           <Link 
             to="/login"
-            className="flex flex-col items-center p-2 text-slate-500 hover:text-blue-600 transition-colors"
+            className="flex flex-col items-center p-2 text-slate-500 hover:text-indigo-600 transition-colors"
           >
             <LogIn size={24} />
             <span className="text-xs mt-1 font-medium">Login</span>

@@ -1,3 +1,4 @@
+// LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -7,7 +8,7 @@ import {
   signInWithCredential
 } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Download, LogIn } from 'lucide-react';
 
 const LoginScreen: React.FC = () => {
@@ -32,9 +33,7 @@ const LoginScreen: React.FC = () => {
     
     // 2. Android/Chrome/Desktop Install Prompt logic
     const handleBeforeInstallPrompt = (e: any) => {
-      // Prevent the browser's default mini-infobar from appearing
       e.preventDefault();
-      // Save the event so it can be triggered later by our button
       setDeferredPrompt(e);
       setShowInstallButton(true);
     };
@@ -42,11 +41,9 @@ const LoginScreen: React.FC = () => {
     // 3. iOS Detection (iOS doesn't support 'beforeinstallprompt')
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
     if (isIOS && !isIosStandalone) {
-      // We show the button because we'll provide manual instructions via alert
       setShowInstallButton(true);
     }
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    // Hide button automatically once the app is installed
     window.addEventListener('appinstalled', () => {
       setShowInstallButton(false);
       setDeferredPrompt(null);
@@ -56,9 +53,25 @@ const LoginScreen: React.FC = () => {
     };
   }, []);
 
+  // --- NEW: Helper function to track previous login ---
+  const updateLoginTimestamps = async (uid: string) => {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    
+    const updatePayload: any = {
+      last_login: serverTimestamp()
+    };
+
+    // If they have a previous last_login, shift it to previous_login
+    if (userSnap.exists() && userSnap.data().last_login) {
+      updatePayload.previous_login = userSnap.data().last_login;
+    }
+
+    await setDoc(userRef, updatePayload, { merge: true });
+  };
+
   useEffect(() => {
     const handleNativeMessage = async (event: any) => {
-      // 1. Safe Parse: Handle both string and object data
       let data;
       try {
         data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -75,9 +88,8 @@ const LoginScreen: React.FC = () => {
           const credential = GoogleAuthProvider.credential(data.payload);
           const userCredential = await signInWithCredential(auth, credential);
 
-          await setDoc(doc(db, 'users', userCredential.user.uid), {
-            last_login: serverTimestamp(),
-          }, { merge: true });
+          // Update timestamps using our new helper
+          await updateLoginTimestamps(userCredential.user.uid);
           
           notifyMobileApp(userCredential.user.uid);
           navigate(`/profile/${userCredential.user.uid}`);
@@ -88,7 +100,6 @@ const LoginScreen: React.FC = () => {
       }
     };
 
-    // Android WebViews often require listening on both window AND document
     window.addEventListener('message', handleNativeMessage);
     document.addEventListener('message', handleNativeMessage as any);
 
@@ -100,7 +111,6 @@ const LoginScreen: React.FC = () => {
 
   const handlePWAInstall = async () => {
     if (deferredPrompt) {
-      // Logic for Chrome/Android
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
@@ -108,12 +118,11 @@ const LoginScreen: React.FC = () => {
       }
       setDeferredPrompt(null);
     } else {
-      // Logic for iOS (Manual instruction)
       alert("To install myHealth:\n1. Tap the 'Share' icon at the bottom of Safari.\n2. Scroll down and select 'Add to Home Screen' 📲");
     }
   };
+
   const notifyMobileApp = (uid: string) => {
-    // Check if the native bridge exists
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'AUTH_SUCCESS',
@@ -123,16 +132,15 @@ const LoginScreen: React.FC = () => {
       console.log("Not in a native shell, skipping mobile sync.");
     }
   };
-  // Inside LoginScreen.tsx
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        last_login: serverTimestamp(),
-      }, { merge: true });
+      // Update timestamps using our new helper
+      await updateLoginTimestamps(userCredential.user.uid);
 
       notifyMobileApp(userCredential.user.uid);
       navigate(`/profile/${userCredential.user.uid}`);
@@ -140,21 +148,19 @@ const LoginScreen: React.FC = () => {
       setError(err.message || 'Login failed');
     }
   };
+
   const handleGoogleLogin = async () => {
     setError('');
     if (window.ReactNativeWebView) {
-      // 1. Tell Native to start the Google flow
       console.log("[Web] Triggering Native Google Sign-In");
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TRIGGER_GOOGLE_LOGIN' }));
     } else {
-      // 2. Standard Web fallback (e.g., Chrome on Desktop)
       try {
         const provider = new GoogleAuthProvider();
         const userCredential = await signInWithPopup(auth, provider);
         
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          last_login: serverTimestamp(),
-        }, { merge: true });
+        // Update timestamps using our new helper
+        await updateLoginTimestamps(userCredential.user.uid);
 
         navigate(`/profile/${userCredential.user.uid}`);
       } catch (err: any) {
@@ -166,7 +172,6 @@ const LoginScreen: React.FC = () => {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#F8F9FE] p-4">
       <div className="w-full max-w-100 flex flex-col items-center">
-        {/* PWA Install Button - Pill Styled */}
         {showInstallButton && (
           <button
             onClick={handlePWAInstall}

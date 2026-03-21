@@ -1,22 +1,24 @@
-  // PostCard.tsx
-  import React, { useState, useRef, useEffect } from 'react';
-  import { useNavigate } from 'react-router-dom';
-  import { 
-    doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, 
-    getDoc, addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
-  } from 'firebase/firestore';
-  import { db, auth } from '../firebase';
-  import { useLocation } from '../context/LocationContext';
-  import { PostReplies } from './PostReplies';
-  import type { Post } from './forum';
-  import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle } from 'lucide-react';
-  import { HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from './forumConstants';
+// PostCard.tsx
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, 
+  getDoc, addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
+} from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { useLocation } from '../context/LocationContext';
+import { PostReplies } from './PostReplies';
+import type { Post } from './forum';
+import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell } from 'lucide-react';
+import { HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from './forumConstants';
 
-  interface PostCardProps {
-    post: Post;
-  }
+interface PostCardProps {
+  post: Post;
+  isUnread?: boolean;
+  onMarkRead?: () => void;
+}
 
-  export const PostCard: React.FC<PostCardProps> = ({ post }) => {
+export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }) => {
     const [authorImageId, setAuthorImageId] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isReplying, setIsReplying] = useState(false);
@@ -54,6 +56,16 @@
     
     const options = post.type === 'poll' ? post.options || [] : [];
     const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
+
+    const handleTogglePost = () => {
+      const newVisibility = !isPostVisible;
+      setIsPostVisible(newVisibility);
+      
+      // If we are opening the post and it was unread, mark it as read
+      if (newVisibility && isUnread && onMarkRead) {
+        onMarkRead();
+      }
+    };
 
     useEffect(() => {
       const fetchAuthorImage = async () => {
@@ -158,7 +170,8 @@
         };      
         await updateDoc(postRef, {
           confirm: arrayUnion(newConfirm),
-          lastUpdated: serverTimestamp() 
+          lastUpdated: serverTimestamp(),
+          lastUpdatedBy: user.uid
         });
         
         setIsConfirmModalOpen(false);
@@ -299,7 +312,8 @@
 
         await updateDoc(doc(db, 'myHealth_posts', post.id), {
           replyCount: increment(1),
-          lastUpdated: serverTimestamp() 
+          lastUpdated: serverTimestamp(),
+          lastUpdatedBy: user.uid
         });
 
         setIsExpanded(true);
@@ -324,306 +338,332 @@
     }, [replyContent]);
 
     return (
-      <>
-        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm flex flex-col transition-all hover:border-indigo-200">
-          
-          {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
+    <>
+      <div className={`group bg-white rounded-xl sm:rounded-2xl border transition-all ${
+        isUnread ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
+      } flex flex-col hover:border-indigo-200`}>
+        {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
+        <div 
+          className={`bg-slate-50 p-3 sm:p-4 cursor-pointer hover:bg-slate-100 transition-colors flex items-start gap-3 sm:gap-4 ${isPostVisible ? 'border-b border-slate-200 rounded-t-xl sm:rounded-t-2xl' : 'rounded-xl sm:rounded-2xl'}`}
+          onClick={handleTogglePost}
+        >
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+          {/* Clickable User Avatar */}
           <div 
-            className={`bg-slate-50 p-2 sm:p-3 cursor-pointer hover:bg-slate-100 transition-colors flex items-center gap-2 sm:gap-3 ${isPostVisible ? 'border-b border-slate-200 rounded-t-xl sm:rounded-t-2xl' : 'rounded-xl sm:rounded-2xl'}`}
-            onClick={() => setIsPostVisible(!isPostVisible)}
+            className="w-10 h-10 sm:w-11 sm:h-11 bg-indigo-100 border border-slate-200 rounded-full flex items-center justify-center text-indigo-600 shadow-sm hover:ring-2 ring-indigo-300 transition-all overflow-hidden cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); navigate(`/profile/${post.authorId}`); }}
+            title="View Profile"
           >
-            {/* Clickable User Avatar */}
-            <div 
-              className="w-10 h-10 sm:w-10 sm:h-10 bg-indigo-100 border border-slate-200 rounded-full flex items-center justify-center text-indigo-600 shrink-0 shadow-sm hover:ring-2 ring-indigo-300 transition-all z-10 overflow-hidden"
-              onClick={(e) => { e.stopPropagation(); navigate(`/profile/${post.authorId}`); }}
-              title="View Profile"
-            >
-              {authorImageId ? (
-                <img 
-                  src={authorImageId} 
-                  alt={post.authorName} 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <User size={20} className="sm:w-5 sm:h-5" />
-              )}
+            {authorImageId ? (
+              <img 
+                src={authorImageId} 
+                alt={post.authorName} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User size={20} className="sm:w-5 sm:h-5" />
+            )}
+          </div>
+
+          {/* Date and Time Underneath */}
+          <div className="flex flex-col items-center text-[9px] leading-tight text-slate-400 font-medium whitespace-nowrap">
+            {post.createdAt?.seconds && (
+              <>
+                <span>
+                  {new Date(post.createdAt.seconds * 1000).toLocaleDateString(undefined, {
+                    month: 'numeric',
+                    day: 'numeric',
+                    year: '2-digit'
+                  })}
+                </span>
+                <span>
+                  {new Date(post.createdAt.seconds * 1000).toLocaleTimeString(undefined, {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+          
+
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pt-0.5">
+            <div className="flex items-center justify-between gap-2 w-full">
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 overflow-hidden whitespace-nowrap">
+                {/* NEW ACTIVITY INDICATOR */}
+                {isUnread && (
+                  <div className="relative flex shrink-0 items-center justify-center mr-2">
+                    {/* The Ping Animation */}
+                    <span className="absolute animate-ping inline-flex h-4 w-4 rounded-full bg-blue-400 opacity-75"></span>
+                    
+                    {/* The Icon Container - increased size and padding */}
+                    <div className="relative bg-blue-600 rounded-full p-1 border border-white shadow-sm">
+                      {/* Increased size from 8 to 12 or 14 */}
+                      <Bell size={12} className="text-white fill-white" />
+                    </div>
+                  </div>
+                )}
+                <h2 className={`text-sm sm:text-base truncate leading-tight ${isUnread ? 'font-black text-blue-900' : 'font-bold text-slate-700'}`}>
+                 {post.title}
+                </h2>
+                <span className="font-bold text-slate-400">• By </span>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); navigate(`/profile/${post.authorId}`); }} 
+                  className="font-bold text-indigo-500 hover:text-indigo-700 hover:underline transition-all truncate max-w-30 sm:max-w-none"
+                >
+                  {post.authorName}
+                </button>
+              </div>
+
+              {/* Top Right: Confirm Button */}
+              <div className="flex items-center shrink-0 relative">
+                {post.forumSection === 'Population Health' && post.type === 'post' && post.hazard && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleConfirmToggle(e); }}
+                    className={`group/confirm flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all duration-300 border transform active:scale-95 cursor-pointer ${
+                      hasConfirmed 
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-200' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-500 hover:text-emerald-600 hover:shadow-lg hover:shadow-emerald-100 hover:ring-2 hover:ring-emerald-500 hover:ring-offset-2 hover:-translate-y-0.5'
+                    }`}
+                  >
+                    <CheckCircle 
+                      size={14} 
+                      className={`transition-transform duration-300 ${
+                        hasConfirmed 
+                          ? "text-white scale-110" 
+                          : "text-emerald-500 group-hover/confirm:scale-125 group-hover/confirm:rotate-12"
+                      }`} 
+                    />
+                    
+                    <span className="hidden sm:inline tracking-tight">
+                      {hasConfirmed ? 'Confirmed' : 'Confirm'}
+                    </span>
+                    
+                    {confirms?.length > 0 && (
+                      <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold transition-colors ${
+                        hasConfirmed 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-slate-100 text-slate-500 group-hover/confirm:bg-emerald-500 group-hover/confirm:text-white'
+                      }`}>
+                        {confirms.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 sm:gap-1">
-              {/* Top Line: Meta Data & Actions */}
-              <div className="flex items-center justify-between gap-2 w-full">
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 overflow-hidden whitespace-nowrap">
-                  {/* User Name & Date */}
-                  <span className="font-bold text-slate-400">By </span>
-                  <button 
-                    onClick={() => navigate(`/profile/${post.authorId}`)} 
-                    className="font-bold text-indigo-400 hover:text-indigo-600 hover:underline transition-all truncate max-w-35 sm:max-w-none"
-                  >{post.authorName}
-                  </button>
-                  <span className="shrink-0 flex gap-1">
-                    • 
-                    {post.createdAt?.seconds ? (
-                      <>
-                        {/* Desktop: Full Date & Time (e.g., October 24, 2023, 2:30 PM) */}
-                        <span className="hidden sm:inline">
-                          {new Date(post.createdAt.seconds * 1000).toLocaleString(undefined, { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit'
-                          })}
-                        </span>
+            {/* LINE 2: Badges, Help Dates (Inline), Map Pin */}
+            <div className="flex items-center justify-between gap-2 w-full mt-auto min-h-6">
+              
+              {/* LEFT SIDE: All Badges & Indicators */}
+              <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap flex-1">
+                {/* Hazard Badge */}
+                {post.hazard && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span 
+                      style={{ 
+                        backgroundColor: `${HAZARD_COLORS[post.hazard.type] || '#94a3b8'}15`, 
+                        color: HAZARD_COLORS[post.hazard.type] || '#94a3b8' 
+                      }}
+                      className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full border border-current/10"
+                    >
+                      • ⚠️ {post.hazard.type}
+                    </span>
+                    <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate max-w-25 sm:max-w-none text-slate-500">
+                      {post.hazard.value}
+                    </span>
+                  </div>
+                )}
 
-                        {/* Mobile: Short Form (e.g., 10/24/23, 2:30 PM) */}
-                        <span className="inline sm:hidden">
-                          {new Date(post.createdAt.seconds * 1000).toLocaleString(undefined, { 
-                            year: '2-digit', 
-                            month: 'numeric', 
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      </>
-                    ) : (
-                      ''
+                {/* Help Badge + Inline Dates */}
+                {post.help && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span 
+                      style={{ backgroundColor: `${HELP_COLORS[post.help.type] || '#94a3b8'}15`, color: HELP_COLORS[post.help.type] || '#94a3b8' }}
+                      className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full border border-current/10"
+                    >
+                      🤝 {post.help.type}
+                    </span>
+                    {(post.helpStartDate || post.helpEndDate) && (
+                      <span className="text-[10px] sm:text-xs font-medium text-slate-400 flex items-center gap-1 whitespace-nowrap">
+                        🕒 {formatHelpDate(post.helpStartDate) || 'Now'} - {formatHelpDate(post.helpEndDate) || 'TBD'}
+                      </span>
                     )}
-                  </span>               
-                  {/* Badges moved to Header */}
-                  {post.hazard && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span 
-                        style={{ 
-                          backgroundColor: `${HAZARD_COLORS[post.hazard.type] || '#94a3b8'}15`, 
-                          color: HAZARD_COLORS[post.hazard.type] || '#94a3b8' 
-                        }}
-                        className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-                      >
-                        • ⚠️ {post.hazard.type}
-                      </span>
-                      <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate max-w-15 sm:max-w-none">
-                        {post.hazard.value}
-                      </span>
-                    </div>
-                  )}
+                  </div>
+                )}
 
-                  {post.help && (
-                      <div className="flex flex-col gap-0.5 sm:gap-1">
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                          <span 
-                            style={{ backgroundColor: `${HELP_COLORS[post.help.type] || '#94a3b8'}15`, color: HELP_COLORS[post.help.type] || '#94a3b8' }}
-                            className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-                          >
-                            🤝 {post.help.type}
-                          </span>
-                          <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate max-w-15 sm:max-w-none">
-                            {post.help.value}
-                          </span>
-                        </div>
-                        {(post.helpStartDate || post.helpEndDate) && (
-                          <span className="text-[10px] sm:text-xs font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-                            🕒 {formatHelpDate(post.helpStartDate) || 'Now'} {' - '} {formatHelpDate(post.helpEndDate) || 'TBD'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  
-                    {post.public && (
-                        <>
-                          <span 
-                            style={{ backgroundColor: `${PUBLIC_COLORS[post.public.type] || '#94a3b8'}15`, color: PUBLIC_COLORS[post.public.type] || '#94a3b8' }}
-                            className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-                          >
-                            📍 {post.public.type} 
-                          </span>
-                          <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate max-w-15 sm:max-w-none">
-                            {post.public.value} 
-                          </span>
-                        </>
-                      )}
-                  {post.topic && (
-                    <>
+                {/* Public Badge */}
+                {post.public && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span 
+                      style={{ backgroundColor: `${PUBLIC_COLORS[post.public.type] || '#94a3b8'}15`, color: PUBLIC_COLORS[post.public.type] || '#94a3b8' }}
+                      className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full border border-current/10"
+                    >
+                      📍 {post.public.type} 
+                    </span>
+                    <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate text-slate-500">
+                      {post.public.value} 
+                    </span>
+                  </div>
+                )}
+
+                {/* Topic Badge */}
+                {post.topic && (
+                  <div className="flex items-center gap-1 shrink-0">
                     <span 
                       style={{ backgroundColor: `${TOPIC_COLORS[post.topic] || '#94a3b8'}15`, color: TOPIC_COLORS[post.topic] || '#94a3b8' }}
-                      className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      className="text-[clamp(0.6rem,2vw,0.7rem)] font-bold px-2 py-0.5 rounded-full border border-current/10"
                     >
                       📌 {post.topic} 
                     </span>
-                    <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate max-w-15 sm:max-w-none">
+                    <span className="text-[clamp(0.6rem,2vw,0.7rem)] font-medium opacity-80 truncate text-slate-500">
                       {post.detail} 
                     </span>
-                    </>
-                  )}
-                  {/* Map Pin Indicator */}
-                  {post.location && (
-                    <div 
-                      className="flex items-center justify-center bg-emerald-50 border border-emerald-200 rounded-full w-5 h-5 sm:w-6 sm:h-6 ml-1"
-                      title="Location Attached"
-                    >
-                      <MapPin 
-                        size={12} 
-                        className="text-emerald-600 fill-emerald-600/20 shrink-0" 
-                      />
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Actions: Confirm / Trash */}
-                <div className="flex items-center gap-1.5 shrink-0 pl-1">
-                  {post.forumSection === 'Population Health' && post.type === 'post' && post.hazard && (
-                    <button
-                      onClick={handleConfirmToggle}
-                      className={`flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-bold transition-all duration-200 whitespace-nowrap border-2 group active:scale-95 ${
-                        hasConfirmed 
-                          ? 'bg-emerald-500 text-white border-emerald-400 shadow-[0_4px_12px_-2px_rgba(16,185,129,0.4)] hover:bg-emerald-600 hover:shadow-[0_6px_16px_-2px_rgba(16,185,129,0.5)]' 
-                          : 'bg-slate-200 text-slate-600 border-transparent hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-md hover:-translate-y-0.5'
-                      }`}
-                    >
-                      <CheckCircle 
-                        size={10} 
-                        className={`shrink-0 transition-transform duration-200 ${!hasConfirmed && 'group-hover:scale-110 group-hover:rotate-12'}`} 
-                      />
-                      <span className="hidden sm:inline">{hasConfirmed ? 'Confirmed' : 'Confirm'}</span>
-                      {confirms.length > 0 && <span className="ml-0.5">{confirms.length}</span>}
-                    </button>
-                  )}
-                </div>
+                {/* Map Pin Indicator */}
+                {post.location && (
+                  <div className="flex items-center justify-center bg-emerald-50 border border-emerald-200 rounded-full w-5 h-5 ml-1 shrink-0">
+                    <MapPin size={10} className="text-emerald-600 fill-emerald-600/20" />
+                  </div>
+                )}
               </div>
 
-              {/* Bottom Line: Title */}
-              <div className="flex items-center justify-between gap-3 w-full">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                  {post.title}
-                </h2>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {!isPostVisible && (
-                    <span className="text-[10px] text-slate-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline">
-                      Click to expand
-                    </span>
-                  )}
-                  {isAuthor && (
-                    <button onClick={handleDelete} className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                      title="Delete Post"
-                    >
-                      <Trash2 size={16} className="sm:w-4.5 sm:h-4.5" />
-                    </button>
-                  )}
-                </div>
+              {/* RIGHT SIDE: Trash Action (Pinned to Bottom Right) */}
+              <div className="flex items-center gap-2 shrink-0 ml-auto pl-2">
+                {!isPostVisible && (
+                  <span className="text-[10px] text-slate-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline tracking-tight">
+                    Click to expand
+                  </span>
+                )}
+                
+                {isAuthor && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDelete(e); }} 
+                    className="group/trash relative text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-full transition-all duration-200 hover:ring-2 hover:ring-red-500/20 hover:ring-offset-1 active:scale-90"
+                    title="Delete Post"
+                  >
+                    <Trash2 size={15} className="transition-transform group-hover/trash:scale-110" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* WHITE CONTENT AREA (EXPANDED VIEW) */}
-          {isPostVisible && (
-            <div className="p-3 sm:p-5 bg-white rounded-b-xl sm:rounded-b-2xl">
-              {/* Post Content */}
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap wrap-break-word">
-                {renderTextWithLinks(post.content)}
-              </p>
-          
-              {/* Poll Component */}
-              {post.type === 'poll' && post.options && (
-                <div className="space-y-2 my-3 sm:my-4">
-                  {post.options.map((opt, idx) => {
-                    const pct = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
-                    const isSelected = userSelectedOption === idx;
-                    return (
-                      <button key={idx} onClick={(e) => handleVote(e, idx)}
-                        className={`relative w-full text-left p-2 sm:p-3 rounded-xl border transition-all duration-300 overflow-hidden group
-                          ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-300 hover:border-indigo-400'}`}
-                      >
-                        <div className={`absolute inset-0 transition-all duration-700 ${isSelected ? 'bg-indigo-300/40' : 'bg-indigo-300/20'}`} style={{ width: `${pct}%` }} />
-                        <div className="relative flex justify-between items-center text-xs sm:text-sm font-bold gap-2">
-                          <span className={isSelected ? 'text-indigo-950' : 'text-slate-800'}>{opt.text}</span>
-                          <span className={`shrink-0 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg text-[10px] sm:text-[11px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-900'}`}>{pct}%</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1">
-                    {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
-                  </p>
-                </div>
-              )}
+        {/* WHITE CONTENT AREA (EXPANDED VIEW) */}
+        {isPostVisible && (
+          <div className="p-4 sm:p-5 bg-white rounded-b-xl sm:rounded-b-2xl">
+            {/* Post Content */}
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap wrap-break-word">
+              {renderTextWithLinks(post.content)}
+            </p>
+        
+            {/* Poll Component */}
+            {post.type === 'poll' && post.options && (
+              <div className="space-y-2 my-4">
+                {post.options.map((opt, idx) => {
+                  const pct = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
+                  const isSelected = userSelectedOption === idx;
+                  return (
+                    <button key={idx} onClick={(e) => handleVote(e, idx)}
+                      className={`relative w-full text-left p-2 sm:p-3 rounded-xl border transition-all duration-300 overflow-hidden group
+                        ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-slate-300 hover:border-indigo-400'}`}
+                    >
+                      <div className={`absolute inset-0 transition-all duration-700 ${isSelected ? 'bg-indigo-300/40' : 'bg-indigo-300/20'}`} style={{ width: `${pct}%` }} />
+                      <div className="relative flex justify-between items-center text-xs sm:text-sm font-bold gap-2">
+                        <span className={isSelected ? 'text-indigo-950' : 'text-slate-800'}>{opt.text}</span>
+                        <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] ${isSelected ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-900'}`}>{pct}%</span>
+                      </div>
+                    </button>
+                  );
+                })}
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1">
+                  {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+                </p>
+              </div>
+            )}
 
-              {/* Petition Component */}
-              {post.type === 'petition' && (
-                <div className="my-3 sm:my-4 p-3 sm:p-4 bg-amber-50 rounded-xl border border-amber-100 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-                  <span className="font-black text-amber-900 text-[clamp(0.9rem,3vw,1.125rem)] flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
-                    <Edit3 size={16} className="sm:w-4.5 sm:h-4.5" /> {post.signatures?.length || 0} Signatures
-                  </span>
-                  <button
-                    onClick={handleSignPetition}
-                    className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap flex-1 sm:flex-none text-center ${hasSigned ? 'bg-amber-200 text-amber-800' : 'bg-amber-500 text-white hover:scale-105'}`}
+            {/* Petition Component */}
+            {post.type === 'petition' && (
+              <div className="my-4 p-3 sm:p-4 bg-amber-50 rounded-xl border border-amber-100 flex flex-wrap items-center justify-between gap-3">
+                <span className="font-black text-amber-900 text-[clamp(0.9rem,3vw,1.125rem)] flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+                  <Edit3 size={16} className="sm:w-4.5 sm:h-4.5" /> {post.signatures?.length || 0} Signatures
+                </span>
+                <button
+                  onClick={handleSignPetition}
+                  className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap flex-1 sm:flex-none text-center ${hasSigned ? 'bg-amber-200 text-amber-800' : 'bg-amber-500 text-white hover:scale-105 shadow-sm hover:shadow-md'}`}
+                >
+                  {hasSigned ? 'Signed ✓' : 'Add Signature'}
+                </button>
+              </div>
+            )}
+
+            {/* Action Bar */}
+            <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2 mt-4 pt-3 border-t border-slate-100">
+              <button onClick={(e) => handleReaction(e, 'like')} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-500 transition-colors'}`}>
+                <ThumbsUp size={14} className={`sm:w-4 sm:h-4 ${hasLiked ? 'fill-indigo-600' : ''}`} /> {post.likes?.length || 0}
+              </button>
+              <button onClick={(e) => handleReaction(e, 'dislike')} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400 hover:text-red-500 transition-colors'}`}>
+                <ThumbsDown size={14} className={`sm:w-4 sm:h-4 ${hasDisliked ? 'fill-red-500' : ''}`} /> {post.dislikes?.length || 0}
+              </button>
+
+              <div className="ml-auto flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold text-slate-400">
+                <button onClick={toggleReplies} className="hover:text-indigo-500 transition-colors whitespace-nowrap">
+                  {isExpanded ? 'Hide Replies' : `Replies (${post.replyCount || 0})`}
+                </button>
+                <span className="hidden sm:inline">|</span>
+                <button onClick={(e) => { e.stopPropagation(); setIsReplying(!isReplying); if (!isExpanded && !isReplying) setIsExpanded(true); }} className="hover:text-indigo-500 transition-colors flex items-center gap-1 whitespace-nowrap">
+                  <Plus size={12} className="sm:w-3 sm:h-3"/> Add Reply
+                </button>
+              </div>
+            </div>
+
+            {/* Reply Setup */}
+            {isReplying && (
+              <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-4 items-start animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                <textarea
+                  ref={textareaRef}
+                  autoFocus
+                  rows={1}
+                  className="flex-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm outline-none focus:border-indigo-400 focus:bg-white transition-colors resize-none overflow-hidden min-h-10"
+                  placeholder="Write a reply..."
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                />
+                <div className="flex items-center gap-2 pt-1 w-full sm:w-auto justify-end">
+                  <button 
+                    onClick={handleToggleRootReplyLocation}
+                    className={`p-1.5 sm:p-2 rounded-xl transition-colors ${rootReplyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                    title="Attach Location"
                   >
-                    {hasSigned ? 'Signed ✓' : 'Add Signature'}
+                    <MapPin size={16} className="sm:w-4.5 sm:h-4.5" />
                   </button>
-                </div>
-              )}
-
-              {/* Action Bar */}
-              <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2 mt-3 pt-2 sm:mt-4 sm:pt-3 border-t border-slate-100">
-                <button onClick={(e) => handleReaction(e, 'like')} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold ${hasLiked ? 'text-indigo-600' : 'text-slate-400'}`}>
-                  <ThumbsUp size={14} className={`sm:w-4 sm:h-4 ${hasLiked ? 'fill-indigo-600' : ''}`} /> {post.likes?.length || 0}
-                </button>
-                <button onClick={(e) => handleReaction(e, 'dislike')} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold ${hasDisliked ? 'text-red-500' : 'text-slate-400'}`}>
-                  <ThumbsDown size={14} className={`sm:w-4 sm:h-4 ${hasDisliked ? 'fill-red-500' : ''}`} /> {post.dislikes?.length || 0}
-                </button>
-
-                <div className="ml-auto flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold text-slate-400">
-                  <button onClick={toggleReplies} className="hover:text-indigo-500 whitespace-nowrap">
-                    {isExpanded ? 'Hide Replies' : `Replies (${post.replyCount || 0})`}
-                  </button>
-                  <span className="hidden sm:inline">|</span>
-                  <button onClick={(e) => { e.stopPropagation(); setIsReplying(!isReplying); if (!isExpanded && !isReplying) setIsExpanded(true); }} className="hover:text-indigo-500 flex items-center gap-1 whitespace-nowrap">
-                    <Plus size={12} className="sm:w-3 sm:h-3"/> Add Reply
-                  </button>
+                  <button onClick={handleAddRootReply} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm">Post</button>
+                  <button onClick={() => { setIsReplying(false); setReplyContent(''); setRootReplyLocation(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={16} className="text-slate-400" /></button>
                 </div>
               </div>
-
-              {/* Reply Setup */}
-              {isReplying && (
-                <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3 items-start" onClick={(e) => e.stopPropagation()}>
-                  <textarea
-                    ref={textareaRef}
-                    autoFocus
-                    rows={1}
-                    className="flex-1 w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm outline-none focus:border-indigo-400 resize-none overflow-hidden min-h-9"
-                    placeholder="Write a reply..."
-                    value={replyContent}
-                    onChange={(e) => setReplyContent(e.target.value)}
-                  />
-                  <div className="flex items-center gap-2 pt-1 w-full sm:w-auto justify-end">
-                    <button 
-                      onClick={handleToggleRootReplyLocation}
-                      className={`p-1.5 sm:p-2 rounded-xl transition-colors ${rootReplyLocation ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                      title="Attach Location"
-                    >
-                      <MapPin size={16} className="sm:w-4.5 sm:h-4.5" />
-                    </button>
-                    <button onClick={handleAddRootReply} className="bg-indigo-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold">Post</button>
-                    <button onClick={() => { setIsReplying(false); setReplyContent(''); setRootReplyLocation(null); }}><X size={16} className="text-slate-400" /></button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Render PostReplies Block */}
-              {isExpanded && <div className="mt-3"><PostReplies postId={post.id} /></div>}
-            </div>
-          )}
-        </div>
+            )}
+            
+            {/* Render PostReplies Block */}
+            {isExpanded && <div className="mt-4"><PostReplies postId={post.id} /></div>}
+          </div>
+        )}
+      </div>
 
       {/* CONFIRMATION MODAL OVERLAY */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 sm:p-6 relative shadow-2xl">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 sm:p-6 relative shadow-2xl animate-in fade-in zoom-in duration-200">
             <h3 className="font-bold text-lg sm:text-xl text-slate-900 mb-1">Confirm Location</h3>
             <p className="text-[10px] sm:text-xs text-slate-500 mb-4 sm:mb-6">Verify this report by logging your location.</p>
             
             <div className="space-y-2 sm:space-y-3">
-              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'post' ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'post' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                 <input 
                   type="radio" 
                   name="loc" 
@@ -640,7 +680,7 @@
                 </span>
               </label>
 
-              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'current' ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'current' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                 <input 
                   type="radio" 
                   name="loc" 
@@ -657,7 +697,7 @@
                 </span>
               </label>
 
-              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'custom' ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'custom' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                 <input 
                   type="radio" 
                   name="loc" 
@@ -670,25 +710,25 @@
             </div>
 
             {confirmOption === 'custom' && (
-              <div className="mt-3 flex w-full gap-2 animate-in slide-in-from-top-2">
+              <div className="mt-3 flex w-full gap-2 animate-in slide-in-from-top-2 duration-300">
                 <input 
                   type="number" 
                   placeholder="Lat" 
                   value={customLat} 
                   onChange={e => setCustomLat(e.target.value)} 
-                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2 sm:p-2.5 outline-none focus:border-indigo-500 text-xs sm:text-sm" 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm transition-all" 
                 />
                 <input 
                   type="number" 
                   placeholder="Lng" 
                   value={customLng} 
                   onChange={e => setCustomLng(e.target.value)} 
-                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2 sm:p-2.5 outline-none focus:border-indigo-500 text-xs sm:text-sm" 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm transition-all" 
                 />
               </div>
             )}
 
-            <div className="flex gap-2 sm:gap-3 mt-6 sm:mt-8">
+            <div className="flex gap-3 mt-6 sm:mt-8">
               <button onClick={() => setIsConfirmModalOpen(false)} className="flex-1 py-2.5 sm:py-3 text-[10px] sm:text-xs text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors">Cancel</button>
               <button onClick={handleConfirmSubmit} className="flex-1 py-2.5 sm:py-3 bg-indigo-600 text-[10px] sm:text-xs text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">Submit</button>
             </div>

@@ -1,7 +1,6 @@
-// ModalGroups.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2 } from 'lucide-react';
-import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc, collectionGroup, limit } from 'firebase/firestore';
+import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
+import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 
@@ -18,6 +17,8 @@ interface Group {
   members: { userId: string; display_name: string }[];
   createdBy: string;
   adminId?: string;
+  lastUpdated?: any;
+  lastUpdatedBy?: string;
 }
 
 interface ModalGroupsProps {
@@ -30,13 +31,28 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
   const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
-  // Create Group State
+  // User Data State (for tracking read receipts)
+  const [userData, setUserData] = useState<any>(null);
+
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch Current User's Profile Data
+  useEffect(() => {
+    if (!isOpen || !auth.currentUser) return;
+    
+    // Listen for read receipts to conditionally render badges next to specific groups
+    const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setUserData(docSnap.data());
+      }
+    });
+    return () => unsubscribe();
+  }, [isOpen]);
 
   // Fetch User's Groups
   useEffect(() => {
@@ -50,6 +66,14 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
         id: doc.id,
         ...doc.data()
       })) as Group[];
+      
+      // Sort groups by last updated
+      groupsData.sort((a, b) => {
+         const timeA = a.lastUpdated?.toMillis() || 0;
+         const timeB = b.lastUpdated?.toMillis() || 0;
+         return timeB - timeA;
+      });
+
       setUserGroups(groupsData);
       setIsLoadingGroups(false);
     });
@@ -57,7 +81,82 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     return () => unsubscribe();
   }, [isOpen]);
 
-  // Handle User Search (Debounced & Lowercase via collectionGroup)
+  // === NEW HANDLER: Use this to wrap your group link/click ===
+  // This updates the specific read receipt and THEN navigates
+  const handleGroupClick = async (groupId: string) => {
+    if (auth.currentUser) {
+      try {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        // Mark ONLY this specific group as read
+        await setDoc(userRef, { 
+          [`last_read_group_${groupId}`]: serverTimestamp() 
+        }, { merge: true });
+      } catch (err) {
+        console.error("Error updating read receipt:", err);
+      }
+    }
+    
+    // Navigate and close modal
+    navigate(`/group/${groupId}`);
+    onClose();
+  };
+
+
+  // Fetch Current User's Profile Data & CLEAR GLOBAL BADGE
+  useEffect(() => {
+    if (!isOpen || !auth.currentUser) return;
+    
+    // 1. Listen for read receipts
+    const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setUserData(docSnap.data());
+      }
+    });
+
+    // 2. Mark the modal as "opened" to clear the Navbar notification immediately
+    const clearGlobalBadge = async () => {
+      try {
+        const userRef = doc(db, 'users', auth.currentUser!.uid);
+        await setDoc(userRef, { 
+          groups_modal_last_opened: serverTimestamp() 
+        }, { merge: true });
+      } catch (err) {
+        console.error("Error clearing global badge:", err);
+      }
+    };
+    clearGlobalBadge();
+
+    return () => unsubscribe();
+  }, [isOpen]);
+
+  // Fetch User's Groups
+  useEffect(() => {
+    if (!isOpen || !auth.currentUser) return;
+
+    const groupsRef = collection(db, 'myHealth_groups');
+    const q = query(groupsRef, where('memberUids', 'array-contains', auth.currentUser.uid));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const groupsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Group[];
+      
+      // Sort groups by last updated
+      groupsData.sort((a, b) => {
+         const timeA = a.lastUpdated?.toMillis() || 0;
+         const timeB = b.lastUpdated?.toMillis() || 0;
+         return timeB - timeA;
+      });
+
+      setUserGroups(groupsData);
+      setIsLoadingGroups(false);
+    });
+
+    return () => unsubscribe();
+  }, [isOpen]);
+
+  // Handle User Search
   useEffect(() => {
     const performSearch = async () => {
       if (searchQuery.trim().length < 2) {
@@ -68,7 +167,6 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
       try {
         const lowerTerm = searchQuery.toLowerCase();
         
-        // Search across 'profile' subcollections for matching 'name_lowercase'
         const q = query(
           collectionGroup(db, 'profile'),
           where('name_lowercase', '>=', lowerTerm),
@@ -80,19 +178,14 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
         const results: SearchUser[] = [];
 
         for (const userDoc of snapshot.docs) {
-          const userData = userDoc.data();
-          // The document is user_data inside the profile subcollection. 
-          // The grandparent is the user's root document.
+          const fetchedUserData = userDoc.data();
           const uid = userDoc.ref.parent.parent?.id;
           
           if (!uid || uid === auth.currentUser?.uid || selectedMembers.some(m => m.uid === uid)) continue;
-          
-          // Prevent duplicates if multiple docs match under the same user
           if (results.some(r => r.uid === uid)) continue;
 
           let imageId = null;
           try {
-            // Fetch the user's avatar image independently
             const imgDocRef = doc(db, 'users', uid, 'profile', 'image_data');
             const imgSnap = await getDoc(imgDocRef);
             if (imgSnap.exists()) {
@@ -104,7 +197,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
 
           results.push({
             uid,
-            displayName: userData.name || userData.display_name || 'Unknown User',
+            displayName: fetchedUserData.name || fetchedUserData.display_name || 'Unknown User',
             imageId
           });
         }
@@ -135,14 +228,12 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     
     setIsSaving(true);
     try {
-      // 1. Fetch current user's real display name from the users collection
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       const creatorDisplayName = userDocSnap.exists() 
         ? userDocSnap.data().display_name 
         : (auth.currentUser.displayName || 'New Member');
 
-      // 2. Construct the group data with the proper name
       const groupData = {
         name: groupName,
         memberUids: [auth.currentUser.uid, ...selectedMembers.map(m => m.uid)],
@@ -155,7 +246,8 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
         ],
         createdBy: auth.currentUser.uid,
         adminId: auth.currentUser.uid,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp() 
       };
 
       await addDoc(collection(db, 'myHealth_groups'), groupData);
@@ -171,18 +263,13 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     }
   };
 
-  const handleGroupClick = (groupId: string) => {
-    onClose();
-    navigate(`/group/${groupId}`);
-  };
-
   const handleProfileClick = (uid: string) => {
     onClose();
     navigate(`/profile/${uid}`);
   };
 
   const handleLeaveGroup = async (e: React.MouseEvent, group: Group) => {
-    e.stopPropagation(); // Prevents navigating to group
+    e.stopPropagation();
     if (!auth.currentUser) return;
 
     if (window.confirm(`Are you sure you want to leave ${group.name}?`)) {
@@ -203,7 +290,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
   };
 
   const handleDeleteGroup = async (e: React.MouseEvent, groupId: string) => {
-    e.stopPropagation(); // Prevents navigating to group
+    e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this group? This action cannot be undone.")) {
       try {
         await deleteDoc(doc(db, 'myHealth_groups', groupId));
@@ -213,6 +300,7 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
       }
     }
   };
+
 
   if (!isOpen) return null;
 
@@ -230,9 +318,6 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
           </button>
         </div>
 
-        {/* Two-column layout body 
-            Updated for mobile: The entire main flex area becomes scrollable on mobile so content naturally stacks 
-            and the user easily accesses the bottom sections without internal clipping. */}
         <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
           
           {/* LEFT COLUMN: MY GROUPS */}
@@ -252,49 +337,79 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {userGroups.map(group => (
-                    <div 
-                      key={group.id} 
-                      onClick={() => handleGroupClick(group.id)}
-                      className="group p-4 bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-md rounded-2xl cursor-pointer transition-all flex items-center justify-between"
-                    >
-                      <div className="flex-1">
-                        <h3 className="font-bold text-slate-800 mb-1">{group.name}</h3>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
-                          <Users size={12} /> {group.members.length} Members
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                           {group.members.slice(0, 3).map(m => (
-                             <span key={m.userId} className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 truncate max-w-20">
-                               {m.display_name}
-                             </span>
-                           ))}
-                           {group.members.length > 3 && <span className="text-[10px] text-slate-400">+{group.members.length - 3}</span>}
+                  {userGroups.map(group => {
+                    // --- NEW: Calculate Unread Status ---
+                    // Baseline is the previous_login. If it doesn't exist, default to 0.
+                    const baseTime = userData?.previous_login?.toMillis() || 0;
+                    const updatedTime = group.lastUpdated?.toMillis() || 0;
+                    const readTime = userData?.[`last_read_group_${group.id}`]?.toMillis() || 0;
+                    
+                    // It's unread if the group updated AFTER the user's last session, 
+                    // and AFTER the specific time they last opened this group.
+                    const isUnread = updatedTime > baseTime && updatedTime > readTime;
+
+                    return (
+                      <div 
+                        key={group.id} 
+                        onClick={() => handleGroupClick(group.id)}
+                        className={`group p-4 bg-white border ${
+                          isUnread ? 'border-emerald-300 ring-1 ring-emerald-100 shadow-md' : 'border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md'
+                        } rounded-2xl cursor-pointer transition-all flex items-center justify-between relative`}
+                      >
+                        <div className="flex-1 min-w-0 pr-4">
+                          <div className="flex items-center gap-2">
+                            {/* UNREAD INDICATOR */}
+                            {isUnread && (
+                              <div className="relative flex shrink-0 items-center justify-center">
+                                <span className="absolute animate-ping inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
+                                <div className="relative bg-emerald-500 rounded-full p-1 border border-white shadow-sm">
+                                  <Bell size={10} className="text-white fill-white" />
+                                </div>
+                              </div>
+                            )}
+                            
+                            <h3 className={`truncate ${isUnread ? 'font-black text-emerald-900' : 'font-bold text-slate-800'}`}>
+                              {group.name}
+                            </h3>
+                          </div>
+
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                            <Users size={12} /> {group.members.length} Members
+                          </p>
+                          
+                          <div className="flex flex-wrap gap-1 mt-2">
+                             {group.members.slice(0, 3).map(m => (
+                               <span key={m.userId} className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 truncate max-w-20">
+                                 {m.display_name}
+                               </span>
+                             ))}
+                             {group.members.length > 3 && <span className="text-[10px] text-slate-400">+{group.members.length - 3}</span>}
+                          </div>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {group.adminId === auth.currentUser?.uid && (
+                            <button 
+                              onClick={(e) => handleDeleteGroup(e, group.id)} 
+                              className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
+                              title="Delete Group"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                          <button 
+                            onClick={(e) => handleLeaveGroup(e, group)} 
+                            className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
+                            title="Leave Group"
+                          >
+                            <LogOut size={18} />
+                          </button>
+                          <ChevronRight className="text-slate-300 group-hover:text-emerald-500 transition-colors ml-1" size={20} />
                         </div>
                       </div>
-                      
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1 ml-2">
-                        {group.adminId === auth.currentUser?.uid && (
-                          <button 
-                            onClick={(e) => handleDeleteGroup(e, group.id)} 
-                            className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
-                            title="Delete Group"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={(e) => handleLeaveGroup(e, group)} 
-                          className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors md:opacity-0 md:group-hover:opacity-100" 
-                          title="Leave Group"
-                        >
-                          <LogOut size={18} />
-                        </button>
-                        <ChevronRight className="text-slate-300 group-hover:text-emerald-500 transition-colors ml-1" size={20} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -335,14 +450,9 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                   {isSearching && <Loader2 className="absolute right-3 top-3.5 text-slate-400 animate-spin" size={18} />}
                 </div>
 
-                {/* Changed to in-flow block element to avoid scrolling overlap on mobile */}
                 {searchResults.map(user => (
                   <div key={user.uid} className="flex items-center p-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
-                    
-                    {/* 1. Main container for the interactive profile part */}
                     <div className="flex items-center gap-3 flex-1 justify-between">
-                      
-                      {/* Group the Image and Name together on the left */}
                       <div 
                         className="flex items-center gap-3 cursor-pointer group/name" 
                         onClick={() => handleProfileClick(user.uid)}
@@ -359,10 +469,9 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                         </span>
                       </div>
 
-                      {/* 2. The Add button is now pushed to the far right because of justify-between above */}
                       <button 
                         onClick={(e) => {
-                          e.stopPropagation(); // Safety first
+                          e.stopPropagation(); 
                           addMember(user);
                         }} 
                         className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-full transition-colors"
