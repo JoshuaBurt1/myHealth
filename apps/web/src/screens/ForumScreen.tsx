@@ -1,4 +1,4 @@
-// ForumScreen.tsx
+//ForumScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -191,6 +191,13 @@ const ForumScreen: React.FC = () => {
 
   const handleMarkRead = async (postId: string) => {
     if (!user) return;
+    
+    // Find the post to verify authorship
+    const post = posts.find(p => p.id === postId);
+    
+    // ONLY track reads for the user's own posts to drastically decrease write/read operations
+    if (post && post.authorId !== user.uid) return;
+
     try {
       await updateDoc(doc(db, 'users', user.uid), {
         [`last_read_post_${postId}`]: serverTimestamp()

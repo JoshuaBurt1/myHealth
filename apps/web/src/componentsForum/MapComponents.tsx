@@ -35,7 +35,7 @@ export const MapContent = ({ userLocation, mapZoom, activeSection, gridCells, po
       />
       <MapController userLocation={userLocation} zoom={mapZoom} />
       
-      {/* Grid Cells for Population Health */}
+      {/* Grid Cells for Population Health (Heatmap style) */}
       {activeSection === 'Population Health' && gridCells.map((cell: any, idx: number) => {
         let color = cell.count > 5 ? '#ef4444' : cell.count >= 3 ? '#f97316' : '#fbbf24';
         return (
@@ -61,73 +61,85 @@ export const MapContent = ({ userLocation, mapZoom, activeSection, gridCells, po
       {/* Post Markers */}
       {posts.map((post: Post) => {
         const elements = [];
+
+        // --- POPULATION HEALTH SECTION ---
         if (activeSection === 'Population Health') {
-          if (post.hazard?.type && post.confirm) {
+          // 1. Hazard Markers (Triangles - Based on Community Confirmations)
+          if (post.hazard?.type && post.confirm && post.confirm.length > 0) {
             const hazardColor = HAZARD_COLORS[post.hazard.type] || '#ef4444';
-            const icon = getShapeIcon('triangle', hazardColor);
+            const hazardIcon = getShapeIcon('triangle', hazardColor);
+            
             post.confirm.forEach((c: any, idx: number) => {
               if (c.location) elements.push(
-                <Marker key={`conf-${post.id}-${idx}`} position={c.location as [number, number]} icon={icon}>
+                <Marker key={`conf-${post.id}-${idx}`} position={c.location as [number, number]} icon={hazardIcon}>
                   <Popup className="font-sans">
-                    <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: hazardColor }}>{post.hazard!.type} ({post.type})</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: hazardColor }}>{post.hazard!.type}</span>
                     <strong className="text-slate-800 text-sm">{post.title}</strong>
-                    <div className="text-xs text-slate-500 italic mt-1">Community Confirmed Hazard</div>
+                    <div className="text-xs text-slate-500 italic mt-1">Community Confirmed Position</div>
                   </Popup>
                 </Marker>
               );
             });
-          } else if (post.help?.type && HELP_COLORS[post.help.type] && post.location) {
-            const helpColor = HELP_COLORS[post.help.type];
+          } 
+          
+          // 2. Help/Events Markers (Squares)
+          if (post.help?.type && post.location) {
+            const helpColor = HELP_COLORS[post.help.type] || '#6366f1';
             elements.push(
-              <Marker key={`loc-${post.id}`} position={post.location as [number, number]} icon={getShapeIcon('square', helpColor)}>
+              <Marker key={`help-${post.id}`} position={post.location as [number, number]} icon={getShapeIcon('square', helpColor)}>
                 <Popup className="font-sans">
-                  <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: helpColor }}>{post.help.type} ({post.type})</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: helpColor }}>{post.help.type} (Event)</span>
                   <strong className="text-slate-800 text-sm">{post.title}</strong>
-                  <div className="text-xs text-slate-500 italic mt-1">By {post.authorName}</div>
-                </Popup>
-              </Marker>
-            );
-          } else if (post.public?.type && PUBLIC_COLORS[post.public.type] && post.location) {
-            const publicColor = PUBLIC_COLORS[post.public.type];
-            elements.push(
-              <Marker key={`loc-${post.id}`} position={post.location as [number, number]} icon={getShapeIcon('circle', publicColor)}>
-                <Popup className="font-sans">
-                  <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: publicColor }}>{post.public.type} ({post.type})</span>
-                  <strong className="text-slate-800 text-sm">{post.title}</strong>
-                  <div className="text-xs text-slate-500 italic mt-1">By {post.authorName}</div>
+                  <div className="text-xs text-slate-500 italic mt-1">Location via {post.authorName}</div>
                 </Popup>
               </Marker>
             );
           }
-        } else if (post.location) {
+
+          // 3. Public Access Markers (Circles)
+          if (post.public?.type && post.location) {
+            const publicColor = PUBLIC_COLORS[post.public.type] || '#10b981';
+            elements.push(
+              <Marker key={`pub-${post.id}`} position={post.location as [number, number]} icon={getShapeIcon('circle', publicColor)}>
+                <Popup className="font-sans">
+                  <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: publicColor }}>{post.public.type}</span>
+                  <strong className="text-slate-800 text-sm">{post.title}</strong>
+                  <div className="text-xs text-slate-500 italic mt-1">Resource Location</div>
+                </Popup>
+              </Marker>
+            );
+          }
+        } 
+        
+        // --- PERSONAL HEALTH & OFF-TOPIC SECTIONS ---
+        else if (post.location) {
           let markerColor = '#94a3b8';
           let labelText: string = post.forumSection;
           let shape: 'star' | 'diamond' | 'circle' = 'circle'; 
 
           if (post.forumSection === 'Personal Health') {
-            shape = 'star';
-            if (post.topic) {
-              markerColor = TOPIC_COLORS[post.topic] || markerColor;
-              labelText = post.topic;
-            }
+            shape = 'star'; // Star for Personal Health
+            markerColor = post.topic ? (TOPIC_COLORS[post.topic] || '#6366f1') : '#6366f1';
+            labelText = post.topic || 'General Health';
           } else if (post.forumSection === 'Off Topic') {
-            shape = 'diamond';
+            shape = 'diamond'; // Diamond for Off Topic
             markerColor = '#64748b'; 
+            labelText = 'Off Topic';
           }
 
-          const customIcon = getShapeIcon(shape, markerColor);
           elements.push(
-            <Marker key={`loc-${post.id}`} position={post.location as [number, number]} icon={customIcon}>
+            <Marker key={`other-${post.id}`} position={post.location as [number, number]} icon={getShapeIcon(shape, markerColor)}>
               <Popup className="font-sans">
                 <span className="text-[10px] font-black uppercase tracking-widest block mb-1" style={{ color: markerColor }}>
-                  {labelText} ({post.type})
+                  {labelText}
                 </span>
                 <strong className="text-slate-800 text-sm">{post.title}</strong>
-                <div className="text-xs text-slate-500 italic mt-1">By {post.authorName}</div>
+                <div className="text-xs text-slate-500 italic mt-1">Shared by {post.authorName}</div>
               </Popup>
             </Marker>
           );
         }
+
         return elements;
       })}
 
@@ -136,8 +148,8 @@ export const MapContent = ({ userLocation, mapZoom, activeSection, gridCells, po
         <Marker position={userLocation}>
           <Popup className="font-sans">
             <div className="text-center">
-              <p className="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Current Position</p>
-              <strong className="text-slate-800 text-sm">You are here</strong>
+              <p className="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Your Device</p>
+              <strong className="text-slate-800 text-sm">Current Location</strong>
             </div>
           </Popup>
         </Marker>

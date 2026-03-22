@@ -1,15 +1,15 @@
-//PostCard.tsx
+// PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, 
-  getDoc, addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp, deleteField
+  getDoc, addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { PostReplies } from './PostReplies';
 import type { Post } from './forum';
-import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell, MessageSquare } from 'lucide-react';
+import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell } from 'lucide-react';
 import { HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from './forumConstants';
 
 interface PostCardProps {
@@ -28,7 +28,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     
     // Collapse State
     const [isPostVisible, setIsPostVisible] = useState(false);
-    const [optimisticRead, setOptimisticRead] = useState(false);
     
     // Confirm Modal State
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -58,30 +57,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     const options = post.type === 'poll' ? post.options || [] : [];
     const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
 
-    // Updated handleTogglePost to use the optimistic handler
     const handleTogglePost = () => {
       const newVisibility = !isPostVisible;
       setIsPostVisible(newVisibility);
       
-      if (newVisibility) {
-        setIsExpanded(true);
-        handleMarkAsReadOptimistically(); 
+      // If we are opening the post and it was unread, mark it as read
+      if (newVisibility && isUnread && onMarkRead) {
+        onMarkRead();
       }
-    };
-
-    // If a post is genuinely updated again by someone else, clear the optimistic read
-    useEffect(() => {
-        setOptimisticRead(false);
-    }, [post.lastUpdated]);
-
-    // Derived visibility state for the Bell and Card styling
-    const showBell = isUnread && !optimisticRead;
-
-    const handleMarkAsReadOptimistically = () => {
-        if (isUnread && onMarkRead) {
-            setOptimisticRead(true);
-            onMarkRead();
-        }
     };
 
     useEffect(() => {
@@ -133,19 +116,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
     const handleDelete = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!user) return;
       if (window.confirm("Delete this entire post?")) {
-        try {
-          await deleteDoc(doc(db, 'myHealth_posts', post.id));
-          
-          // Cleanup: Delete the read tracking fields from the user document to save space
-          await updateDoc(doc(db, 'users', user.uid), {
-            [`last_read_post_${post.id}`]: deleteField(),
-            [`last_read_group_${post.id}`]: deleteField() 
-          });
-        } catch (err) {
-          console.error("Error deleting post:", err);
-        }
+        await deleteDoc(doc(db, 'myHealth_posts', post.id));
       }
     };
 
@@ -338,7 +310,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
         await addDoc(collection(db, 'myHealth_posts', post.id, 'myHealth_replies'), replyData);
 
-        // Sets lastUpdatedBy so you don't receive notifications for your own activity
         await updateDoc(doc(db, 'myHealth_posts', post.id), {
           replyCount: increment(1),
           lastUpdated: serverTimestamp(),
@@ -356,18 +327,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
     const toggleReplies = (e: React.MouseEvent) => {
       e.stopPropagation();
-      
-      // If we are opening the replies section and it has an unread notification, mark it as read
-      if (!isExpanded) {
-        handleMarkAsReadOptimistically();
-      }
       setIsExpanded(!isExpanded);
     };
 
+    useEffect(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    }, [replyContent]);
+
     return (
     <>
-      <div className={`group relative bg-white rounded-xl sm:rounded-2xl border transition-all ${
-        showBell ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
+      <div className={`group bg-white rounded-xl sm:rounded-2xl border transition-all ${
+        isUnread ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
       } flex flex-col hover:border-indigo-200`}>
         {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
         <div 
@@ -415,25 +388,25 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
           </div>
         </div>
           
+
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pt-0.5">
             <div className="flex items-center justify-between gap-2 w-full">
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">
-                
-                {/* 1. BELL ICON FIRST - Now hooked up to the local showBell state */}
-                {showBell && isAuthor && (
-                  <div className="absolute -top-2 -right-2 z-20 flex items-center justify-center">
-                    {/* Outer pulsing ring */}
-                    <span className="absolute animate-ping inline-flex h-6 w-6 rounded-full bg-blue-400 opacity-75"></span>
-                    {/* Inner icon container */}
-                    <div className="relative bg-blue-600 rounded-full p-1.5 border-2 border-white shadow-lg">
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 overflow-hidden whitespace-nowrap">
+                {/* NEW ACTIVITY INDICATOR */}
+                {isUnread && (
+                  <div className="relative flex shrink-0 items-center justify-center mr-2">
+                    {/* The Ping Animation */}
+                    <span className="absolute animate-ping inline-flex h-4 w-4 rounded-full bg-blue-400 opacity-75"></span>
+                    
+                    {/* The Icon Container - increased size and padding */}
+                    <div className="relative bg-blue-600 rounded-full p-1 border border-white shadow-sm">
+                      {/* Increased size from 8 to 12 or 14 */}
                       <Bell size={12} className="text-white fill-white" />
                     </div>
                   </div>
                 )}
-
-                {/* 2. THEN THE TITLE (Add truncate here instead) */}
-                <h2 className={"text-sm sm:text-base truncate leading-tight max-w-37.5 sm:max-w-75 font-bold text-slate-700"}>
-                  {post.title}
+                <h2 className={`text-sm sm:text-base truncate leading-tight ${isUnread ? 'font-black text-blue-900' : 'font-bold text-slate-700'}`}>
+                 {post.title}
                 </h2>
                 <span className="font-bold text-slate-400">• By </span>
                 <button 
@@ -677,104 +650,91 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
             )}
             
             {/* Render PostReplies Block */}
-            {isExpanded && (
-              <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                <PostReplies postId={post.id} />
-              </div>
-            )}
+            {isExpanded && <div className="mt-4"><PostReplies postId={post.id} /></div>}
           </div>
         )}
       </div>
 
       {/* CONFIRMATION MODAL OVERLAY */}
-{isConfirmModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsConfirmModalOpen(false)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative shadow-2xl animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-xl text-slate-900 mb-1">Confirm Location</h3>
-            <p className="text-xs text-slate-500 mb-6">Verify this report by logging your location.</p>
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-5 sm:p-6 relative shadow-2xl animate-in fade-in zoom-in duration-200">
+            <h3 className="font-bold text-lg sm:text-xl text-slate-900 mb-1">Confirm Location</h3>
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-4 sm:mb-6">Verify this report by logging your location.</p>
             
-            <div className="space-y-3">
-              <label className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${confirmOption === 'post' ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-500/20' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+            <div className="space-y-2 sm:space-y-3">
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'post' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                 <input 
                   type="radio" 
-                  name="confirmLoc" 
+                  name="loc" 
                   className="accent-indigo-600 w-4 h-4"
                   checked={confirmOption === 'post'} 
-                  onChange={() => setConfirmOption('post')}
+                  onChange={() => setConfirmOption('post')} 
+                  disabled={!post.location} 
                 />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-800">Post Location</span>
-                  <span className="text-[10px] text-slate-500">Use the location tagged in the original post.</span>
-                </div>
+                <span className={`text-xs sm:text-sm font-bold ${!post.location ? 'text-slate-400' : 'text-slate-700'}`}>
+                  Original Post Location
+                  <span className="block text-[10px] sm:text-xs font-normal text-slate-500 mt-0.5">
+                    {post.location ? `${post.location[0].toFixed(4)}, ${post.location[1].toFixed(4)}` : '(Not available)'}
+                  </span>
+                </span>
               </label>
 
-              {userLocation && (
-                <label className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${confirmOption === 'current' ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-500/20' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
-                  <input 
-                    type="radio" 
-                    name="confirmLoc" 
-                    className="accent-indigo-600 w-4 h-4"
-                    checked={confirmOption === 'current'} 
-                    onChange={() => setConfirmOption('current')}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800">My Current Location</span>
-                    <span className="text-[10px] text-slate-500">Use your current GPS coordinates.</span>
-                  </div>
-                </label>
-              )}
-
-              <label className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${confirmOption === 'custom' ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-500/20' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'current' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                 <input 
                   type="radio" 
-                  name="confirmLoc" 
+                  name="loc" 
                   className="accent-indigo-600 w-4 h-4"
-                  checked={confirmOption === 'custom'} 
-                  onChange={() => setConfirmOption('custom')}
+                  checked={confirmOption === 'current'} 
+                  onChange={() => setConfirmOption('current')} 
+                  disabled={!userLocation} 
                 />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-800">Custom Coordinates</span>
-                  <span className="text-[10px] text-slate-500">Manually enter coordinates.</span>
-                </div>
+                <span className={`text-xs sm:text-sm font-bold ${!userLocation ? 'text-slate-400' : 'text-slate-700'}`}>
+                  My Current Location
+                  <span className="block text-[10px] sm:text-xs font-normal text-slate-500 mt-0.5">
+                    {userLocation ? 'Uses your device GPS' : '(Enable permissions)'}
+                  </span>
+                </span>
               </label>
 
-              {confirmOption === 'custom' && (
-                <div className="grid grid-cols-2 gap-3 pt-2 animate-in slide-in-from-top-2 duration-200">
-                  <input
-                    type="number"
-                    placeholder="Latitude"
-                    value={customLat}
-                    onChange={(e) => setCustomLat(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white transition-all"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Longitude"
-                    value={customLng}
-                    onChange={(e) => setCustomLng(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:bg-white transition-all"
-                  />
-                </div>
-              )}
+              <label className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-colors ${confirmOption === 'custom' ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                <input 
+                  type="radio" 
+                  name="loc" 
+                  className="accent-indigo-600 w-4 h-4"
+                  checked={confirmOption === 'custom'} 
+                  onChange={() => setConfirmOption('custom')} 
+                />
+                <span className="text-xs sm:text-sm font-bold text-slate-700">Custom Coordinates</span>
+              </label>
             </div>
 
-            <div className="flex items-center gap-3 mt-8">
-              <button 
-                onClick={() => setIsConfirmModalOpen(false)}
-                className="flex-1 px-4 py-3 rounded-2xl text-sm font-bold text-slate-500 hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleConfirmSubmit}
-                className="flex-1 px-4 py-3 rounded-2xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95"
-              >
-                Confirm
-              </button>
+            {confirmOption === 'custom' && (
+              <div className="mt-3 flex w-full gap-2 animate-in slide-in-from-top-2 duration-300">
+                <input 
+                  type="number" 
+                  placeholder="Lat" 
+                  value={customLat} 
+                  onChange={e => setCustomLat(e.target.value)} 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm transition-all" 
+                />
+                <input 
+                  type="number" 
+                  placeholder="Lng" 
+                  value={customLng} 
+                  onChange={e => setCustomLng(e.target.value)} 
+                  className="w-1/2 min-w-0 border border-slate-200 bg-white rounded-xl p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs sm:text-sm transition-all" 
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6 sm:mt-8">
+              <button onClick={() => setIsConfirmModalOpen(false)} className="flex-1 py-2.5 sm:py-3 text-[10px] sm:text-xs text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors">Cancel</button>
+              <button onClick={handleConfirmSubmit} className="flex-1 py-2.5 sm:py-3 bg-indigo-600 text-[10px] sm:text-xs text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">Submit</button>
             </div>
           </div>
         </div>
       )}
     </>
-    );
+  );
 };
