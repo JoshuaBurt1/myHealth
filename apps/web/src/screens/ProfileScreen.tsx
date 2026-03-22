@@ -10,7 +10,7 @@ declare global {
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, collection, query, where, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users, Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';

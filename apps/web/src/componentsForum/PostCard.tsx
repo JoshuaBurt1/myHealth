@@ -9,7 +9,7 @@ import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { PostReplies } from './PostReplies';
 import type { Post } from './forum';
-import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell } from 'lucide-react';
+import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell, MessageSquare } from 'lucide-react';
 import { HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from './forumConstants';
 
 interface PostCardProps {
@@ -28,6 +28,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     
     // Collapse State
     const [isPostVisible, setIsPostVisible] = useState(false);
+    const [optimisticRead, setOptimisticRead] = useState(false);
     
     // Confirm Modal State
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -57,14 +58,30 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     const options = post.type === 'poll' ? post.options || [] : [];
     const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
 
+    // Inside PostCard component
     const handleTogglePost = () => {
       const newVisibility = !isPostVisible;
       setIsPostVisible(newVisibility);
       
-      // If we are opening the post and it was unread, mark it as read
-      if (newVisibility && isUnread && onMarkRead) {
-        onMarkRead();
+      if (newVisibility) {
+        setIsExpanded(true);
+        onMarkRead(); 
       }
+    };
+
+    // If a post is genuinely updated again by someone else, clear the optimistic read
+    useEffect(() => {
+        setOptimisticRead(false);
+    }, [post.lastUpdated]);
+
+    // Derived visibility state for the Bell and Card styling
+    const showBell = isUnread && !optimisticRead;
+
+    const handleMarkAsReadOptimistically = () => {
+        if (isUnread && onMarkRead) {
+            setOptimisticRead(true); // Hide it immediately locally
+            onMarkRead(); // Trigger Firestore update in background
+        }
     };
 
     useEffect(() => {
@@ -310,6 +327,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
         await addDoc(collection(db, 'myHealth_posts', post.id, 'myHealth_replies'), replyData);
 
+        // Sets lastUpdatedBy so you don't receive notifications for your own activity
         await updateDoc(doc(db, 'myHealth_posts', post.id), {
           replyCount: increment(1),
           lastUpdated: serverTimestamp(),
@@ -327,6 +345,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
     const toggleReplies = (e: React.MouseEvent) => {
       e.stopPropagation();
+      
+      // If we are opening the replies section and it has an unread notification, mark it as read
+      if (!isExpanded && isUnread && onMarkRead) {
+        onMarkRead();
+      }
       setIsExpanded(!isExpanded);
     };
 
@@ -339,8 +362,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
     return (
     <>
-      <div className={`group bg-white rounded-xl sm:rounded-2xl border transition-all ${
-        isUnread ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
+      <div className={`group relative bg-white rounded-xl sm:rounded-2xl border transition-all ${
+        showBell ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
       } flex flex-col hover:border-indigo-200`}>
         {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
         <div 
@@ -388,25 +411,25 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
           </div>
         </div>
           
-
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pt-0.5">
             <div className="flex items-center justify-between gap-2 w-full">
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 overflow-hidden whitespace-nowrap">
-                {/* NEW ACTIVITY INDICATOR */}
-                {isUnread && (
-                  <div className="relative flex shrink-0 items-center justify-center mr-2">
-                    {/* The Ping Animation */}
-                    <span className="absolute animate-ping inline-flex h-4 w-4 rounded-full bg-blue-400 opacity-75"></span>
-                    
-                    {/* The Icon Container - increased size and padding */}
-                    <div className="relative bg-blue-600 rounded-full p-1 border border-white shadow-sm">
-                      {/* Increased size from 8 to 12 or 14 */}
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">
+                
+                {/* 1. BELL ICON FIRST - Now hooked up to the local showBell state */}
+                {showBell && isAuthor && (
+                  <div className="absolute -top-2 -right-2 z-20 flex items-center justify-center">
+                    {/* Outer pulsing ring */}
+                    <span className="absolute animate-ping inline-flex h-6 w-6 rounded-full bg-blue-400 opacity-75"></span>
+                    {/* Inner icon container */}
+                    <div className="relative bg-blue-600 rounded-full p-1.5 border-2 border-white shadow-lg">
                       <Bell size={12} className="text-white fill-white" />
                     </div>
                   </div>
                 )}
-                <h2 className={`text-sm sm:text-base truncate leading-tight ${isUnread ? 'font-black text-blue-900' : 'font-bold text-slate-700'}`}>
-                 {post.title}
+
+                {/* 2. THEN THE TITLE (Add truncate here instead) */}
+                <h2 className={"text-sm sm:text-base truncate leading-tight max-w-37.5 sm:max-w-75 font-bold text-slate-700"}>
+                  {post.title}
                 </h2>
                 <span className="font-bold text-slate-400">• By </span>
                 <button 
@@ -650,7 +673,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
             )}
             
             {/* Render PostReplies Block */}
-            {isExpanded && <div className="mt-4"><PostReplies postId={post.id} /></div>}
+            {isExpanded && (
+              <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                <PostReplies postId={post.id} />
+              </div>
+            )}
           </div>
         )}
       </div>

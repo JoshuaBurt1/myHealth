@@ -24,7 +24,7 @@ export interface Reply {
   authorId: string; 
   authorName: string; 
   createdAt: any; 
-  lastUpdated?: any; 
+  lastUpdated?: any;
   fullPath: string;
   parentId: string; 
   rootPostId: string; 
@@ -48,6 +48,7 @@ interface BasePost {
   content: string;
   createdAt: any;
   lastUpdated: any;
+  lastUpdatedBy?: string;
   likes: string[];
   dislikes: string[];
   replyCount: number;

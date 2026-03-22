@@ -1,7 +1,7 @@
 //ModalGroups.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
-import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, onSnapshot, updateDoc, deleteDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, deleteDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { useNotifications } from '../context/NotificationContext';
@@ -265,13 +265,11 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                   {userGroups.map(group => {
                     // --- NEW: Calculate Unread Status ---
                     // Baseline is the previous_login. If it doesn't exist, default to 0.
-                    const baseTime = userData?.previous_login?.toMillis() || 0;
                     const updatedTime = group.lastUpdated?.toMillis() || 0;
                     const readTime = userData?.[`last_read_group_${group.id}`]?.toMillis() || 0;
                     
-                    // It's unread if the group updated AFTER the user's last session, 
-                    // and AFTER the specific time they last opened this group.
-                    const isUnread = updatedTime > baseTime && updatedTime > readTime;
+                    // If it's never been read, readTime is 0, so any update makes it unread.
+                    const isUnread = updatedTime > readTime;
 
                     return (
                       <div 

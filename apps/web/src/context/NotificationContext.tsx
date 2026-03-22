@@ -19,10 +19,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return;
       }
 
-      // ONE listener for User Doc
+      // ONE listener for User Doc (Captures previous_login and last_read_post_ID)
       const unsubUser = onSnapshot(doc(db, 'users', user.uid), (s) => setUserData(s.data()));
 
-      // ONE listener for Posts
+      // ONE listener for Posts (Only posts authored by the user for Navbar notifications)
       const qPosts = query(collection(db, 'myHealth_posts'), where('authorId', '==', user.uid));
       const unsubPosts = onSnapshot(qPosts, (s) => setUserPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
 

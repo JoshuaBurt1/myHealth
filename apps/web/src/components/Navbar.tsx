@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+// Navbar.tsx
+import { useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { signOut, type User } from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { doc, collection, query, where, onSnapshot, disableNetwork } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn, Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -28,25 +28,23 @@ const Navbar = ({ user }: NavbarProps) => {
 
     // 1. Check for replies to MY posts
     const unreadPost = userPosts.some(post => {
-      const updatedTime = post.lastUpdated?.toMillis() || 0;
-      const createdTime = post.createdAt?.toMillis() || 0;
+      const updatedTime = post.lastUpdated?.toMillis() || post.createdAt?.toMillis() || 0;
       const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
       
-      const isNotMe = post.lastUpdatedBy !== user.uid;
-      const hasUpdates = updatedTime > createdTime;
+      // Ensure the last person to update it wasn't the current user
+      const isNotMe = post.lastUpdatedBy && post.lastUpdatedBy !== user.uid;
 
-      return hasUpdates && updatedTime > readTime && isNotMe;
+      // Unread IF: Updated after it was last read AND updater is not the current user.
+      // Removed the `prevLogin` check so notifications persist across sessions!
+      return isNotMe && updatedTime > readTime;
     });
 
-    // 2. Check for new messages in MY groups (SINGLE-TIER CHECK NOW)
+    // 2. Check for new messages in MY groups
     const unreadGroup = userGroups.some(group => {
       const updatedTime = group.lastUpdated?.toMillis() || 0;
       const readTime = userData[`last_read_group_${group.id}`]?.toMillis() || 0;
-      
       const isNotMe = group.lastUpdatedBy !== user.uid;
 
-      // SINGLE-TIER CHECK: 
-      // Has it been updated since I last read the specific group?
       return updatedTime > readTime && isNotMe;
     });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, getDoc, updateDoc, 
-  serverTimestamp, increment, arrayUnion, arrayRemove, collectionGroup, where 
+  collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, 
+  serverTimestamp, increment, arrayUnion, arrayRemove, collectionGroup, where, runTransaction
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -72,43 +72,35 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
   };
 
   const handleNestedReply = async () => {
-    if (!user) return alert("Please log in!");
-    if (!replyContent.trim()) return;
+  if (!user || !replyContent.trim()) return;
 
-    try {
-      const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
-      const profileSnap = await getDoc(profileRef);
-      const realName = profileSnap.exists() ? profileSnap.data().name : "Anonymous";
+  const postRef = doc(db, 'myHealth_posts', postId);
+  const newReplyRef = doc(collection(db, `${reply.fullPath}/myHealth_replies`));
 
-      const replyData: any = {
+  try {
+    await runTransaction(db, async (transaction) => {
+      // 1. Write the new reply
+      transaction.set(newReplyRef, {
         content: replyContent,
         authorId: user.uid,
-        authorName: realName,
+        // ... other fields
         createdAt: serverTimestamp(),
-        lastUpdated: serverTimestamp(),
-        parentId: reply.id,
-        rootPostId: postId,
-        level: reply.level + 1,
-        likes: [],
-        dislikes: []
-      };
-
-      if (replyLocation) replyData.location = replyLocation;
-
-      await addDoc(collection(db, `${reply.fullPath}/myHealth_replies`), replyData);
-
-      await updateDoc(doc(db, 'myHealth_posts', postId), {
-        replyCount: increment(1),
-        lastUpdated: serverTimestamp() 
       });
 
-      setReplyContent('');
-      setReplyLocation(null);
-      setIsReplying(false);
-    } catch (err) {
-      console.error("Error adding nested reply: ", err);
-    }
-  };
+      // 2. Increment the parent post count
+      transaction.update(postRef, {
+        replyCount: increment(1),
+        lastUpdated: serverTimestamp()
+      });
+    });
+    
+    // Reset local state only after transaction succeeds
+    setReplyContent('');
+    setIsReplying(false);
+  } catch (e) {
+    console.error("Transaction failed: ", e);
+  }
+};
   
   const handleReplyReaction = async (reactionType: 'like' | 'dislike') => {
     if (!user) return alert("Please log in!");
