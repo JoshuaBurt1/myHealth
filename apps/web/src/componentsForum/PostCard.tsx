@@ -86,22 +86,23 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
     useEffect(() => {
       const fetchAuthorImage = async () => {
+        // Only fetch if a user is logged in AND we have an authorId
+        if (!auth.currentUser || !post.authorId) return;
+
         try {
-          // Fetch the specific post author's image data
           const imgDocRef = doc(db, 'users', post.authorId, 'profile', 'image_data');
           const imgSnap = await getDoc(imgDocRef);
           if (imgSnap.exists()) {
             setAuthorImageId(imgSnap.data().imageId);
           }
         } catch (err) {
+          // This catch currently logs the error you see in the console
           console.error("Failed to fetch image for user:", post.authorId);
         }
       };
 
-      if (post.authorId) {
-        fetchAuthorImage();
-      }
-    }, [post.authorId]);
+      fetchAuthorImage();
+    }, [post.authorId, auth.currentUser]);
 
     const formatHelpDate = (ts: any) => {
       if (!ts) return null;
@@ -687,7 +688,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
       </div>
 
       {/* CONFIRMATION MODAL OVERLAY */}
-{isConfirmModalOpen && (
+      {isConfirmModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsConfirmModalOpen(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative shadow-2xl animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-xl text-slate-900 mb-1">Confirm Location</h3>

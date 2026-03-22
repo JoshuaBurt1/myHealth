@@ -1,6 +1,5 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import { enableNetwork, disableNetwork } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth} from './firebase';
 
 let initialized = false;
 
@@ -11,14 +10,12 @@ export const initFirebaseAuthListener = () => {
   onAuthStateChanged(auth, async (user) => {
     try {
       if (user) {
-        await enableNetwork(db);
-        console.log("[Firestore] Network ENABLED");
+        console.log("[Auth] User logged in:", user.uid);
       } else {
-        await disableNetwork(db);
-        console.log("[Firestore] Network DISABLED");
+        console.log("[Auth] No user - Public Browsing Mode");
       }
     } catch (err) {
-      console.error("Firestore network toggle error:", err);
+      console.error("Auth listener error:", err);
     }
   });
 };

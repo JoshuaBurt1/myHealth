@@ -240,43 +240,60 @@ const DataScreen: React.FC<DataScreenProps> = ({
       bucketsData[bucketKey].push(point);
     });
 
-    return Object.keys(bucketsData).map(key => {
-      const points = bucketsData[Number(key)];
-      if (points.length === 1) return points[0];
+    // Inside DataScreen.tsx -> filteredData useMemo
+  return Object.keys(bucketsData).map(key => {
+    const points = bucketsData[Number(key)];
+    if (points.length === 1) return points[0];
 
-      // Start with a clean slate for the bucketed point
-      const representativePoint: any = { timestamp: Number(key) };
-
-      // Identify all unique metric keys present in this bucket
-      const allKeysInBucket = new Set<string>();
-      points.forEach(p => {
-        Object.keys(p).forEach(k => {
-          if (typeof p[k] === 'number' && k !== 'timestamp') allKeysInBucket.add(k);
-        });
+    const representativePoint: any = { timestamp: Number(key) };
+    const allKeysInBucket = new Set<string>();
+    
+    points.forEach(p => {
+      Object.keys(p).forEach(k => {
+        if (typeof p[k] === 'number' && k !== 'timestamp') allKeysInBucket.add(k);
       });
+    });
 
-      allKeysInBucket.forEach(mKey => {
-        const validPoints = points.filter(p => p[mKey] !== undefined);
-        if (validPoints.length === 0) return;
+    // To keep pairs together, we'll store which source object we picked for each metric
+    const sourcePointForMetric: Record<string, any> = {};
 
-        const values = validPoints.map(p => p[mKey]);
-        const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        
-        // Find the specific point object that has the value furthest from the average
-        const outlierPoint = validPoints.reduce((prev, curr) => 
-          Math.abs(curr[mKey] - avg) > Math.abs(prev[mKey] - avg) ? curr : prev
+    // We process 'bpSyst' first so 'bpDias' can "anchor" to it if they exist in the same entry
+    const sortedKeys = Array.from(allKeysInBucket).sort((a, b) => {
+      if (a === 'bpSyst') return -1;
+      if (b === 'bpSyst') return 1;
+      return 0;
+    });
+
+    sortedKeys.forEach(mKey => {
+      // 1. Only look at points that actually have this specific metric
+      const validPoints = points.filter(p => p[mKey] !== undefined);
+      if (validPoints.length === 0) return;
+
+      let selectedPoint;
+
+      // 2. PAIRING LOGIC: If this is Diastolic, check if the Systolic outlier we just picked
+      // has a corresponding Diastolic value. If it does, use that specific pair.
+      if (mKey === 'bpDias' && sourcePointForMetric['bpSyst']?.bpDias !== undefined) {
+        selectedPoint = sourcePointForMetric['bpSyst'];
+      } else {
+        // 3. CONTINUITY LOGIC: Otherwise, find the outlier for this metric independently.
+        // This ensures that if bpSyst is missing but bpDias exists, the line doesn't break.
+        const avg = validPoints.reduce((a, b) => a + (b[mKey] as number), 0) / validPoints.length;
+        selectedPoint = validPoints.reduce((prev, curr) => 
+          Math.abs((curr[mKey] as number) - avg) > Math.abs((prev[mKey] as number) - avg) ? curr : prev
         );
+      }
 
-        representativePoint[mKey] = outlierPoint[mKey];
-        
-        // Critically: Keep the raw metadata linked to the actual outlier point
-        if (outlierPoint[`${mKey}_raw`]) {
-          representativePoint[`${mKey}_raw`] = outlierPoint[`${mKey}_raw`];
-        }
-      });
+      representativePoint[mKey] = selectedPoint[mKey];
+      sourcePointForMetric[mKey] = selectedPoint; // Save for reference
+      
+      if (selectedPoint[`${mKey}_raw`]) {
+        representativePoint[`${mKey}_raw`] = selectedPoint[`${mKey}_raw`];
+      }
+    });
 
-      return representativePoint;
-    }).sort((a, b) => a.timestamp - b.timestamp);
+    return representativePoint;
+  }).sort((a, b) => a.timestamp - b.timestamp);
   }, [vitalsData, timeRange, customStart, customEnd, reductionFactor]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
