@@ -5,24 +5,7 @@ import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { useNotifications } from '../context/NotificationContext';
-
-
-interface SearchUser {
-  uid: string;
-  displayName: string;
-  imageId: string | null;
-}
-
-interface Group {
-  id: string;
-  name: string;
-  memberUids: string[];
-  members: { userId: string; display_name: string }[];
-  createdBy: string;
-  adminId?: string;
-  lastUpdated?: any;
-  lastUpdatedBy?: string;
-}
+import { type Group, type GroupSearchUser as SearchUser} from '../componentsProfile/group';
 
 interface ModalGroupsProps {
   isOpen: boolean;
@@ -40,25 +23,33 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
   const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
 
   const isLoadingGroups = userGroups === null || userData === null;
 
   // === NEW HANDLER: Use this to wrap your group link/click ===
   // This updates the specific read receipt and THEN navigates
   const handleGroupClick = async (groupId: string) => {
+    // 1. OPTIMISTIC UPDATE: Hide the bell for this group ID immediately
+    setOptimisticReadIds(prev => new Set(prev).add(groupId));
+
     if (auth.currentUser) {
-      try {
-        const userRef = doc(db, 'users', auth.currentUser.uid);
-        // Mark ONLY this specific group as read
-        await setDoc(userRef, { 
-          [`last_read_group_${groupId}`]: serverTimestamp() 
-        }, { merge: true });
-      } catch (err) {
-        console.error("Error updating read receipt:", err);
-      }
+        try {
+            const userRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userRef, { 
+                [`last_read_group_${groupId}`]: serverTimestamp() 
+            }, { merge: true });
+        } catch (err) {
+            console.error("Error updating read receipt:", err);
+            // Optional: Remove from set if it fails to show bell again
+            setOptimisticReadIds(prev => {
+                const next = new Set(prev);
+                next.delete(groupId);
+                return next;
+            });
+        }
     }
     
-    // Navigate and close modal
     navigate(`/group/${groupId}`);
     onClose();
   };
@@ -226,7 +217,6 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
     }
   };
 
-
   if (!isOpen) return null;
 
   return (
@@ -262,20 +252,19 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {userGroups.map(group => {
-                    // --- NEW: Calculate Unread Status ---
-                    // Baseline is the previous_login. If it doesn't exist, default to 0.
-                    const updatedTime = group.lastUpdated?.toMillis() || 0;
-                    const readTime = userData?.[`last_read_group_${group.id}`]?.toMillis() || 0;
-                    
-                    // If it's never been read, readTime is 0, so any update makes it unread.
-                    const isUnread = updatedTime > readTime;
+                {userGroups.map((group: Group) => {
+                  const updatedTime = group.lastUpdated?.toMillis() || 0;
+                  const readTime = userData?.[`last_read_group_${group.id}`]?.toMillis() || 0;
+                  
+                  // Check if we've clicked it in this session
+                  const isOptimisticallyRead = optimisticReadIds.has(group.id);
+                  const isUnread = updatedTime > readTime && !isOptimisticallyRead; // Logic updated here
 
-                    return (
+                  return (
                       <div 
-                        key={group.id} 
-                        onClick={() => handleGroupClick(group.id)}
-                        className={`group p-4 bg-white border ${
+                          key={group.id} 
+                          onClick={() => handleGroupClick(group.id)}
+                          className={`group p-4 bg-white border ${
                           isUnread ? 'border-emerald-300 ring-1 ring-emerald-100 shadow-md' : 'border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md'
                         } rounded-2xl cursor-pointer transition-all flex items-center justify-between relative`}
                       >
@@ -284,10 +273,10 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
                             {/* UNREAD INDICATOR */}
                             {isUnread && (
                               <div className="relative flex shrink-0 items-center justify-center">
-                                <span className="absolute animate-ping inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
-                                <div className="relative bg-emerald-500 rounded-full p-1 border border-white shadow-sm">
-                                  <Bell size={10} className="text-white fill-white" />
-                                </div>
+                                  <span className="absolute animate-ping inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
+                                  <div className="relative bg-emerald-500 rounded-full p-1 border border-white shadow-sm">
+                                    <Bell size={10} className="text-white fill-white" />
+                                  </div>
                               </div>
                             )}
                             

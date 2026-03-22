@@ -1,18 +1,24 @@
 // Navbar.tsx
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { signOut, type User } from 'firebase/auth';
 import { auth } from '../firebase';
 import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn, Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
+import type { Post } from '../componentsForum/forum';
+import type { Group } from '../componentsProfile/group';
 
 interface NavbarProps {
   user: User | null;
 }
 
 const Navbar = ({ user }: NavbarProps) => {
+  const [optiProfileRead, setOptiProfileRead] = useState(false);
   const location = useLocation();
   const { userData, userPosts, userGroups } = useNotifications();
+
+  useEffect(() => { setOptiProfileRead(false); }, [userGroups]);
+  
 
   const handleLogout = async () => {
     try {
@@ -27,7 +33,7 @@ const Navbar = ({ user }: NavbarProps) => {
     if (!userData || !user) return { hasNewReplies: false, hasNewGroupMessages: false };
 
     // 1. Check for replies to MY posts
-    const unreadPost = userPosts.some(post => {
+      const unreadPost = userPosts.some((post: Post) => {
       const updatedTime = post.lastUpdated?.toMillis() || post.createdAt?.toMillis() || 0;
       const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
       
@@ -40,7 +46,7 @@ const Navbar = ({ user }: NavbarProps) => {
     });
 
     // 2. Check for new messages in MY groups
-    const unreadGroup = userGroups.some(group => {
+      const unreadGroup = userGroups.some((group: Group) => {
       const updatedTime = group.lastUpdated?.toMillis() || 0;
       const readTime = userData[`last_read_group_${group.id}`]?.toMillis() || 0;
       const isNotMe = group.lastUpdatedBy !== user.uid;
@@ -48,8 +54,8 @@ const Navbar = ({ user }: NavbarProps) => {
       return updatedTime > readTime && isNotMe;
     });
 
-    return { hasNewReplies: unreadPost, hasNewGroupMessages: unreadGroup };
-  }, [userData, userPosts, userGroups, user]);
+    return { hasNewReplies: unreadPost, hasNewGroupMessages: unreadGroup && !optiProfileRead };
+  }, [userData, userPosts, userGroups, user, optiProfileRead]);
 
   const profilePath = user ? `/profile/${user.uid}` : '/login';
   const isActive = (path: string) => location.pathname === path;
@@ -68,6 +74,9 @@ const Navbar = ({ user }: NavbarProps) => {
           <Link
             key={item.path}
             to={item.path}
+            onClick={() => {
+              if (item.label === 'Profile') setOptiProfileRead(true);
+            }}
             className={`relative flex flex-col items-center p-2 transition-colors ${
               isActive(item.path) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-400'
             }`}

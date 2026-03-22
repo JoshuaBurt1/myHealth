@@ -7,23 +7,7 @@ import {
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
   Clock, LogOut, Settings, MessageSquare, ShieldCheck, Activity, BarChart2 
 } from 'lucide-react';
-
-interface GroupData {
-  name: string;
-  memberUids: string[];
-  members: { userId: string; display_name: string }[];
-  createdBy: string;
-}
-
-interface Message {
-  id: string;
-  text: string;
-  authorId: string;
-  authorName: string;
-  createdAt: any;
-}
-
-type TabType = 'messages' | 'schedule' | 'compare';
+import type { Group, GroupMessage as Message, GroupTabType as TabType } from '../componentsProfile/group';
 
 const getUserColor = (userId: string) => {
   const colors = [
@@ -47,7 +31,7 @@ export const GroupScreen: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
   
-  const [group, setGroup] = useState<GroupData | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +76,7 @@ export const GroupScreen: React.FC = () => {
         const groupSnap = await getDoc(groupRef);
         
         if (groupSnap.exists()) {
-          const data = groupSnap.data() as GroupData;
+          const data = groupSnap.data() as Group;
           if (!data.memberUids.includes(currentUid)) {
             navigate('/');
             return;

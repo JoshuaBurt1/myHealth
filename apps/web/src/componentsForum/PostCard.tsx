@@ -9,7 +9,7 @@ import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { PostReplies } from './PostReplies';
 import type { Post } from './forum';
-import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell, MessageSquare } from 'lucide-react';
+import { User, Trash2, MapPin, Edit3, ThumbsUp, ThumbsDown, Plus, X, CheckCircle, Bell } from 'lucide-react';
 import { HAZARD_COLORS, HELP_COLORS, PUBLIC_COLORS, TOPIC_COLORS } from './forumConstants';
 
 interface PostCardProps {

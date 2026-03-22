@@ -4,7 +4,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc,
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { useNotifications } from '../context/NotificationContext';
-import { MessageSquarePlus, Globe, Search, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { MessageSquarePlus, Globe, Search, ChevronLeft, ChevronRight, MapPin, Bell } from 'lucide-react';
 
 // Components & Types
 import { PostCard } from '../componentsForum/PostCard';
@@ -296,16 +296,14 @@ const ForumScreen: React.FC = () => {
           </button>
         </header>
 
-        {/* SECTION TABS WITH NEW POST BADGES */}
+        {/* SECTION TABS WITH NOTIFICATION BELLS */}
         <div className="flex gap-1 sm:gap-2 mb-6 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
           {FORUM_SECTIONS.map((section) => {
-            // Calculate new posts for this specific section
-            const newCount = posts.filter(p => 
-              p.forumSection === section.id && 
-              userData?.previous_login && 
-              p.createdAt && 
-              p.createdAt.toMillis() > userData?.previous_login.toMillis()
-            ).length;
+            // Check if any of the unread post IDs belong to this specific forum section
+            const hasUnreadInSection = unreadPostIds.some(unreadId => {
+              const post = posts.find(p => p.id === unreadId);
+              return post?.forumSection === section.id;
+            });
 
             return (
               <div key={section.id} className="relative flex-1">
@@ -315,7 +313,7 @@ const ForumScreen: React.FC = () => {
                     setFilterHazard('none'); 
                     setFilterTopic('none'); 
                     setSearchQuery('');
-                    setShowOnlyNew(false); // Reset "New" filter when changing tabs normally
+                    setShowOnlyNew(false); 
                   }}
                   className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
                     activeSection === section.id && !showOnlyNew
@@ -332,22 +330,17 @@ const ForumScreen: React.FC = () => {
                   </span>
                 </button>
 
-                {/* NEW POST BADGE */}
-                {newCount > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveSection(section.id);
-                      setShowOnlyNew(true);
-                    }}
-                    className={`absolute -top-2 -right-1 min-w-5 h-5 px-1.5 flex items-center justify-center rounded-full text-[10px] font-black border-2 border-white shadow-sm transition-transform active:scale-90 z-10 ${
-                      showOnlyNew && activeSection === section.id 
-                        ? 'bg-emerald-500 text-white scale-110' 
-                        : 'bg-indigo-600 text-white'
-                    }`}
-                  >
-                    {newCount}
-                  </button>
+                {/* NOTIFICATION BELL - Shows if user has a new reply in this section */}
+                {hasUnreadInSection && (
+                  <div className="absolute -top-2 -right-1 z-20 flex items-center justify-center pointer-events-none">
+                    {/* Outer pulsing ring */}
+                    <span className="absolute animate-ping inline-flex h-5 w-5 rounded-full bg-blue-400 opacity-75"></span>
+                    
+                    {/* Inner icon container */}
+                    <div className="relative bg-blue-600 rounded-full p-1 border-2 border-white shadow-lg">
+                      <Bell size={10} className="text-white fill-white" />
+                    </div>
+                  </div>
                 )}
               </div>
             );

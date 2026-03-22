@@ -25,6 +25,8 @@ import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
 import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
 import FollowButton from '../componentsProfile/FollowButton';
 import DataScreen from '../componentsProfile/DataScreen';
+import type { Group } from '../componentsProfile/group';
+
 
 import { 
   VITAL_KEY_MAP, STRENGTH_KEY_MAP, SPEED_KEY_MAP, 
@@ -261,7 +263,7 @@ const ProfileScreen: React.FC = () => {
   const hasNewGroupMessages = useMemo(() => {
     if (!myUserData || !myGroups.length || !currentUserId) return false;
 
-    return myGroups.some(group => {
+    return myGroups.some((group: Group) => {
       const updatedTime = group.lastUpdated?.toMillis() || 0;
       const readTime = myUserData[`last_read_group_${group.id}`]?.toMillis() || 0;
       

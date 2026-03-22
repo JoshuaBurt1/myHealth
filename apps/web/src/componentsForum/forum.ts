@@ -42,6 +42,7 @@ export interface PollOption {
 
 interface BasePost {
   id: string;
+  type: ModalMode;
   authorId: string;
   authorName: string;
   title: string;
