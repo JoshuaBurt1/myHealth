@@ -1,11 +1,11 @@
 //ModalGroups.tsx
 import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
-import { collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, deleteDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
+import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { useNotifications } from '../context/NotificationContext';
-import { type Group, type GroupSearchUser as SearchUser} from '../componentsProfile/group';
+import { auth, db } from '../../firebase';
+import { useNotifications } from '../../context/NotificationContext';
+import { type Group, type GroupSearchUser as SearchUser} from './group';
 
 interface ModalGroupsProps {
   isOpen: boolean;
@@ -190,14 +190,26 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
 
     if (window.confirm(`Are you sure you want to leave ${group.name}?`)) {
       try {
-        const groupRef = doc(db, 'myHealth_groups', group.id);
-        const updatedMemberUids = group.memberUids.filter(uid => uid !== auth.currentUser!.uid);
-        const updatedMembers = group.members.filter(m => m.userId !== auth.currentUser!.uid);
-        
-        await updateDoc(groupRef, {
-          memberUids: updatedMemberUids,
-          members: updatedMembers
-        });
+        const currentUid = auth.currentUser.uid;
+        const updatedMemberUids = group.memberUids.filter(uid => uid !== currentUid);
+        const updatedMembers = group.members.filter(m => m.userId !== currentUid);
+
+        if (updatedMemberUids.length === 0) {
+          await purgeGroupData(group.id);
+        } else {
+          const groupRef = doc(db, 'myHealth_groups', group.id);
+          const updatePayload: any = {
+            memberUids: updatedMemberUids,
+            members: updatedMembers
+          };
+
+          // If the person leaving is the Admin, assign the next person as Admin
+          if (group.adminId === currentUid && updatedMemberUids.length > 0) {
+            updatePayload.adminId = updatedMemberUids[0];
+          }
+
+          await updateDoc(groupRef, updatePayload);
+        }
       } catch (error) {
         console.error("Error leaving group:", error);
         alert("Failed to leave group.");
@@ -207,14 +219,33 @@ export const ModalGroups: React.FC<ModalGroupsProps> = ({ isOpen, onClose }) => 
 
   const handleDeleteGroup = async (e: React.MouseEvent, groupId: string) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this group? This action cannot be undone.")) {
+    if (window.confirm("Delete this group and all its data? This cannot be undone.")) {
       try {
-        await deleteDoc(doc(db, 'myHealth_groups', groupId));
+        await purgeGroupData(groupId);
       } catch (error) {
         console.error("Error deleting group:", error);
         alert("Failed to delete group.");
       }
     }
+  };
+
+  const purgeGroupData = async (groupId: string) => {
+    const batch = writeBatch(db);
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+
+    // Identify subcollections (e.g., messages)
+    const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
+    const messagesSnapshot = await getDocs(messagesRef);
+
+    // Add all sub-docs to batch
+    messagesSnapshot.forEach((msgDoc) => {
+      batch.delete(msgDoc.ref);
+    });
+
+    // Add the parent doc to batch
+    batch.delete(groupRef);
+
+    await batch.commit();
   };
 
   if (!isOpen) return null;

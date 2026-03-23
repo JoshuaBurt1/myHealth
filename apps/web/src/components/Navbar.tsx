@@ -6,7 +6,7 @@ import { auth } from '../firebase';
 import { Home, Store, MessageSquare, User as UserIcon, LogOut, LogIn, Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import type { Post } from '../componentsForum/forum';
-import type { Group } from '../componentsProfile/group';
+import type { Group } from '../componentsProfile/componentsGroupScreen/group';
 
 interface NavbarProps {
   user: User | null;
@@ -75,7 +75,7 @@ const Navbar = ({ user }: NavbarProps) => {
             key={item.path}
             to={item.path}
             onClick={() => {
-              if (item.label === 'Profile') setOptiProfileRead(true);
+              //if (item.label === 'Profile') setOptiProfileRead(true);
             }}
             className={`relative flex flex-col items-center p-2 transition-colors ${
               isActive(item.path) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-400'

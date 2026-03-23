@@ -9,7 +9,7 @@ declare global {
 }
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users, Bell } from 'lucide-react';
@@ -19,14 +19,12 @@ import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSchedule } from '../componentsProfile/ModalSchedule';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
-import { ModalGroups } from '../componentsProfile/ModalGroups';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
 import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
 import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
 import FollowButton from '../componentsProfile/FollowButton';
 import DataScreen from '../componentsProfile/DataScreen';
-import type { Group } from '../componentsProfile/group';
-
+import type { Group } from '../componentsProfile/componentsGroupScreen/group';
 
 import { 
   VITAL_KEY_MAP, STRENGTH_KEY_MAP, SPEED_KEY_MAP, 
@@ -58,7 +56,6 @@ const ProfileScreen: React.FC = () => {
   const [followingList, setFollowingList] = useState<{uid: string, name: string}[]>([]);
   const [modalConfig, setModalConfig] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
 
-  const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [showDOBModal, setShowDOBModal] = useState(false);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
@@ -74,6 +71,11 @@ const ProfileScreen: React.FC = () => {
   const [exerciseInputs, setExerciseInputs] = useState<Record<string, string>>({});
 
   const [hiddenOther, setHiddenOther] = useState<string[]>([]);
+
+  const navigate = useNavigate();
+  const handleOpenGroupManagement = () => {
+    navigate('/group/manage');
+  };
 
   const calculateAge = (dobString: string): string => {
     if (!dobString) return '';
@@ -445,7 +447,7 @@ const ProfileScreen: React.FC = () => {
                   {/* Groups Button */}
                   <div 
                     className="relative bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
-                    onClick={() => setShowGroupsModal(true)}
+                    onClick={handleOpenGroupManagement}
                   >
                     {/* Unread Message Bell Badge */}
                     {isMe && hasNewGroupMessages && (
@@ -638,11 +640,6 @@ const ProfileScreen: React.FC = () => {
 
       {/* GLOBAL MODALS */}
       <ModalFollow config={modalConfig} onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} followers={followersList} following={followingList} />
-      
-      <ModalGroups 
-        isOpen={showGroupsModal} 
-        onClose={() => setShowGroupsModal(false)} 
-      />
 
       <ModalDOB 
         isOpen={showDOBModal} 

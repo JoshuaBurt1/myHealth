@@ -212,8 +212,6 @@ const ForumScreen: React.FC = () => {
     setPostLocation(null); setHazardType(''); setHazardValue(''); setPostTopic('');
     setHelpType(''); setHelpValue(''); setPublicType(''); setPublicValue('');
     setIsModalOpen(false); setModalMode('post'); setHelpStartDate(''); setHelpEndDate('');
-    
-    // FIX: Ensure topicValue and popHealthCategory are properly reset
     setTopicValue(''); 
     setPopHealthCategory('hazard');
   };

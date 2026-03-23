@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, 
+  collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc,
   serverTimestamp, increment, arrayUnion, arrayRemove, collectionGroup, where, runTransaction
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -72,37 +72,47 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
   };
 
   const handleNestedReply = async () => {
-  if (!user || !replyContent.trim()) return;
+    if (!user || !replyContent.trim()) return;
 
-  const postRef = doc(db, 'myHealth_posts', postId);
-  const newReplyRef = doc(collection(db, `${reply.fullPath}/myHealth_replies`));
+    const postRef = doc(db, 'myHealth_posts', postId);
+    const newReplyRef = doc(collection(db, `${reply.fullPath}/myHealth_replies`));
+    const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
 
-  try {
-    await runTransaction(db, async (transaction) => {
-      // 1. Write the new reply
-      transaction.set(newReplyRef, {
-        content: replyContent,
-        authorId: user.uid,
-        // ... other fields
-        createdAt: serverTimestamp(),
+    try {
+      await runTransaction(db, async (transaction) => {
+        const profileSnap = await transaction.get(profileRef);
+        const realName = profileSnap.exists() ? profileSnap.data().name : "Anonymous";
+        // 1. Write the new reply
+        transaction.set(newReplyRef, {
+          content: replyContent,
+          authorId: user.uid,
+          authorName: realName,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp(),
+          parentId: reply.id,
+          rootPostId: postId,
+          level: reply.level + 1,
+          likes: [],
+          dislikes: [],
+          location: replyLocation || null
+        });
+
+        // 2. Increment the parent post count
+        transaction.update(postRef, {
+          replyCount: increment(1),
+          lastUpdated: serverTimestamp()
+        });
       });
-
-      // 2. Increment the parent post count
-      transaction.update(postRef, {
-        replyCount: increment(1),
-        lastUpdated: serverTimestamp()
-      });
-    });
-    
-    // Reset local state only after transaction succeeds
-    setReplyContent('');
-    setIsReplying(false);
-  } catch (e) {
-    console.error("Transaction failed: ", e);
-  }
-};
+      
+      // Reset local state only after transaction succeeds
+      setReplyContent('');
+      setIsReplying(false);
+    } catch (e) {
+      console.error("Transaction failed: ", e);
+    }
+  };
   
-  const handleReplyReaction = async (reactionType: 'like' | 'dislike') => {
+   const handleReplyReaction = async (reactionType: 'like' | 'dislike') => {
     if (!user) return alert("Please log in!");
     const replyRef = doc(db, reply.fullPath);
 

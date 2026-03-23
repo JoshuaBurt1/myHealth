@@ -1,6 +1,15 @@
 //group.ts
 import { Timestamp } from 'firebase/firestore';
 
+export interface GroupScheduleEvent {
+  id: string;
+  day: string;
+  time: string;
+  duration: number;
+  type: 'group' | 'appointment' | 'practice' | 'other';
+  title: string;
+}
+
 /**
  * Individual member object stored within a Group's members array
  */
@@ -22,6 +31,7 @@ export interface Group {
   createdAt: Timestamp | any;
   lastUpdated: Timestamp | any;
   lastUpdatedBy?: string;
+  schedule?: GroupScheduleEvent[];
 }
 
 /**
