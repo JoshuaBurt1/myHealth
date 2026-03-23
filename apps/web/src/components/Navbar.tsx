@@ -31,23 +31,30 @@ const Navbar = ({ user }: NavbarProps) => {
   // Compute Unread Badges
   const { hasNewReplies, hasNewGroupMessages } = useMemo(() => {
     if (!userData || !user) return { hasNewReplies: false, hasNewGroupMessages: false };
+
+    // 1. Check for unread Forum Posts
     const unreadPost = userPosts.some((post: Post) => {
       const updatedTime = post.lastUpdated?.toMillis() || post.createdAt?.toMillis() || 0;
-      const prevLoginTime = userData.previous_login?.toMillis() || 0;
       const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
       const isNotMe = post.lastUpdatedBy && post.lastUpdatedBy !== user.uid;
-      return isNotMe && updatedTime > prevLoginTime && updatedTime > readTime;
+      
+      // Removed prevLoginTime: The notification stays until readTime >= updatedTime
+      return isNotMe && updatedTime > readTime;
     });
+
+    // 2. Check for unread Group Messages
     const unreadGroup = userGroups.some((group: Group) => {
       const updatedTime = group.lastUpdated?.toMillis() || 0;
-      const prevLoginTime = userData.previous_login?.toMillis() || 0;
       const readTime = userData[`last_read_group_${group.id}`]?.toMillis() || 0;
       const isNotMe = group.lastUpdatedBy !== user.uid;
-      return updatedTime > prevLoginTime && updatedTime > readTime && isNotMe;
+
+      // Removed prevLoginTime and optiProfileRead
+      return isNotMe && updatedTime > readTime;
     });
+
     return { 
       hasNewReplies: unreadPost, 
-      hasNewGroupMessages: unreadGroup && !optiProfileRead 
+      hasNewGroupMessages: unreadGroup 
     };
   }, [userData, userPosts, userGroups, user, optiProfileRead]);
 
@@ -68,9 +75,6 @@ const Navbar = ({ user }: NavbarProps) => {
           <Link
             key={item.path}
             to={item.path}
-            onClick={() => {
-              if (item.label === 'Profile') setOptiProfileRead(true);
-            }}
             className={`relative flex flex-col items-center p-2 transition-colors ${
               isActive(item.path) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-400'
             }`}

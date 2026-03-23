@@ -4,12 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   doc, updateDoc, collection, query, orderBy, onSnapshot, 
   addDoc, setDoc, serverTimestamp, getDocs, where, limit, 
-  collectionGroup, getDoc, writeBatch
+  collectionGroup, getDoc, writeBatch, arrayRemove, arrayUnion
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
-  MessageSquare, ShieldCheck, BarChart2, X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
+  MessageSquare, ShieldCheck, Activity, BarChart2,
+  X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
 } from 'lucide-react';
 
 import type { Group, GroupMessage as Message, GroupTabType as TabType, GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
@@ -60,6 +61,7 @@ export const GroupScreen: React.FC = () => {
 
   // --- Membership Management State ---
   const [isManagingMembers, setIsManagingMembers] = useState(false);
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false); // NEW STATE
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -139,7 +141,6 @@ export const GroupScreen: React.FC = () => {
   useEffect(() => {
     if (!group) return;
     
-    // Only process if the group actually has this feature enabled to save reads
     if (!group.features?.zScoreCompare) return;
 
     let isMounted = true;
@@ -147,24 +148,26 @@ export const GroupScreen: React.FC = () => {
     const fetchAndProcessStats = async () => {
       setIsCalculatingStats(true);
       try {
-        // 1. Fetch user_data for all members concurrently
-        const memberDataSnapshots = await Promise.all(
-          group.members.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
+        // FILTER: Only include members who have NOT opted out
+        const participatingMembers = group.members.filter(m => 
+          !(group as any).optedOutDataUids?.includes(m.userId)
         );
 
-        // 2. Map snapshots to internal array
-        const memberProfiles = group.members.map((m, i) => ({
+        // Fetch user_data only for participating members
+        const memberDataSnapshots = await Promise.all(
+          participatingMembers.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
+        );
+
+        const memberProfiles = participatingMembers.map((m, i) => ({
           userId: m.userId,
           displayName: m.display_name,
           data: memberDataSnapshots[i].exists() ? memberDataSnapshots[i].data() : {}
         }));
 
-        // 3. Helper to aggregate and calculate math
         const processMetrics = (keyMap: Record<string, string>): CategoryComparison[] => {
           const results: CategoryComparison[] = [];
           
           Object.entries(keyMap).forEach(([name, key]) => {
-            // Get raw arrays for each member
             const rawMembers = memberProfiles.map(mp => {
               const vals = extractValues(mp.data, key);
               const recent = vals.length > 0 ? vals[vals.length - 1] : null;
@@ -172,11 +175,10 @@ export const GroupScreen: React.FC = () => {
               return { ...mp, recent, avg };
             });
 
-            // Isolate valid group numbers to find Group Mean/StdDev
             const validRecents = rawMembers.map(m => m.recent).filter(v => v !== null) as number[];
             const validAvgs = rawMembers.map(m => m.avg).filter(v => v !== null) as number[];
 
-            if (validRecents.length === 0 && validAvgs.length === 0) return; // Skip if no one tracked this
+            if (validRecents.length === 0 && validAvgs.length === 0) return;
 
             const recentMean = calcMean(validRecents);
             const recentSd = calcStdDev(validRecents, recentMean);
@@ -184,7 +186,6 @@ export const GroupScreen: React.FC = () => {
             const avgMean = calcMean(validAvgs);
             const avgSd = calcStdDev(validAvgs, avgMean);
 
-            // Calculate final statistics per member
             const members = rawMembers.map(m => ({
               userId: m.userId,
               displayName: m.displayName,
@@ -196,7 +197,6 @@ export const GroupScreen: React.FC = () => {
               avgPercentile: m.avg !== null ? calcPercentile(validAvgs, m.avg) : null,
             }));
 
-            // Only push metric if at least one member has data
             if (members.some(m => m.recentValue !== null || m.avgValue !== null)) {
               results.push({ metricName: name, metricKey: key, members });
             }
@@ -220,7 +220,7 @@ export const GroupScreen: React.FC = () => {
     fetchAndProcessStats();
 
     return () => { isMounted = false; };
-  }, [group?.memberUids, group?.features?.zScoreCompare]);
+  }, [group?.memberUids, group?.features?.zScoreCompare, (group as any)?.optedOutDataUids]);
 
   // --- User Search Logic ---
   useEffect(() => {
@@ -280,7 +280,6 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
-  // Maps the payload from ModalGroupSchedule to Firestore requirements
   const handleAddGroupEvent = (eventData: Omit<GroupScheduleEvent, 'id'>) => {
       const newEvent: GroupScheduleEvent = {
           id: Date.now().toString(),
@@ -422,6 +421,31 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
+  // --- NEW: Toggle Data Sharing ---
+  const handleToggleDataSharing = async () => {
+    if (!group || !groupId || !auth.currentUser) return;
+    
+    const currentUid = auth.currentUser.uid;
+    const isOptedOut = (group as any).optedOutDataUids?.includes(currentUid);
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+    
+    try {
+      if (isOptedOut) {
+        // They want to share (opt in)
+        await updateDoc(groupRef, {
+          optedOutDataUids: arrayRemove(currentUid)
+        });
+      } else {
+        // They want to hide (opt out)
+        await updateDoc(groupRef, {
+          optedOutDataUids: arrayUnion(currentUid)
+        });
+      }
+    } catch (err) {
+      console.error("Error updating sharing preferences:", err);
+    }
+  };
+
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-emerald-500" size={40} />
@@ -431,6 +455,7 @@ export const GroupScreen: React.FC = () => {
   if (!group) return null;
 
   const isAdmin = auth.currentUser?.uid === group.adminId;
+  const isSharingData = !((group as any).optedOutDataUids || []).includes(auth.currentUser?.uid || '');
 
   return (
     /* Outer Container: Set bg-white on mobile to remove bleed, md:bg-slate-50 for desktop */
@@ -731,13 +756,42 @@ export const GroupScreen: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Actions Section */}
+                {/* Actions */}
                 <div className="pb-10 md:pb-0">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Actions</h3>
                   <div className="space-y-2">
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+                    
+                    {/* NEW: Toggleable Group Settings */}
+                    <button 
+                      onClick={() => setIsGroupSettingsOpen(!isGroupSettingsOpen)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-colors ${
+                        isGroupSettingsOpen ? 'bg-slate-50 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
                       <Settings size={18} className="shrink-0" /> <span className="truncate">Group Settings</span>
                     </button>
+
+                    {isGroupSettingsOpen && (
+                      <div className="mt-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col pr-4">
+                            <span className="text-sm font-semibold text-slate-700">Share My Data</span>
+                            <span className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                              Include my data in group comparisons (Z-Score & Percentiles)
+                            </span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer"
+                              checked={isSharingData}
+                              onChange={handleToggleDataSharing}
+                            />
+                            <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Manage Members Button (Conditional) */}
                     {isAdmin && (

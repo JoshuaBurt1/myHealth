@@ -62,8 +62,7 @@ export const HealthSyncSection: React.FC<HealthSyncSectionProps> = ({
 
                 // FIX: Match exact local date first. Fallback to includes for legacy data.
                 const index = stepsArray.findIndex((entry: any) => 
-                    (entry.date && entry.date === dayData.date) || 
-                    (!entry.date && entry.dateTime && entry.dateTime.includes(dayData.date))
+                    (entry.date && entry.date === dayData.date)
                 );
 
                 const isToday = dayData.date === payload.today?.date;
