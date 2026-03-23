@@ -1,6 +1,6 @@
 //ForumScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -97,20 +97,14 @@ const ForumScreen: React.FC = () => {
 
   // Window Resize Listeners
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-
-      if (!mobile) {
-        setIsFilterDrawerOpen(false);
-      }
-    };
-
-    handleResize();
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener('resize', handleResize);
-
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) setIsFilterDrawerOpen(false);
+  }, [isMobile]);
 
   // Unread Notifications Logic
   const unreadPostIds = useMemo(() => {
@@ -139,82 +133,25 @@ const ForumScreen: React.FC = () => {
 
   // Data Fetching
   useEffect(() => {
-    const q = query(
-      collection(db, 'myHealth_posts'),
-      orderBy('lastUpdated', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
+    const q = query(collection(db, 'myHealth_posts'), orderBy('lastUpdated', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const now = new Date();
-
-      const allPosts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Post[];
-
-      const expiredPosts = allPosts.filter((post) => {
-        if (!post.help || !post.helpEndDate) return false;
-
-        const expiry = post.helpEndDate.toDate
-          ? post.helpEndDate.toDate()
-          : new Date(post.helpEndDate);
-
-        return now > expiry;
+      const allPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Post[];
+      
+      // FRONTEND AUTO-DELETE: Check for expired "Help" posts
+      allPosts.forEach(async (post) => {
+        if (post.help && post.helpEndDate) {
+          const expiry = post.helpEndDate.toDate ? post.helpEndDate.toDate() : new Date(post.helpEndDate);
+          if (now > expiry) {
+            console.log(`Post ${post.id} expired. Deleting...`);
+            await deleteDoc(doc(db, 'myHealth_posts', post.id));
+          }
+        }
       });
 
-      const validPosts = allPosts.filter(
-        post => !expiredPosts.some(e => e.id === post.id)
-      );
-
-      setPosts(validPosts);
+      setPosts(allPosts);
       setLoading(false);
-
-      if (expiredPosts.length === 0 || !auth.currentUser) return;
-
-      try {
-        const acquired = await runTransaction(db, async (transaction) => {
-          const lockRef = doc(db, 'system', 'cleanup_lock');
-          const snap = await transaction.get(lockRef);
-
-          const nowMillis = Date.now();
-          const LOCK_TIMEOUT = 30000; // 30s
-
-          if (!snap.exists()) {
-            transaction.set(lockRef, {
-              owner: auth.currentUser!.uid,
-              timestamp: nowMillis
-            });
-            return true;
-          }
-
-          const data = snap.data();
-
-          if (nowMillis - data.timestamp > LOCK_TIMEOUT) {
-            transaction.set(lockRef, {
-              owner: auth.currentUser!.uid,
-              timestamp: nowMillis
-            });
-            return true;
-          }
-
-          return false;
-        });
-
-        if (acquired) {
-          console.log("Cleanup lock acquired. Deleting expired posts...");
-
-          await Promise.all(
-            expiredPosts.map(post =>
-              deleteDoc(doc(db, 'myHealth_posts', post.id))
-            )
-          );
-        }
-
-      } catch (err) {
-        console.error("Cleanup error:", err);
-      }
     });
-
     return () => unsubscribe();
   }, []);
 

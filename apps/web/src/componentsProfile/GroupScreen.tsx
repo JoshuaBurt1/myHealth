@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import type { Group, GroupMessage as Message, GroupTabType as TabType } from './componentsGroupScreen/group';
-import { ModalGroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/ModalGroupsSchedule';
+import { ModalGroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/GroupsSchedule';
 
 const getUserColor = (userId: string) => {
   const colors = [
@@ -200,7 +200,7 @@ export const GroupScreen: React.FC = () => {
 
   return (
     /* Outer Container: Set bg-white on mobile to remove bleed, md:bg-slate-50 for desktop */
-    <div className="w-full md:max-w-7xl mx-auto p-0 md:p-6 bg-white md:bg-slate-50 min-h-screen pb-20 relative">
+    <div className="w-full md:max-w-7xl mx-auto p-0 md:p-6 bg-white md:bg-slate-50 min-h-screen relative">
       
       <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
         
@@ -382,12 +382,14 @@ export const GroupScreen: React.FC = () => {
 
               {/* --- SCHEDULE TAB --- */}
               {activeTab === 'schedule' && (
-                <ModalGroupSchedule 
-                  scheduleEvents={scheduleEvents}
-                  onAddEvent={handleAddGroupEvent}
-                  onRemoveEvent={handleRemoveGroupEvent}
-                  isSavingSchedule={isSavingSchedule}
-                />
+                <section className="flex-1 flex flex-col min-h-0 overflow-y-auto relative">
+                  <ModalGroupSchedule 
+                    scheduleEvents={scheduleEvents}
+                    onAddEvent={handleAddGroupEvent}
+                    onRemoveEvent={handleRemoveGroupEvent}
+                    isSavingSchedule={isSavingSchedule}
+                  />
+                </section>
               )}
 
               {/* --- COMPARE TAB --- */}

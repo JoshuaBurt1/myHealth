@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
-import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc } from 'firebase/firestore';
+import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { useNotifications } from '../context/NotificationContext';
@@ -24,22 +24,6 @@ export const GroupMngScreen: React.FC = () => {
 
   const isLoadingGroups = userGroups === null || userData === null;
 
-  // Clear badges on mount
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const clearGlobalBadge = async () => {
-      try {
-        const userRef = doc(db, 'users', auth.currentUser!.uid);
-        await setDoc(userRef, { 
-          groups_modal_last_opened: serverTimestamp() 
-        }, { merge: true });
-      } catch (err) {
-        console.error("Error clearing global badge:", err);
-      }
-    };
-    clearGlobalBadge();
-  }, []);
-
   const handleGroupClick = (groupId: string) => {
     setOptimisticReadIds(prev => new Set(prev).add(groupId));    
     if (auth.currentUser) {
@@ -54,6 +38,43 @@ export const GroupMngScreen: React.FC = () => {
   const handleProfileClick = (uid: string) => {
     navigate(`/profile/${uid}`);
   };
+
+  // Self-cleaning logic (delete old users/documentId/last_read_group files)
+  useEffect(() => {
+    if (!auth.currentUser || !userData || !userGroups) return;
+
+    const cleanupOrphanedGroupFields = async () => {
+      try {
+        const userRef = doc(db, 'users', auth.currentUser!.uid);
+        const updates: Record<string, any> = {};
+        let needsCleanup = false;
+
+        const lastReadKeys = Object.keys(userData).filter(key => 
+          key.startsWith('last_read_group_')
+        );
+
+        lastReadKeys.forEach(key => {
+          const groupIdFromField = key.replace('last_read_group_', '');
+          
+          const isStillMember = userGroups.some(g => g.id === groupIdFromField);
+
+          if (!isStillMember) {
+            updates[key] = deleteField();
+            needsCleanup = true;
+          }
+        });
+
+        if (needsCleanup) {
+          await updateDoc(userRef, updates);
+          console.log("Successfully scrubbed orphaned group fields.");
+        }
+      } catch (err) {
+        console.error("Error during group field cleanup:", err);
+      }
+    };
+
+    cleanupOrphanedGroupFields();
+  }, [userData, userGroups]); // Re-run if user data or group list changes
   
   // Handle User Search
   useEffect(() => {
@@ -198,7 +219,7 @@ export const GroupMngScreen: React.FC = () => {
 
   const handleDeleteGroup = async (e: React.MouseEvent, groupId: string) => {
     e.stopPropagation();
-    if (window.confirm("Delete this group and all its data? This cannot be undone.")) {
+    if (window.confirm("Delete this group? This cannot be undone.")) {
       try {
         await purgeGroupData(groupId);
       } catch (error) {
