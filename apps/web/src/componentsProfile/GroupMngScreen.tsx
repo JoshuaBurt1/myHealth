@@ -227,16 +227,17 @@ export const GroupMngScreen: React.FC = () => {
   };
     
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
-      <div className="bg-white rounded-3xl shadow-sm w-full overflow-hidden flex flex-col border border-slate-100 mt-2">
-        {/* --- SECTION 1: FULL-WIDTH HEADER --- */}
-        <div className="h-20 md:h-24 border-b border-slate-100 flex items-center shrink-0 bg-white">
+    /* Outer Container: p-0 on mobile ensures children touch the screen edges */
+    <div className="max-w-7xl mx-auto p-0 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
+      
+      <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
+        
+        <div className="h-20 md:h-24 border-b border-slate-100 flex items-center shrink-0 bg-white md:rounded-t-3xl">
           
-          {/* Header Left: Back Button (Aligned with Sidebar width, hidden on Desktop) */}
+          {/* Header Left: Back Button */}
           <div className="w-20 md:w-24 flex justify-center border-r border-slate-100 h-full items-center">
             <button 
               onClick={() => navigate(-1)} 
-
               className="flex md:hidden p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
               title="Go Back"
             >
@@ -244,7 +245,7 @@ export const GroupMngScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* Header Right: Dynamic Title & Subtitle */}
+          {/* Header Right: Title & Subtitle */}
           <div className="flex-1 px-6 md:px-8 flex flex-col justify-center">
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3 tracking-tight">
               {activeTab === 'my-groups' ? (
