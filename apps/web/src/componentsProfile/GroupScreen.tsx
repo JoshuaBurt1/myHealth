@@ -9,8 +9,8 @@ import {
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
-  MessageSquare, ShieldCheck, Activity, BarChart2,
-  X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
+  MessageSquare, ShieldCheck, BarChart2,
+  X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon, Database, ListFilter
 } from 'lucide-react';
 
 import type { Group, GroupMessage as Message, GroupTabType as TabType, GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
@@ -23,6 +23,8 @@ import {
 } from './compareUtils';
 import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
 import { GroupComparePercentile } from './componentsGroupScreen/GroupComparePercentile';
+import { ManageDataSourceModal } from './componentsGroupScreen/ManageDataSourceModal';
+import { ManageDataFieldsModal } from './componentsGroupScreen/ManageDataFieldsModal';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -59,9 +61,13 @@ export const GroupScreen: React.FC = () => {
   const [scheduleEvents, setScheduleEvents] = useState<GroupScheduleEvent[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
-  // --- Membership Management State ---
+  // --- Settings & Admin States ---
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+  const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
   const [isManagingMembers, setIsManagingMembers] = useState(false);
-  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false); // NEW STATE
+  const [isDataSourceModalOpen, setIsDataSourceModalOpen] = useState(false);
+  const [isDataFieldsModalOpen, setIsDataFieldsModalOpen] = useState(false);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -148,12 +154,13 @@ export const GroupScreen: React.FC = () => {
     const fetchAndProcessStats = async () => {
       setIsCalculatingStats(true);
       try {
-        // FILTER: Only include members who have NOT opted out
-        const participatingMembers = group.members.filter(m => 
-          !(group as any).optedOutDataUids?.includes(m.userId)
-        );
+        // FILTER: Opted out users AND Admin Excluded users
+        const participatingMembers = group.members.filter(m => {
+          const isUserOptedOut = (group as any).optedOutDataUids?.includes(m.userId);
+          const isAdminExcluded = (group as any).adminExcludedUids?.includes(m.userId);
+          return !isUserOptedOut && !isAdminExcluded;
+        });
 
-        // Fetch user_data only for participating members
         const memberDataSnapshots = await Promise.all(
           participatingMembers.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
         );
@@ -166,8 +173,12 @@ export const GroupScreen: React.FC = () => {
 
         const processMetrics = (keyMap: Record<string, string>): CategoryComparison[] => {
           const results: CategoryComparison[] = [];
+          const activeFields = (group as any).activeDataFields; // Retrieve allowed fields
           
           Object.entries(keyMap).forEach(([name, key]) => {
+            // FILTER: Skip field if admin has disabled it
+            if (activeFields && !activeFields.includes(key)) return;
+
             const rawMembers = memberProfiles.map(mp => {
               const vals = extractValues(mp.data, key);
               const recent = vals.length > 0 ? vals[vals.length - 1] : null;
@@ -220,7 +231,7 @@ export const GroupScreen: React.FC = () => {
     fetchAndProcessStats();
 
     return () => { isMounted = false; };
-  }, [group?.memberUids, group?.features?.zScoreCompare, (group as any)?.optedOutDataUids]);
+  }, [group?.memberUids, group?.features?.zScoreCompare, (group as any)?.optedOutDataUids, (group as any)?.adminExcludedUids, (group as any)?.activeDataFields]);
 
   // --- User Search Logic ---
   useEffect(() => {
@@ -421,7 +432,6 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
-  // --- NEW: Toggle Data Sharing ---
   const handleToggleDataSharing = async () => {
     if (!group || !groupId || !auth.currentUser) return;
     
@@ -431,15 +441,9 @@ export const GroupScreen: React.FC = () => {
     
     try {
       if (isOptedOut) {
-        // They want to share (opt in)
-        await updateDoc(groupRef, {
-          optedOutDataUids: arrayRemove(currentUid)
-        });
+        await updateDoc(groupRef, { optedOutDataUids: arrayRemove(currentUid) });
       } else {
-        // They want to hide (opt out)
-        await updateDoc(groupRef, {
-          optedOutDataUids: arrayUnion(currentUid)
-        });
+        await updateDoc(groupRef, { optedOutDataUids: arrayUnion(currentUid) });
       }
     } catch (err) {
       console.error("Error updating sharing preferences:", err);
@@ -456,10 +460,18 @@ export const GroupScreen: React.FC = () => {
 
   const isAdmin = auth.currentUser?.uid === group.adminId;
   const isSharingData = !((group as any).optedOutDataUids || []).includes(auth.currentUser?.uid || '');
+  const hasFeatures = !!group.features;
 
   return (
-    /* Outer Container: Set bg-white on mobile to remove bleed, md:bg-slate-50 for desktop */
     <div className="w-full md:max-w-7xl mx-auto p-0 md:p-6 bg-white md:bg-slate-50 min-h-screen pb-20 relative">
+      
+      {/* Modals */}
+      {isDataSourceModalOpen && (
+        <ManageDataSourceModal group={group} onClose={() => setIsDataSourceModalOpen(false)} />
+      )}
+      {isDataFieldsModalOpen && (
+        <ManageDataFieldsModal group={group} onClose={() => setIsDataFieldsModalOpen(false)} />
+      )}
       
       <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
         
@@ -793,67 +805,95 @@ export const GroupScreen: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Manage Members Button (Conditional) */}
+                    {/* Admin Settings Hierarchy */}
                     {isAdmin && (
                       <>
                         <button 
-                          onClick={() => setIsManagingMembers(!isManagingMembers)}
+                          onClick={() => setIsAdminSettingsOpen(!isAdminSettingsOpen)}
                           className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-colors ${
-                            isManagingMembers ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'
+                            isAdminSettingsOpen ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          <Users size={18} className="shrink-0" /> 
-                          <span className="truncate">Manage Members</span>
+                          <ShieldCheck size={18} className="shrink-0" /> 
+                          <span className="truncate">Admin Settings</span>
                         </button>
 
-                        {/* Manage Members Dropdown Content */}
-                        {isManagingMembers && (
-                          <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
-                            <div className="relative mb-3">
-                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                              <input
-                                type="text"
-                                placeholder="Search for users..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                              />
-                            </div>
+                        {isAdminSettingsOpen && (
+                          <div className="mt-2 p-2 bg-slate-50/50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2 space-y-1">
+                            
+                            {/* 1. Manage Members */}
+                            <div>
+                              <button 
+                                onClick={() => setIsManagingMembers(!isManagingMembers)}
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
+                                  isManagingMembers ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm'
+                                }`}
+                              >
+                                <Users size={16} /> Manage Members
+                              </button>
+                              
+                              {/* Manage Members Search UI */}
+                              {isManagingMembers && (
+                                <div className="mt-2 p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                  <div className="relative mb-3">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input type="text" placeholder="Search for users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                                  </div>
 
-                            {/* Search Results */}
-                            <div className="space-y-1 max-h-40 overflow-y-auto">
-                              {isSearching && <div className="p-2 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" size={16} /></div>}
-                              {searchResults.map(user => (
-                                <div key={user.uid} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
-                                      {user.imageId ? <img src={`/api/images/${user.imageId}`} alt="" /> : <UserIcon size={14} className="text-slate-400" />}
+                                  <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                                    {isSearching && <div className="p-2 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" size={16} /></div>}
+                                    {searchResults.map(user => (
+                                      <div key={user.uid} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group">
+                                        <div className="flex items-center gap-2 truncate pr-2">
+                                          <div className="w-6 h-6 shrink-0 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
+                                            {user.imageId ? <img src={`/api/images/${user.imageId}`} alt="" /> : <UserIcon size={12} className="text-slate-400" />}
+                                          </div>
+                                          <span className="text-xs font-medium text-slate-700 truncate">{user.displayName}</span>
+                                        </div>
+                                        <button onClick={() => handleAddMember(user)} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded-md shrink-0">
+                                          <Plus size={14} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="mt-3 pt-3 border-t border-slate-100">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Current Members</p>
+                                    <div className="space-y-1">
+                                      {group.members.map(member => (
+                                        <div key={member.userId} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded-lg">
+                                          <span className="text-xs text-slate-600 truncate pr-2">{member.display_name} {member.userId === group.adminId && '(Admin)'}</span>
+                                          {member.userId !== group.adminId && (
+                                            <button onClick={() => handleRemoveMember(member.userId)} className="text-rose-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md shrink-0">
+                                              <Minus size={14} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
                                     </div>
-                                    <span className="text-sm font-medium text-slate-700">{user.displayName}</span>
                                   </div>
-                                  <button onClick={() => handleAddMember(user)} className="p-1 hover:bg-emerald-100 text-emerald-600 rounded-md">
-                                    <Plus size={16} />
-                                  </button>
                                 </div>
-                              ))}
+                              )}
                             </div>
 
-                            {/* Current Members (to remove) */}
-                            <div className="mt-3 pt-3 border-t border-slate-200">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Current Members</p>
-                              <div className="space-y-1">
-                                {group.members.map(member => (
-                                  <div key={member.userId} className="flex items-center justify-between p-1">
-                                    <span className="text-xs text-slate-600">{member.display_name} {member.userId === group.adminId && '(Admin)'}</span>
-                                    {member.userId !== group.adminId && (
-                                      <button onClick={() => handleRemoveMember(member.userId)} className="text-rose-500 hover:text-rose-700">
-                                        <Minus size={14} />
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
+                            {/* 2. Manage Data Source */}
+                            <button 
+                              onClick={() => setIsDataSourceModalOpen(true)}
+                              disabled={!hasFeatures}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded-xl transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:shadow-none"
+                            >
+                              <Database size={16} /> Manage Data Source
+                            </button>
+
+                            {/* 3. Manage Data Fields */}
+                            <button 
+                              onClick={() => setIsDataFieldsModalOpen(true)}
+                              disabled={!hasFeatures}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm rounded-xl transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-transparent disabled:shadow-none"
+                            >
+                              <ListFilter size={16} /> Manage Data Fields
+                            </button>
+
                           </div>
                         )}
                       </>
