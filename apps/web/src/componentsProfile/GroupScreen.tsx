@@ -1,3 +1,4 @@
+// GroupScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -8,12 +9,19 @@ import {
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
-  MessageSquare, ShieldCheck, Activity, BarChart2,
-  X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
+  MessageSquare, ShieldCheck, BarChart2, X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
 } from 'lucide-react';
 
 import type { Group, GroupMessage as Message, GroupTabType as TabType, GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
 import { GroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/GroupSchedule';
+
+// --- NEW IMPORTS ---
+import { 
+  VITAL_KEY_MAP, EXERCISE_KEY_MAP, extractValues, calcMean, 
+  calcStdDev, calcZScore, calcPercentile, type CompareData, type CategoryComparison 
+} from './compareUtils';
+import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
+import { GroupComparePercentile } from './componentsGroupScreen/GroupComparePercentile';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -50,13 +58,18 @@ export const GroupScreen: React.FC = () => {
   const [scheduleEvents, setScheduleEvents] = useState<GroupScheduleEvent[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
-  // --- New Membership Management State ---
+  // --- Membership Management State ---
   const [isManagingMembers, setIsManagingMembers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // --- Compare Data State ---
+  const [compareData, setCompareData] = useState<CompareData | null>(null);
+  const [isCalculatingStats, setIsCalculatingStats] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
   const scrollToBottom = () => {
     setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -121,6 +134,93 @@ export const GroupScreen: React.FC = () => {
     };
 
   }, [groupId, navigate]);
+
+  // --- Z-Score & Percentile Engine ---
+  useEffect(() => {
+    if (!group) return;
+    
+    // Only process if the group actually has this feature enabled to save reads
+    if (!group.features?.zScoreCompare) return;
+
+    let isMounted = true;
+
+    const fetchAndProcessStats = async () => {
+      setIsCalculatingStats(true);
+      try {
+        // 1. Fetch user_data for all members concurrently
+        const memberDataSnapshots = await Promise.all(
+          group.members.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
+        );
+
+        // 2. Map snapshots to internal array
+        const memberProfiles = group.members.map((m, i) => ({
+          userId: m.userId,
+          displayName: m.display_name,
+          data: memberDataSnapshots[i].exists() ? memberDataSnapshots[i].data() : {}
+        }));
+
+        // 3. Helper to aggregate and calculate math
+        const processMetrics = (keyMap: Record<string, string>): CategoryComparison[] => {
+          const results: CategoryComparison[] = [];
+          
+          Object.entries(keyMap).forEach(([name, key]) => {
+            // Get raw arrays for each member
+            const rawMembers = memberProfiles.map(mp => {
+              const vals = extractValues(mp.data, key);
+              const recent = vals.length > 0 ? vals[vals.length - 1] : null;
+              const avg = vals.length > 0 ? calcMean(vals) : null;
+              return { ...mp, recent, avg };
+            });
+
+            // Isolate valid group numbers to find Group Mean/StdDev
+            const validRecents = rawMembers.map(m => m.recent).filter(v => v !== null) as number[];
+            const validAvgs = rawMembers.map(m => m.avg).filter(v => v !== null) as number[];
+
+            if (validRecents.length === 0 && validAvgs.length === 0) return; // Skip if no one tracked this
+
+            const recentMean = calcMean(validRecents);
+            const recentSd = calcStdDev(validRecents, recentMean);
+            
+            const avgMean = calcMean(validAvgs);
+            const avgSd = calcStdDev(validAvgs, avgMean);
+
+            // Calculate final statistics per member
+            const members = rawMembers.map(m => ({
+              userId: m.userId,
+              displayName: m.displayName,
+              recentValue: m.recent,
+              avgValue: m.avg,
+              recentZScore: m.recent !== null ? calcZScore(m.recent, recentMean, recentSd) : null,
+              avgZScore: m.avg !== null ? calcZScore(m.avg, avgMean, avgSd) : null,
+              recentPercentile: m.recent !== null ? calcPercentile(validRecents, m.recent) : null,
+              avgPercentile: m.avg !== null ? calcPercentile(validAvgs, m.avg) : null,
+            }));
+
+            // Only push metric if at least one member has data
+            if (members.some(m => m.recentValue !== null || m.avgValue !== null)) {
+              results.push({ metricName: name, metricKey: key, members });
+            }
+          });
+          return results;
+        };
+
+        const vitalsData = processMetrics(VITAL_KEY_MAP);
+        const exercisesData = processMetrics(EXERCISE_KEY_MAP);
+
+        if (isMounted) {
+          setCompareData({ vitals: vitalsData, exercises: exercisesData });
+        }
+      } catch (err) {
+        console.error("Error processing group stats:", err);
+      } finally {
+        if (isMounted) setIsCalculatingStats(false);
+      }
+    };
+
+    fetchAndProcessStats();
+
+    return () => { isMounted = false; };
+  }, [group?.memberUids, group?.features?.zScoreCompare]);
 
   // --- User Search Logic ---
   useEffect(() => {
@@ -527,47 +627,22 @@ export const GroupScreen: React.FC = () => {
               )}
 
               {/* --- COMPARE TAB --- */}
-              {activeTab === 'compare' && (
-                <section className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6">
-                  <div className="max-w-4xl mx-auto w-full">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <Activity className="text-emerald-500" /> Z-Score Comparisons
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                          <Activity size={18} className="text-blue-500"/> Exercise Z-Scores
-                        </h3>
-                        <div className="space-y-4">
-                          {group.members.map(member => (
-                            <div key={member.userId} className="flex items-center justify-between">
-                              <span className="text-sm font-semibold text-slate-600">{member.display_name}</span>
-                              <div className="flex-1 mx-4 h-2 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                                <div className="h-full bg-blue-400 rounded-full w-[60%]"></div>
-                              </div>
-                              <span className="text-xs font-bold text-slate-400">+1.2</span>
-                            </div>
-                          ))}
-                        </div>
+              {activeTab === 'compare' && group.features?.zScoreCompare && (
+                <section className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6 bg-slate-50">
+                  <div className="max-w-5xl mx-auto w-full">
+                    
+                    {isCalculatingStats ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                        <Loader2 className="animate-spin mb-4 text-emerald-500" size={40} />
+                        <p className="font-medium text-sm">Calculating group statistics...</p>
                       </div>
+                    ) : compareData && (
+                      <div className="space-y-4">
+                        <GroupCompareZScore data={compareData} />
+                        <GroupComparePercentile data={compareData} />
+                      </div>
+                    )}
 
-                      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                          <Activity size={18} className="text-rose-500"/> Vitals Z-Scores
-                        </h3>
-                        <div className="space-y-4">
-                          {group.members.map(member => (
-                            <div key={member.userId} className="flex items-center justify-between">
-                              <span className="text-sm font-semibold text-slate-600">{member.display_name}</span>
-                              <div className="flex-1 mx-4 h-2 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                                <div className="h-full bg-rose-400 rounded-full w-[40%]"></div>
-                              </div>
-                              <span className="text-xs font-bold text-slate-400">-0.4</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </section>
               )}
@@ -658,88 +733,88 @@ export const GroupScreen: React.FC = () => {
 
                 {/* Actions Section */}
                 <div className="pb-10 md:pb-0">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Actions</h3>
-          <div className="space-y-2">
-            <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-              <Settings size={18} className="shrink-0" /> <span className="truncate">Group Settings</span>
-            </button>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Actions</h3>
+                  <div className="space-y-2">
+                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+                      <Settings size={18} className="shrink-0" /> <span className="truncate">Group Settings</span>
+                    </button>
 
-            {/* Manage Members Button (Conditional) */}
-            {isAdmin && (
-              <>
-                <button 
-                  onClick={() => setIsManagingMembers(!isManagingMembers)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-colors ${
-                    isManagingMembers ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Users size={18} className="shrink-0" /> 
-                  <span className="truncate">Manage Members</span>
-                </button>
+                    {/* Manage Members Button (Conditional) */}
+                    {isAdmin && (
+                      <>
+                        <button 
+                          onClick={() => setIsManagingMembers(!isManagingMembers)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-colors ${
+                            isManagingMembers ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Users size={18} className="shrink-0" /> 
+                          <span className="truncate">Manage Members</span>
+                        </button>
 
-                {/* Manage Members Dropdown Content */}
-                {isManagingMembers && (
-                  <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
-                    <div className="relative mb-3">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input
-                        type="text"
-                        placeholder="Search for users..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                      />
-                    </div>
-
-                    {/* Search Results */}
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {isSearching && <div className="p-2 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" size={16} /></div>}
-                      {searchResults.map(user => (
-                        <div key={user.uid} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
-                              {user.imageId ? <img src={`/api/images/${user.imageId}`} alt="" /> : <UserIcon size={14} className="text-slate-400" />}
+                        {/* Manage Members Dropdown Content */}
+                        {isManagingMembers && (
+                          <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
+                            <div className="relative mb-3">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                              <input
+                                type="text"
+                                placeholder="Search for users..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                              />
                             </div>
-                            <span className="text-sm font-medium text-slate-700">{user.displayName}</span>
-                          </div>
-                          <button onClick={() => handleAddMember(user)} className="p-1 hover:bg-emerald-100 text-emerald-600 rounded-md">
-                            <Plus size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
 
-                    {/* Current Members (to remove) */}
-                    <div className="mt-3 pt-3 border-t border-slate-200">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Current Members</p>
-                      <div className="space-y-1">
-                        {group.members.map(member => (
-                          <div key={member.userId} className="flex items-center justify-between p-1">
-                            <span className="text-xs text-slate-600">{member.display_name} {member.userId === group.adminId && '(Admin)'}</span>
-                            {member.userId !== group.adminId && (
-                              <button onClick={() => handleRemoveMember(member.userId)} className="text-rose-500 hover:text-rose-700">
-                                <Minus size={14} />
-                              </button>
-                            )}
+                            {/* Search Results */}
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                              {isSearching && <div className="p-2 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" size={16} /></div>}
+                              {searchResults.map(user => (
+                                <div key={user.uid} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
+                                      {user.imageId ? <img src={`/api/images/${user.imageId}`} alt="" /> : <UserIcon size={14} className="text-slate-400" />}
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-700">{user.displayName}</span>
+                                  </div>
+                                  <button onClick={() => handleAddMember(user)} className="p-1 hover:bg-emerald-100 text-emerald-600 rounded-md">
+                                    <Plus size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Current Members (to remove) */}
+                            <div className="mt-3 pt-3 border-t border-slate-200">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Current Members</p>
+                              <div className="space-y-1">
+                                {group.members.map(member => (
+                                  <div key={member.userId} className="flex items-center justify-between p-1">
+                                    <span className="text-xs text-slate-600">{member.display_name} {member.userId === group.adminId && '(Admin)'}</span>
+                                    {member.userId !== group.adminId && (
+                                      <button onClick={() => handleRemoveMember(member.userId)} className="text-rose-500 hover:text-rose-700">
+                                        <Minus size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        )}
+                      </>
+                    )}
+
+                    <hr className="my-2 border-slate-100" />
+                    
+                    <button 
+                      onClick={(e) => handleLeaveGroup(e, group)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    >
+                      <LogOut size={18} className="shrink-0" /> <span className="truncate">Leave Group</span>
+                    </button>
                   </div>
-                )}
-              </>
-            )}
-
-            <hr className="my-2 border-slate-100" />
-            
-            <button 
-              onClick={(e) => handleLeaveGroup(e, group)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-            >
-              <LogOut size={18} className="shrink-0" /> <span className="truncate">Leave Group</span>
-            </button>
-          </div>
-        </div>
+                </div>
               </div>
             </aside>
           )}

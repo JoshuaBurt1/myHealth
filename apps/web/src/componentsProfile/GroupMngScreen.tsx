@@ -58,7 +58,7 @@ export const GroupMngScreen: React.FC = () => {
         lastReadKeys.forEach(key => {
           const groupIdFromField = key.replace('last_read_group_', '');
           
-          const isStillMember = userGroups.some(g => g.id === groupIdFromField);
+          const isStillMember = userGroups.some((g: Group) => g.id === groupIdFromField);
 
           if (!isStillMember) {
             updates[key] = deleteField();
