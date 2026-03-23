@@ -31,30 +31,24 @@ const Navbar = ({ user }: NavbarProps) => {
   // Compute Unread Badges
   const { hasNewReplies, hasNewGroupMessages } = useMemo(() => {
     if (!userData || !user) return { hasNewReplies: false, hasNewGroupMessages: false };
-
-    // 1. Check for replies to MY posts
-      const unreadPost = userPosts.some((post: Post) => {
+    const unreadPost = userPosts.some((post: Post) => {
       const updatedTime = post.lastUpdated?.toMillis() || post.createdAt?.toMillis() || 0;
+      const prevLoginTime = userData.previous_login?.toMillis() || 0;
       const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
-      
-      // Ensure the last person to update it wasn't the current user
       const isNotMe = post.lastUpdatedBy && post.lastUpdatedBy !== user.uid;
-
-      // Unread IF: Updated after it was last read AND updater is not the current user.
-      // Removed the `prevLogin` check so notifications persist across sessions!
-      return isNotMe && updatedTime > readTime;
+      return isNotMe && updatedTime > prevLoginTime && updatedTime > readTime;
     });
-
-    // 2. Check for new messages in MY groups
-      const unreadGroup = userGroups.some((group: Group) => {
+    const unreadGroup = userGroups.some((group: Group) => {
       const updatedTime = group.lastUpdated?.toMillis() || 0;
+      const prevLoginTime = userData.previous_login?.toMillis() || 0;
       const readTime = userData[`last_read_group_${group.id}`]?.toMillis() || 0;
       const isNotMe = group.lastUpdatedBy !== user.uid;
-
-      return updatedTime > readTime && isNotMe;
+      return updatedTime > prevLoginTime && updatedTime > readTime && isNotMe;
     });
-
-    return { hasNewReplies: unreadPost, hasNewGroupMessages: unreadGroup && !optiProfileRead };
+    return { 
+      hasNewReplies: unreadPost, 
+      hasNewGroupMessages: unreadGroup && !optiProfileRead 
+    };
   }, [userData, userPosts, userGroups, user, optiProfileRead]);
 
   const profilePath = user ? `/profile/${user.uid}` : '/login';
@@ -75,7 +69,7 @@ const Navbar = ({ user }: NavbarProps) => {
             key={item.path}
             to={item.path}
             onClick={() => {
-              //if (item.label === 'Profile') setOptiProfileRead(true);
+              if (item.label === 'Profile') setOptiProfileRead(true);
             }}
             className={`relative flex flex-col items-center p-2 transition-colors ${
               isActive(item.path) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-400'

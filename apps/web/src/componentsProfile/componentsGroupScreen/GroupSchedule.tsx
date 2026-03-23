@@ -10,7 +10,7 @@ export interface GroupScheduleEvent {
   title: string;
 }
 
-interface ModalGroupScheduleProps {
+interface GroupScheduleProps {
   scheduleEvents: GroupScheduleEvent[];
   onAddEvent: (event: Omit<GroupScheduleEvent, 'id'>) => void;
   onRemoveEvent: (id: string, e: React.MouseEvent) => void;
@@ -26,7 +26,7 @@ const timeToPx = (time: string) => {
   return (h + (m || 0) / 60) * HOUR_HEIGHT;
 };
 
-export const ModalGroupSchedule: React.FC<ModalGroupScheduleProps> = ({
+export const GroupSchedule: React.FC<GroupScheduleProps> = ({
   scheduleEvents,
   onAddEvent,
   onRemoveEvent,

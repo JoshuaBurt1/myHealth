@@ -1,4 +1,3 @@
-//group.ts
 import { Timestamp } from 'firebase/firestore';
 
 export interface GroupScheduleEvent {
@@ -19,6 +18,13 @@ export interface GroupMember {
 }
 
 /**
+ * Feature toggles for the group
+ */
+export interface GroupFeatures {
+  zScoreCompare?: boolean;
+}
+
+/**
  * Main Group document structure as stored in 'myHealth_groups'
  */
 export interface Group {
@@ -32,6 +38,7 @@ export interface Group {
   lastUpdated: Timestamp | any;
   lastUpdatedBy?: string;
   schedule?: GroupScheduleEvent[];
+  features?: GroupFeatures; // Added features property
 }
 
 /**

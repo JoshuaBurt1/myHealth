@@ -1,7 +1,7 @@
 //PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   doc, updateDoc, arrayRemove, arrayUnion, getDoc, collectionGroup, query, where, getDocs, writeBatch, deleteField,
   addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
 } from 'firebase/firestore';

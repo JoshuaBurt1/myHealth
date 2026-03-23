@@ -22,6 +22,8 @@ export const GroupMngScreen: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
 
+  const [enableZScore, setEnableZScore] = useState(false);
+
   const isLoadingGroups = userGroups === null || userData === null;
 
   const handleGroupClick = (groupId: string) => {
@@ -167,7 +169,10 @@ export const GroupMngScreen: React.FC = () => {
         createdBy: auth.currentUser.uid,
         adminId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
-        lastUpdated: serverTimestamp() 
+        lastUpdated: serverTimestamp(),
+        features: {
+          zScoreCompare: enableZScore 
+        }
       };
 
       await addDoc(collection(db, 'myHealth_groups'), groupData);
@@ -175,45 +180,12 @@ export const GroupMngScreen: React.FC = () => {
       setGroupName('');
       setSelectedMembers([]);
       setSearchQuery('');
-      setActiveTab('my-groups'); // Switch back to groups view after saving
+      setActiveTab('my-groups');
     } catch (error) {
       console.error("Error saving group:", error);
       alert("Failed to create group. Please try again.");
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleLeaveGroup = async (e: React.MouseEvent, group: Group) => {
-    e.stopPropagation();
-    if (!auth.currentUser) return;
-
-    if (window.confirm(`Are you sure you want to leave ${group.name}?`)) {
-      try {
-        const currentUid = auth.currentUser.uid;
-        const updatedMemberUids = group.memberUids.filter(uid => uid !== currentUid);
-        const updatedMembers = group.members.filter(m => m.userId !== currentUid);
-
-        if (updatedMemberUids.length === 0) {
-          await purgeGroupData(group.id);
-        } else {
-          const groupRef = doc(db, 'myHealth_groups', group.id);
-          const updatePayload: any = {
-            memberUids: updatedMemberUids,
-            members: updatedMembers
-          };
-
-          // If the person leaving is the Admin, assign the next person as Admin
-          if (group.adminId === currentUid && updatedMemberUids.length > 0) {
-            updatePayload.adminId = updatedMemberUids[0];
-          }
-
-          await updateDoc(groupRef, updatePayload);
-        }
-      } catch (error) {
-        console.error("Error leaving group:", error);
-        alert("Failed to leave group.");
-      }
     }
   };
 
@@ -229,33 +201,50 @@ export const GroupMngScreen: React.FC = () => {
     }
   };
 
+  const handleLeaveGroup = async (e: React.MouseEvent, group: Group) => {
+    e.stopPropagation();
+    if (!auth.currentUser) return;
+    if (window.confirm(`Are you sure you want to leave ${group.name}?`)) {
+      try {
+        const currentUid = auth.currentUser.uid;
+        const updatedMemberUids = group.memberUids.filter(uid => uid !== currentUid);
+        const updatedMembers = group.members.filter(m => m.userId !== currentUid);
+        if (updatedMemberUids.length === 0) {
+          await purgeGroupData(group.id);
+        } else {
+          const groupRef = doc(db, 'myHealth_groups', group.id);
+          const updatePayload: any = {
+            memberUids: updatedMemberUids,
+            members: updatedMembers
+          };
+          if (group.adminId === currentUid && updatedMemberUids.length > 0) {
+            updatePayload.adminId = updatedMemberUids[0];
+          }
+          await updateDoc(groupRef, updatePayload);
+        }
+      } catch (error) {
+        console.error("Error leaving group:", error);
+        alert("Failed to leave group.");
+      }
+    }
+  };
+
   const purgeGroupData = async (groupId: string) => {
     const batch = writeBatch(db);
     const groupRef = doc(db, 'myHealth_groups', groupId);
-
-    // Identify subcollections (e.g., messages)
     const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
     const messagesSnapshot = await getDocs(messagesRef);
-
-    // Add all sub-docs to batch
     messagesSnapshot.forEach((msgDoc) => {
       batch.delete(msgDoc.ref);
     });
-
-    // Add the parent doc to batch
     batch.delete(groupRef);
     await batch.commit();
   };
     
   return (
-    /* Outer Container: p-0 on mobile ensures children touch the screen edges */
     <div className="max-w-7xl mx-auto p-0 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
-      
       <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
-        
         <div className="h-20 md:h-24 border-b border-slate-100 flex items-center shrink-0 bg-white md:rounded-t-3xl">
-          
-          {/* Header Left: Back Button */}
           <div className="w-20 md:w-24 flex justify-center border-r border-slate-100 h-full items-center">
             <button 
               onClick={() => navigate(-1)} 
@@ -266,7 +255,6 @@ export const GroupMngScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* Header Right: Title & Subtitle */}
           <div className="flex-1 px-6 md:px-8 flex flex-col justify-center">
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3 tracking-tight">
               {activeTab === 'my-groups' ? (
@@ -283,13 +271,8 @@ export const GroupMngScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* --- SECTION 2: BODY (Sidebar + Content) --- */}
         <div className="flex flex-1 overflow-hidden">
-          
-          {/* LEFT SIDEBAR */}
           <div className="w-20 md:w-24 border-r border-slate-100 flex flex-col items-center py-6 gap-8 bg-white shrink-0">
-            
-            {/* Tab: My Groups */}
             <button 
               onClick={() => setActiveTab('my-groups')}
               className="flex flex-col items-center gap-1.5 w-full group outline-none"
@@ -308,7 +291,6 @@ export const GroupMngScreen: React.FC = () => {
               </span>
             </button>
 
-            {/* Tab: Create Group */}
             <button 
               onClick={() => setActiveTab('create-group')}
               className="flex flex-col items-center gap-1.5 w-full group outline-none"
@@ -328,11 +310,8 @@ export const GroupMngScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* MAIN CONTENT AREA */}
           <div className="flex-1 bg-slate-50/30 overflow-y-auto">
-            
             {activeTab === 'my-groups' ? (
-              /* VIEW: MY GROUPS LIST */
               <div className="p-4 md:p-8">
                 {isLoadingGroups ? (
                   <div className="flex justify-center p-12">
@@ -428,12 +407,11 @@ export const GroupMngScreen: React.FC = () => {
                 )}
               </div>
             ) : (
-              /* VIEW: CREATE GROUP FORM */
               <div className="flex justify-center items-start p-4 md:p-8">
                 <div className="w-full max-w-2xl flex flex-col bg-white border border-slate-200 shadow-sm rounded-3xl overflow-hidden">
                   
                   <div className="p-6 md:p-8 space-y-8">
-                    {/* Input: Group Name */}
+                    {/* Input: Group Name & Features */}
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Group Identity</label>
                       <input 
@@ -443,6 +421,20 @@ export const GroupMngScreen: React.FC = () => {
                         onChange={(e) => setGroupName(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-slate-700 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                       />
+                      
+                      {/* NEW: Z-Score Feature Toggle */}
+                      <div className="mt-4 flex items-center gap-3 ml-1">
+                        <input 
+                          type="checkbox" 
+                          id="zScoreCheck"
+                          checked={enableZScore}
+                          onChange={(e) => setEnableZScore(e.target.checked)}
+                          className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
+                        />
+                        <label htmlFor="zScoreCheck" className="text-sm font-semibold text-slate-600 cursor-pointer select-none">
+                          Enable Z-Score Comparisons for this group
+                        </label>
+                      </div>
                     </div>
 
                     {/* Input: Search Members */}

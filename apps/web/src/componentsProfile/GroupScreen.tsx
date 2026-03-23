@@ -1,16 +1,21 @@
-// src/screens/GroupScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+  doc, updateDoc, collection, query, orderBy, onSnapshot, 
+  addDoc, setDoc, serverTimestamp, getDocs, where, limit, 
+  collectionGroup, getDoc, writeBatch
+} from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
   MessageSquare, ShieldCheck, Activity, BarChart2,
-  X, Clock, Settings, LogOut
+  X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon
 } from 'lucide-react';
 
-import type { Group, GroupMessage as Message, GroupTabType as TabType } from './componentsGroupScreen/group';
-import { ModalGroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/GroupsSchedule';
+import type { Group, GroupMessage as Message, GroupTabType as TabType, GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
+import { GroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/GroupSchedule';
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const getUserColor = (userId: string) => {
   const colors = [
@@ -30,8 +35,6 @@ const getUserColor = (userId: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 export const GroupScreen: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
@@ -46,6 +49,12 @@ export const GroupScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType | 'schedule' | 'compare'>('messages');
   const [scheduleEvents, setScheduleEvents] = useState<GroupScheduleEvent[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  // --- New Membership Management State ---
+  const [isManagingMembers, setIsManagingMembers] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
@@ -79,7 +88,7 @@ export const GroupScreen: React.FC = () => {
 
     const unsubscribeGroup = onSnapshot(groupRef, (groupSnap) => {
       if (groupSnap.exists()) {
-        const data = groupSnap.data() as Group;
+        const data = { id: groupSnap.id, ...groupSnap.data() } as Group;
 
         if (!data.memberUids.includes(currentUid)) {
           navigate('/');
@@ -113,21 +122,61 @@ export const GroupScreen: React.FC = () => {
 
   }, [groupId, navigate]);
 
-  const getMemberDisplayName = (userId: string) => {
-    const member = group?.members.find(m => m.userId === userId);
-    return member ? member.display_name : 'Unknown User';
-  };
+  // --- User Search Logic ---
+  useEffect(() => {
+    const performSearch = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      setIsSearching(true);
+      try {
+        const lowerTerm = searchQuery.toLowerCase();
+        const q = query(
+          collectionGroup(db, 'profile'),
+          where('name_lowercase', '>=', lowerTerm),
+          where('name_lowercase', '<=', lowerTerm + '\uf8ff'),
+          limit(5)
+        );
+        
+        const snapshot = await getDocs(q);
+        const results: SearchUser[] = [];
 
-  const handleSaveGroupSchedule = async (updatedEvents: GroupScheduleEvent[]) => {
-    setIsSavingSchedule(true);
-    try {
-        const groupRef = doc(db, 'myHealth_groups', groupId!);
-        await updateDoc(groupRef, { schedule: updatedEvents });
-        setScheduleEvents(updatedEvents);
-    } catch (err) {
-        console.error("Failed to update group schedule", err);
-    } finally {
-        setIsSavingSchedule(false);
+        for (const userDoc of snapshot.docs) {
+          const fetchedUserData = userDoc.data();
+          const uid = userDoc.ref.parent.parent?.id;
+          
+          if (!uid || group?.memberUids.includes(uid)) continue;
+
+          let imageId = null;
+          try {
+            const imgDocRef = doc(db, 'users', uid, 'profile', 'image_data');
+            const imgSnap = await getDoc(imgDocRef);
+            if (imgSnap.exists()) imageId = imgSnap.data().imageId;
+          } catch (e) {}
+
+          results.push({
+            uid,
+            displayName: fetchedUserData.name || fetchedUserData.display_name || 'Unknown User',
+            imageId
+          });
+        }
+        setSearchResults(results);
+      } catch (error) {
+        console.error("Error searching users:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const timer = setTimeout(() => performSearch(), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, group?.memberUids]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
@@ -143,6 +192,96 @@ export const GroupScreen: React.FC = () => {
   const handleRemoveGroupEvent = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       handleSaveGroupSchedule(scheduleEvents.filter(ev => ev.id !== id));
+  };
+
+  const getMemberDisplayName = (userId: string) => {
+    const member = group?.members.find(m => m.userId === userId);
+    return member ? member.display_name : 'Unknown User';
+  };
+
+  // --- Membership Action Handlers ---
+  const handleAddMember = async (user: SearchUser) => {
+    if (!group || !groupId) return;
+    try {
+      const groupRef = doc(db, 'myHealth_groups', groupId);
+      await updateDoc(groupRef, {
+        memberUids: [...group.memberUids, user.uid],
+        members: [...group.members, { userId: user.uid, display_name: user.displayName }]
+      });
+      setSearchQuery('');
+    } catch (err) {
+      console.error("Error adding member:", err);
+    }
+  };
+
+  const handleRemoveMember = async (uid: string) => {
+    if (!group || !groupId) return;
+    if (uid === group.adminId) {
+        alert("Cannot remove the admin. Transfer admin rights first.");
+        return;
+    }
+    try {
+      const groupRef = doc(db, 'myHealth_groups', groupId);
+      await updateDoc(groupRef, {
+        memberUids: group.memberUids.filter(id => id !== uid),
+        members: group.members.filter(m => m.userId !== uid)
+      });
+    } catch (err) {
+      console.error("Error removing member:", err);
+    }
+  };
+
+  const handleLeaveGroup = async (e: React.MouseEvent, group: Group) => {
+    e.stopPropagation();
+    if (!auth.currentUser) return;
+    if (window.confirm(`Are you sure you want to leave ${group.name}?`)) {
+      try {
+        const currentUid = auth.currentUser.uid;
+        const updatedMemberUids = group.memberUids.filter(uid => uid !== currentUid);
+        const updatedMembers = group.members.filter(m => m.userId !== currentUid);
+        if (updatedMemberUids.length === 0) {
+          await purgeGroupData(group.id);
+        } else {
+          const groupRef = doc(db, 'myHealth_groups', group.id);
+          const updatePayload: any = {
+            memberUids: updatedMemberUids,
+            members: updatedMembers
+          };
+          if (group.adminId === currentUid && updatedMemberUids.length > 0) {
+            updatePayload.adminId = updatedMemberUids[0];
+          }
+          await updateDoc(groupRef, updatePayload);
+        }
+      } catch (error) {
+        console.error("Error leaving group:", error);
+        alert("Failed to leave group.");
+      }
+    }
+  };
+
+  const purgeGroupData = async (groupId: string) => {
+    const batch = writeBatch(db);
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+    const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
+    const messagesSnapshot = await getDocs(messagesRef);
+    messagesSnapshot.forEach((msgDoc) => {
+      batch.delete(msgDoc.ref);
+    });
+    batch.delete(groupRef);
+    await batch.commit();
+  };
+
+  const handleSaveGroupSchedule = async (updatedEvents: GroupScheduleEvent[]) => {
+    setIsSavingSchedule(true);
+    try {
+        const groupRef = doc(db, 'myHealth_groups', groupId!);
+        await updateDoc(groupRef, { schedule: updatedEvents });
+        setScheduleEvents(updatedEvents);
+    } catch (err) {
+        console.error("Failed to update group schedule", err);
+    } finally {
+        setIsSavingSchedule(false);
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -183,13 +322,6 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-emerald-500" size={40} />
@@ -198,9 +330,11 @@ export const GroupScreen: React.FC = () => {
 
   if (!group) return null;
 
+  const isAdmin = auth.currentUser?.uid === group.adminId;
+
   return (
     /* Outer Container: Set bg-white on mobile to remove bleed, md:bg-slate-50 for desktop */
-    <div className="w-full md:max-w-7xl mx-auto p-0 md:p-6 bg-white md:bg-slate-50 min-h-screen relative">
+    <div className="w-full md:max-w-7xl mx-auto p-0 md:p-6 bg-white md:bg-slate-50 min-h-screen pb-20 relative">
       
       <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
         
@@ -291,15 +425,17 @@ export const GroupScreen: React.FC = () => {
                 <span className="text-[10px] font-bold">Schedule</span>
               </button>
               
-              <button 
-                onClick={() => setActiveTab('compare')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
-                  activeTab === 'compare' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-                }`}
-              >
-                <BarChart2 size={24} className="mb-1" />
-                <span className="text-[10px] font-bold">Compare</span>
-              </button>
+                {group.features?.zScoreCompare && (
+                  <button 
+                    onClick={() => setActiveTab('compare')}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
+                      activeTab === 'compare' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                    }`}
+                  >
+                    <BarChart2 size={24} className="mb-1" />
+                    <span className="text-[10px] font-bold">Compare</span>
+                  </button>
+                )}
             </div>
           </nav>
 
@@ -382,14 +518,12 @@ export const GroupScreen: React.FC = () => {
 
               {/* --- SCHEDULE TAB --- */}
               {activeTab === 'schedule' && (
-                <section className="flex-1 flex flex-col min-h-0 overflow-y-auto relative">
-                  <ModalGroupSchedule 
-                    scheduleEvents={scheduleEvents}
-                    onAddEvent={handleAddGroupEvent}
-                    onRemoveEvent={handleRemoveGroupEvent}
-                    isSavingSchedule={isSavingSchedule}
-                  />
-                </section>
+                <GroupSchedule 
+                  scheduleEvents={scheduleEvents}
+                  onAddEvent={handleAddGroupEvent}
+                  onRemoveEvent={handleRemoveGroupEvent}
+                  isSavingSchedule={isSavingSchedule}
+                />
               )}
 
               {/* --- COMPARE TAB --- */}
@@ -524,20 +658,88 @@ export const GroupScreen: React.FC = () => {
 
                 {/* Actions Section */}
                 <div className="pb-10 md:pb-0">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Actions</h3>
-                  <div className="space-y-2">
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-                      <Settings size={18} className="shrink-0" /> <span className="truncate">Group Settings</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-                      <Users size={18} className="shrink-0" /> <span className="truncate">Manage Members</span>
-                    </button>
-                    <hr className="my-2 border-slate-100" />
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors">
-                      <LogOut size={18} className="shrink-0" /> <span className="truncate">Leave Group</span>
-                    </button>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Actions</h3>
+          <div className="space-y-2">
+            <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+              <Settings size={18} className="shrink-0" /> <span className="truncate">Group Settings</span>
+            </button>
+
+            {/* Manage Members Button (Conditional) */}
+            {isAdmin && (
+              <>
+                <button 
+                  onClick={() => setIsManagingMembers(!isManagingMembers)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-colors ${
+                    isManagingMembers ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Users size={18} className="shrink-0" /> 
+                  <span className="truncate">Manage Members</span>
+                </button>
+
+                {/* Manage Members Dropdown Content */}
+                {isManagingMembers && (
+                  <div className="mt-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search for users..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {/* Search Results */}
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {isSearching && <div className="p-2 text-center"><Loader2 className="animate-spin mx-auto text-slate-400" size={16} /></div>}
+                      {searchResults.map(user => (
+                        <div key={user.uid} className="flex items-center justify-between p-2 hover:bg-white rounded-lg group">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
+                              {user.imageId ? <img src={`/api/images/${user.imageId}`} alt="" /> : <UserIcon size={14} className="text-slate-400" />}
+                            </div>
+                            <span className="text-sm font-medium text-slate-700">{user.displayName}</span>
+                          </div>
+                          <button onClick={() => handleAddMember(user)} className="p-1 hover:bg-emerald-100 text-emerald-600 rounded-md">
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Current Members (to remove) */}
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Current Members</p>
+                      <div className="space-y-1">
+                        {group.members.map(member => (
+                          <div key={member.userId} className="flex items-center justify-between p-1">
+                            <span className="text-xs text-slate-600">{member.display_name} {member.userId === group.adminId && '(Admin)'}</span>
+                            {member.userId !== group.adminId && (
+                              <button onClick={() => handleRemoveMember(member.userId)} className="text-rose-500 hover:text-rose-700">
+                                <Minus size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+              </>
+            )}
+
+            <hr className="my-2 border-slate-100" />
+            
+            <button 
+              onClick={(e) => handleLeaveGroup(e, group)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+            >
+              <LogOut size={18} className="shrink-0" /> <span className="truncate">Leave Group</span>
+            </button>
+          </div>
+        </div>
               </div>
             </aside>
           )}

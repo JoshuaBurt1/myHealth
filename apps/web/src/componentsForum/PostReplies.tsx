@@ -100,7 +100,8 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
         // 2. Increment the parent post count
         transaction.update(postRef, {
           replyCount: increment(1),
-          lastUpdated: serverTimestamp()
+          lastUpdated: serverTimestamp(),
+          lastUpdatedBy: user.uid
         });
       });
       
