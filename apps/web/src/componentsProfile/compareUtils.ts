@@ -126,10 +126,18 @@ export const calcPercentile = (arr: number[], val: number) => {
  */
 export const extractValues = (data: any, key: string): number[] => {
   const val = data?.[key];
+  
   if (Array.isArray(val)) {
-    return val.map(v => typeof v === 'object' ? v.value : v).filter(v => typeof v === 'number');
-  } else if (typeof val === 'number') {
-    return [val];
+    return val
+      .map(v => {
+        const rawValue = typeof v === 'object' ? v.value : v;
+        return parseFloat(rawValue);
+      })
+      .filter(v => !isNaN(v) && typeof v === 'number');
+  } else if (val !== undefined && val !== null) {
+    const num = parseFloat(val);
+    return isNaN(num) ? [] : [num];
   }
+  
   return [];
 };

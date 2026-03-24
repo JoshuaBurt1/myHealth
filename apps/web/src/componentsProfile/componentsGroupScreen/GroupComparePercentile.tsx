@@ -43,7 +43,7 @@ export const GroupComparePercentile: React.FC<Props> = ({ data }) => {
                     </div>
                     
                     <span className="text-xs font-bold text-slate-500 w-12 text-right">
-                      {Math.round(percentile)}th
+                      {Math.round(percentile)}
                     </span>
                   </div>
                 );

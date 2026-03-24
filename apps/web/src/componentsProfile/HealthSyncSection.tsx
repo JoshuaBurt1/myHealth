@@ -58,40 +58,37 @@ export const HealthSyncSection: React.FC<HealthSyncSectionProps> = ({
             let totalNewGems = 0;
 
             const processDayData = (dayData: { date: string, steps: number } | undefined) => {
-                if (!dayData || dayData.steps < 0) return;
+              if (!dayData || dayData.steps < 0) return;
 
-                // FIX: Match exact local date first. Fallback to includes for legacy data.
-                const index = stepsArray.findIndex((entry: any) => 
-                    (entry.date && entry.date === dayData.date)
-                );
+              // 1. Find the entry by checking if the ISO string contains the target date
+              const index = stepsArray.findIndex((entry: any) => 
+                  entry.dateTime && entry.dateTime.includes(dayData.date)
+              );
 
-                const isToday = dayData.date === payload.today?.date;
-                const logTime = isToday ? new Date().toISOString() : `${dayData.date}T23:59:59.000Z`;
+              const isToday = dayData.date === payload.today?.date;
+              const logTime = isToday ? new Date().toISOString() : `${dayData.date}T23:59:59.000Z`;
 
-                if (index >= 0) {
-                    // FIX: Overwrite unconditionally to correct the timezone lock bug.
-                    // Add `date: dayData.date` explicitly for future lookups.
-                    stepsArray[index] = {
-                        date: dayData.date, 
-                        value: String(dayData.steps),
-                        dateTime: logTime
-                    };
-                } else {
-                    stepsArray.push({ 
-                        date: dayData.date, 
-                        value: String(dayData.steps), 
-                        dateTime: logTime 
-                    });
-                }
+              // 2. Log only value and dateTime
+              const updatedEntry = {
+                  value: String(dayData.steps),
+                  dateTime: logTime
+              };
 
-                const alreadyRewarded = stepRewards[dayData.date] || 0;
-                const unrewardedSteps = dayData.steps - alreadyRewarded;
+              if (index >= 0) {
+                  stepsArray[index] = updatedEntry;
+              } else {
+                  stepsArray.push(updatedEntry);
+              }
 
-                if (unrewardedSteps >= 100) {
-                    const earnedGems = Math.floor(unrewardedSteps / 100);
-                    totalNewGems += earnedGems;
-                    stepRewards[dayData.date] = alreadyRewarded + (earnedGems * 100);
-                }
+              // 3. Reward logic (still uses dayData.date as the key for stepRewards)
+              const alreadyRewarded = stepRewards[dayData.date] || 0;
+              const unrewardedSteps = dayData.steps - alreadyRewarded;
+
+              if (unrewardedSteps >= 100) {
+                  const earnedGems = Math.floor(unrewardedSteps / 100);
+                  totalNewGems += earnedGems;
+                  stepRewards[dayData.date] = alreadyRewarded + (earnedGems * 100);
+              }
             };
 
             if (payload.yesterday) processDayData(payload.yesterday);
