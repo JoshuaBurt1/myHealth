@@ -4,6 +4,7 @@ import { Plus, MapPin, X, ChevronLeft, ChevronRight } from 'lucide-react';
 export interface GroupScheduleEvent {
   id: string;
   day: string;
+  date?: string; // Added date string to pin events to specific days
   time: string;
   duration: number;
   type: 'practice' | 'appointment' | 'group' | 'other';
@@ -32,29 +33,38 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
   onRemoveEvent,
   isSavingSchedule
 }) => {
-  const [activeSlot, setActiveSlot] = useState<{ day: string, time: string } | null>(null);
+  const [activeSlot, setActiveSlot] = useState<{ day: string, date: string, time: string } | null>(null);
   const [eventType, setEventType] = useState<'practice' | 'appointment' | 'group' | 'other'>('practice');
   const [eventDuration, setEventDuration] = useState<number>(1);
   const [eventTitle, setEventTitle] = useState('');
 
-  // --- DYNAMIC DATES LOGIC ---
-  const weekDates = useMemo(() => {
-    const dates = [];
+  // --- DYNAMIC DATES & INFINITE WEEKS LOGIC ---
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const weekData = useMemo(() => {
+    const data = [];
     const curr = new Date();
     const day = curr.getDay();
-    // Calculate Monday of the current week
-    const diff = curr.getDate() - day + (day === 0 ? -6 : 1);
+    // Calculate Monday of the targeted week
+    const diff = curr.getDate() - day + (day === 0 ? -6 : 1) + (weekOffset * 7);
     const monday = new Date(curr.setDate(diff));
 
     for (let i = 0; i < 7; i++) {
       const nextDay = new Date(monday);
       nextDay.setDate(monday.getDate() + i);
+      
+      const year = nextDay.getFullYear();
       const month = (nextDay.getMonth() + 1).toString().padStart(2, '0');
       const date = nextDay.getDate().toString().padStart(2, '0');
-      dates.push(`${month}/${date}`);
+      
+      data.push({
+        dayName: DAYS[i],
+        displayDate: `${month}/${date}`,
+        fullDate: `${year}-${month}-${date}` // e.g. "2026-03-24"
+      });
     }
-    return dates;
-  }, []);
+    return data;
+  }, [weekOffset]);
 
   // --- RESPONSIVE PAGINATION LOGIC ---
   const containerRef = useRef<HTMLDivElement>(null);
@@ -73,18 +83,12 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  const MIN_DAY_WIDTH = 90; // Minimum pixels per day column
-  const timeAxisWidth = 52; // Decreased time column width
-  const rightNavWidth = 40; // Space reserved for the right arrow
+  const MIN_DAY_WIDTH = 90; 
+  const timeAxisWidth = 52; 
+  const rightNavWidth = 40; 
 
-  // Check if we need pagination to reserve right button space
-  let tempAvailable = containerWidth - timeAxisWidth;
-  let tempVisible = containerWidth === 0 ? 7 : Math.floor(tempAvailable / MIN_DAY_WIDTH);
-  
-  const availableWidth = tempVisible < 7 
-    ? containerWidth - timeAxisWidth - rightNavWidth 
-    : containerWidth - timeAxisWidth;
-
+  // Always reserve space for the right arrow so we can infinite scroll
+  const availableWidth = containerWidth - timeAxisWidth - rightNavWidth;
   const calculatedVisibleDays = containerWidth === 0 ? 7 : Math.max(1, Math.floor(availableWidth / MIN_DAY_WIDTH));
   const visibleDays = Math.min(7, calculatedVisibleDays);
 
@@ -94,8 +98,23 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
     }
   }, [visibleDays, startIndex]);
 
-  const handlePrev = () => setStartIndex(s => Math.max(0, s - 1));
-  const handleNext = () => setStartIndex(s => Math.min(7 - visibleDays, s + 1));
+  const handlePrev = () => {
+    if (startIndex > 0) {
+      setStartIndex(s => Math.max(0, s - 1));
+    } else {
+      setWeekOffset(w => w - 1);
+      setStartIndex(7 - visibleDays); // Jump to end of previous week
+    }
+  };
+
+  const handleNext = () => {
+    if (startIndex < 7 - visibleDays) {
+      setStartIndex(s => Math.min(7 - visibleDays, s + 1));
+    } else {
+      setWeekOffset(w => w + 1);
+      setStartIndex(0); // Jump to start of next week
+    }
+  };
 
   const innerWidthPercent = (7 / visibleDays) * 100;
   const transformXPercent = -(startIndex / 7) * 100;
@@ -105,6 +124,7 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
 
     onAddEvent({
       day: activeSlot.day,
+      date: activeSlot.date,
       time: activeSlot.time,
       duration: eventDuration,
       type: eventType,
@@ -117,7 +137,6 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
   };
 
   return (
-    // Removed margins, padding, and borders to make flush
     <section className="flex-1 flex flex-col min-h-0 bg-white">
       <div 
         ref={containerRef} 
@@ -130,15 +149,13 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
             
             {/* Top-Left Corner: Time Spacer + Left Button */}
             <div className="w-13 shrink-0 border-r border-slate-200 bg-white relative flex items-center justify-center z-50">
-              {visibleDays < 7 && startIndex > 0 && (
-                <button 
-                  onClick={handlePrev}
-                  className="absolute inset-0 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
-                  title="Previous Days"
-                >
-                  <ChevronLeft size={20} strokeWidth={3} />
-                </button>
-              )}
+              <button 
+                onClick={handlePrev}
+                className="absolute inset-0 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
+                title="Previous Days/Week"
+              >
+                <ChevronLeft size={20} strokeWidth={3} />
+              </button>
             </div>
             
             {/* Sliding Header Days */}
@@ -147,30 +164,25 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
                 className="flex h-full transition-transform duration-300 ease-in-out"
                 style={{ width: `${innerWidthPercent}%`, transform: `translateX(${transformXPercent}%)` }}
               >
-                {DAYS.map((day, idx) => (
-                  <div key={day} className="flex-1 flex flex-col items-center justify-center border-r border-slate-200 last:border-0">
-                    <span className="font-black text-slate-700 uppercase text-xs">{day}</span>
-                    {/* Added dynamic date output below day */}
-                    <span className="text-[10px] font-bold text-slate-400 mt-0.5">{weekDates[idx]}</span>
+                {weekData.map((dayInfo) => (
+                  <div key={dayInfo.fullDate} className="flex-1 flex flex-col items-center justify-center border-r border-slate-200 last:border-0">
+                    <span className="font-black text-slate-700 uppercase text-xs">{dayInfo.dayName}</span>
+                    <span className="text-[10px] font-bold text-slate-400 mt-0.5">{dayInfo.displayDate}</span>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Top-Right Corner: Right Button */}
-            {visibleDays < 7 && (
-              <div className="w-10 shrink-0 border-l border-slate-200 bg-white relative flex items-center justify-center z-50">
-                {startIndex < 7 - visibleDays && (
-                  <button 
-                    onClick={handleNext}
-                    className="absolute inset-0 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
-                    title="Next Days"
-                  >
-                    <ChevronRight size={20} strokeWidth={3} />
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="w-10 shrink-0 border-l border-slate-200 bg-white relative flex items-center justify-center z-50">
+              <button 
+                onClick={handleNext}
+                className="absolute inset-0 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
+                title="Next Days/Week"
+              >
+                <ChevronRight size={20} strokeWidth={3} />
+              </button>
+            </div>
           </div>
 
           {/* GRID BODY */}
@@ -190,14 +202,15 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
                 className="flex absolute inset-0 transition-transform duration-300 ease-in-out"
                 style={{ width: `${innerWidthPercent}%`, transform: `translateX(${transformXPercent}%)` }}
               >
-                {DAYS.map(day => {
-                  const dayEvents = scheduleEvents.filter(e => e.day === day);
+                {weekData.map(dayInfo => {
+                  // Fallback match for legacy data (day matches) or exact match for new date-bound data
+                  const dayEvents = scheduleEvents.filter(e => e.date ? e.date === dayInfo.fullDate : e.day === dayInfo.dayName);
                   return (
-                    <div key={day} className="flex-1 border-r border-slate-100 last:border-0 relative h-full">
+                    <div key={dayInfo.fullDate} className="flex-1 border-r border-slate-100 last:border-0 relative h-full">
                       {HOURS.map((_, i) => (
                         <div key={i} className="absolute w-full border-t border-slate-100 hover:bg-emerald-50/50 cursor-pointer group transition-colors"
                              style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-                             onClick={() => setActiveSlot({ day, time: `${i.toString().padStart(2, '0')}:00` })}>
+                             onClick={() => setActiveSlot({ day: dayInfo.dayName, date: dayInfo.fullDate, time: `${i.toString().padStart(2, '0')}:00` })}>
                           <div className="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center pointer-events-none">
                             <Plus size={16} className="text-emerald-400" />
                           </div>
@@ -235,9 +248,7 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
             </div>
 
             {/* Empty Right Column mapping directly under the Next button space */}
-            {visibleDays < 7 && (
-              <div className="w-10 shrink-0 border-l border-slate-100 bg-white relative z-10"></div>
-            )}
+            <div className="w-10 shrink-0 border-l border-slate-100 bg-white relative z-10"></div>
           </div>
         </div>
       </div>
@@ -249,7 +260,7 @@ export const GroupSchedule: React.FC<GroupScheduleProps> = ({
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-lg font-black text-slate-800">Add Group Event</h3>
-                <p className="text-xs font-bold text-emerald-600">{activeSlot.day} @ {activeSlot.time}</p>
+                <p className="text-xs font-bold text-emerald-600">{activeSlot.day} ({activeSlot.date}) @ {activeSlot.time}</p>
               </div>
               <button onClick={() => setActiveSlot(null)} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500">
                 <X size={16} />

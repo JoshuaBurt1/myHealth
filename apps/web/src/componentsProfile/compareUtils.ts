@@ -1,3 +1,4 @@
+// compareUtils.ts
 export const VITAL_KEY_MAP: Record<string, string> = {
   'Systolic BP (mmHg)': 'bpSyst',
   'Diastolic BP (mmHg)': 'bpDias',
@@ -80,8 +81,18 @@ export interface MetricComparison {
   avgValue: number | null;
   recentZScore: number | null;
   avgZScore: number | null;
+  recentVsAvgZScore: number | null;
   recentPercentile: number | null;
   avgPercentile: number | null;
+  recentVsAvgPercentile: number | null;
+  // NEW TREND METRICS
+  trendDelta: number | null; 
+  trendZScore: number | null; 
+  // NEW ALL-TIME METRICS
+  allTimeHigh: number | null;
+  allTimeHighDate: string | null;
+  allTimeLow: number | null;
+  allTimeLowDate: string | null;
 }
 
 export interface CategoryComparison {
@@ -108,7 +119,7 @@ export const calcStdDev = (arr: number[], meanVal: number) => {
 };
 
 export const calcZScore = (val: number, meanVal: number, sd: number) => {
-  if (sd === 0) return 0; // If everyone has the exact same score, Z is 0
+  if (sd === 0) return 0; 
   return (val - meanVal) / sd;
 };
 
@@ -116,17 +127,14 @@ export const calcPercentile = (arr: number[], val: number) => {
   if (arr.length <= 1) return 50; 
   const below = arr.filter(v => v < val).length;
   const equal = arr.filter(v => v === val).length;
-  // Standard fractional ranking percentile
   return ((below + (0.5 * equal)) / arr.length) * 100; 
 };
 
 /**
- * Robust extractor for user_data fields which might be an array of numbers, 
- * an array of objects { value, date }, or just a single scalar number.
+ * Extracts raw numbers for simple distribution math
  */
 export const extractValues = (data: any, key: string): number[] => {
   const val = data?.[key];
-  
   if (Array.isArray(val)) {
     return val
       .map(v => {
@@ -138,6 +146,25 @@ export const extractValues = (data: any, key: string): number[] => {
     const num = parseFloat(val);
     return isNaN(num) ? [] : [num];
   }
-  
+  return [];
+};
+
+/**
+ * Extracts numbers AND their associated dates for All-Time records
+ */
+export const extractDetailedValues = (data: any, key: string): { value: number, date?: string }[] => {
+  const val = data?.[key];
+  if (Array.isArray(val)) {
+    return val
+      .map(v => {
+        const rawValue = typeof v === 'object' ? v.value : v;
+        const date = typeof v === 'object' ? v.date : undefined;
+        return { value: parseFloat(rawValue), date };
+      })
+      .filter(v => !isNaN(v.value) && typeof v.value === 'number');
+  } else if (val !== undefined && val !== null) {
+    const num = parseFloat(val);
+    return isNaN(num) ? [] : [{ value: num }];
+  }
   return [];
 };

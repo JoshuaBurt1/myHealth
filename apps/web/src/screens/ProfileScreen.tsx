@@ -12,11 +12,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, Calendar, Users, Bell } from 'lucide-react';
+import { User, Users, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, LineChart, Settings, Bell } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
-import { ModalSchedule } from '../componentsProfile/ModalSchedule';
+import { ModalPrivacy } from '../componentsProfile/ModalPrivacy';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
@@ -59,7 +59,8 @@ const ProfileScreen: React.FC = () => {
   const [showDOBModal, setShowDOBModal] = useState(false);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
 
   // Unread Groups State
   const { userData: myUserData, userGroups: myGroups } = useNotifications();
@@ -383,258 +384,339 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
-      
+
       {/* RESPONSIVE TWO-COLUMN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start mt-2">
         
-        {/* LEFT COLUMN: Profile, Controls, Vitals, Exercises */}
         <div className="space-y-4">
+  
+        {/* LEFT COLUMN: Profile (Hidden on mobile if history tab is active) */}
+      <div className={`${activeTab === 'profile' ? 'block' : 'hidden lg:block'} space-y-4`}>
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           
-          {/* COMPACT PROFILE HEADER */}
-          <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100">
-            {/* TOP SECTION: Avatar + Stats side-by-side */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-              {/* Left/Avatar */}
-              <div className="relative shrink-0">
-                <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-md flex items-center justify-center">
-                  {profileImage ? (
-                    <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    /* Increased icon size from 48 to 64 to fill the larger circle */
-                    <User size={64} className="text-slate-400" />
-                  )}
-                  {imageUploading && (
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
-                      <Loader2 className="animate-spin text-white" />
-                    </div>
-                  )}
-                </div>
-                {isMe && (
-                  <label className="absolute bottom-0 right-0 bg-blue-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-sm transition-colors">
-                    {imageUploading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handlePickImage} 
-                      disabled={imageUploading} 
-                    />
-                  </label>
-                )}
-              </div>
-
-              {/* Right/Stats & Badges */}
-              <div className="flex-1 w-full flex flex-col justify-center">
-                <div className="flex justify-center sm:justify-start gap-3 mb-3">
-                  {/* Followers Button */}
-                  <div 
-                    className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
-                    onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
-                  >
-                    <div className="text-xl font-black text-slate-800 leading-7">{followerCount}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Followers</div>
-                  </div>
-
-                  {/* Following Button */}
-                  <div 
-                    className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
-                    onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
-                  >
-                    <div className="text-xl font-black text-slate-800 leading-7">{followingCount}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Following</div>
-                  </div>
-                  
-                  {/* Groups Button */}
-                  <div 
-                    className="relative bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-4 py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-25 text-center"
-                    onClick={handleOpenGroupManagement}
-                  >
-                    {/* Unread Message Bell Badge */}
-                    {isMe && hasNewGroupMessages && (
-                      <div className="absolute top-1 right-1 flex items-center justify-center">
-                        <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping bg-emerald-600" />
-                        <div className="relative flex items-center justify-center w-4 h-4 rounded-full border-2 border-white shadow-sm bg-emerald-600">
-                          <Bell size={8} className="text-white fill-white" />
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* h-7 matches the leading-7 (28px) of the text numbers exactly */}
-                    <div className="h-7 flex items-center justify-center">
-                      <Users size={20} className="text-emerald-600"/>
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Groups</div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                  <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
-                  {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}
-                  {profileImage && <Badge icon={<Camera size={14}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
-                  {followingCount > 0 && <Badge icon={<TrendingUp size={14}/>} color="bg-green-100 text-green-600" label="Networker" />}
-                </div>
-              </div>
-            </div>
-
-            {/* BOTTOM SECTION: Basic Information Fields */}
-            <div className="pt-2 mt-4 border-t border-slate-50 space-y-4">
-              {/* Header added here */}
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          {/* INTERNAL HEADER: Matches Active History style */}
+            <div className="p-2 md:p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+              
+              {/* Desktop Title: Visible only on lg screens */}
+              <h3 className="hidden lg:flex text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2 px-1">
                 <User size={14} className="text-blue-400"/> Basic Information
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <InputField 
-                  label="Name" 
-                  value={formData.name} 
-                  onChange={(v) => setFormData({...formData, name: v})} 
-                  onBlur={() => updateBasicInfo('name', formData.name)}
-                  disabled={!isMe}
-                />
-                <InputField 
-                  label="Goal" 
-                  value={formData.goal} 
-                  onChange={(v) => setFormData({...formData, goal: v})} 
-                  onBlur={() => updateBasicInfo('goal', formData.goal)}
-                  icon={<Flag size={16}/>} 
-                  disabled={!isMe}
-                />
+              {/* Mobile Tab Navigator: Replaces title on smaller screens */}
+              <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-100">
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeTab === 'profile' 
+                      ? 'bg-white text-indigo-600 shadow-sm' 
+                      : 'text-slate-500 hover:bg-slate-200/30'
+                  }`}
+                >
+                  <User size={12} /> Profile
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeTab === 'history' 
+                      ? 'bg-white text-indigo-600 shadow-sm' 
+                      : 'text-slate-500 hover:bg-slate-200/30'
+                  }`}
+                >
+                  <LineChart size={12} /> History
+                </button>
               </div>
-              
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
-                {/* SEX FIELD */}
-                <PrivacyWrapper fieldKey="sex" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <SexInputField 
-                    label="Sex" 
-                    value={formData.sex} 
-                    onChange={(v) => {
-                      setFormData({ ...formData, sex: v });
-                      updateBasicInfo('sex', v);
-                    }} 
-                    disabled={!isMe} // Pass disabled to child
-                  />
-                </PrivacyWrapper>
-
-                {/* AGE FIELD */}
-                <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <AgeInputField 
-                    label="Age" 
-                    value={formData.age} 
-                    isMe={isMe} 
-                    onIconClick={() => isMe && setShowDOBModal(true)} 
-                    disabled={!isMe}
-                  />
-                </PrivacyWrapper>
-
-                {/* HEIGHT FIELD */}
-                <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField 
-                    label="Height (cm)" 
-                    type="number" 
-                    value={formData.height} 
-                    onChange={(v) => setFormData({...formData, height: v})} 
-                    onBlur={() => updateBasicInfo('height', formData.height)}
-                    disabled={!isMe}
-                  />
-                </PrivacyWrapper>
-
-                {/* WEIGHT FIELD */}
-                <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
-                  <InputField 
-                    label="Weight (kg)" 
-                    type="number" 
-                    value={formData.weight} 
-                    onChange={(v) => setFormData({...formData, weight: v})} 
-                    onBlur={() => updateBasicInfo('weight', formData.weight)}
-                    disabled={!isMe}
-                  />
-                </PrivacyWrapper>
-              </div>
-              {isMe && !!window.ReactNativeWebView && (
-                  <HealthSyncSection 
-                    userId={userId!} 
-                    isMe={isMe} 
-                    steps={steps} 
-                    lastSynced={lastSynced} 
-                    onSyncComplete={(newSteps, syncTime, earnedGems) => {
-                      setSteps(newSteps);
-                      setLastSynced(syncTime);
-                      if (earnedGems > 0) {
-                        setFormData(prev => ({
-                          ...prev,
-                          gems: (parseInt(prev.gems || '0', 10) + earnedGems).toString()
-                        }));
-                      }
-                    }}
-                  />
-                )}
             </div>
-          </div>
-
-          {!isMe && (
-            <FollowButton 
-              targetUserId={userId!} 
-              targetUserName={formData.name} 
-              isFollowingInitial={isFollowing}
-              onFollowChange={handleFollowUpdate}
-            />
-          )}
-
-          {/* QUICK ACTIONS DASHBOARD */}
-          {isMe && (
-            <div className="bg-white p-4 md:p-5 rounded-3xl shadow-sm border border-slate-100">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Stars size={14} className="text-indigo-400"/> Quick Logs & Actions
-              </h3>
-              <div className="grid grid-cols-3 gap-3">
-                {/* Exercises Button */}
-                <button 
-                  onClick={() => setShowExerciseModal(true)} 
-                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md transition-all group"
-                >
-                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
-                    <Dumbbell className="text-indigo-600" size={20}/>
+                
+            {/* COMPACT PROFILE HEADER */}
+            <div className="bg-white p-4 md:p-5 3xl border-slate-100">
+              {/* TOP SECTION: Avatar + Stats side-by-side */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                {/* Left/Avatar */}
+                <div className="relative shrink-0">
+                  <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden bg-slate-200 border-4 border-white shadow-md flex items-center justify-center">
+                    {profileImage ? (
+                      <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      /* Increased icon size from 48 to 64 to fill the larger circle */
+                      <User size={64} className="text-slate-400" />
+                    )}
+                    {imageUploading && (
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
+                        <Loader2 className="animate-spin text-white" />
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Exercises</span>
-                </button>
+                  {isMe && (
+                    <label className="absolute bottom-0 right-0 bg-blue-600 p-1.5 rounded-full text-white cursor-pointer hover:bg-blue-700 shadow-sm transition-colors">
+                      {imageUploading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handlePickImage} 
+                        disabled={imageUploading} 
+                      />
+                    </label>
+                  )}
+                </div>
 
-                {/* Vitals Button */}
-                <button 
-                  onClick={() => setShowVitalModal(true)} 
-                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-rose-50/50 rounded-2xl border border-rose-100 shadow-sm hover:bg-rose-50 hover:border-rose-300 hover:shadow-md transition-all group"
-                >
-                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
-                    <Activity className="text-rose-500" size={20}/>
+                {/* Right/Stats & Badges */}
+                <div className="flex-1 w-full flex flex-col justify-center">
+                 <div className="flex justify-center sm:justify-start gap-3 mb-3">
+                      {/* Followers Button */}
+                      <div 
+                        className="bg-blue-50 hover:bg-blue-100 transition-colors rounded-xl px-2 py-1.5 sm:py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-24 flex flex-col items-center justify-center"
+                        onClick={() => setModalConfig({ isOpen: true, type: 'followers' })}
+                      >
+                        <div className="text-base sm:text-xl font-black text-slate-800 leading-tight">
+                          {followerCount}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Followers
+                        </div>
+                      </div>
+
+                      {/* Following Button */}
+                      <div 
+                        className="bg-indigo-50 hover:bg-indigo-100 transition-colors rounded-xl px-2 py-1.5 sm:py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-24 flex flex-col items-center justify-center"
+                        onClick={() => setModalConfig({ isOpen: true, type: 'following' })}
+                      >
+                        <div className="text-base sm:text-xl font-black text-slate-800 leading-tight">
+                          {followingCount}
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Following
+                        </div>
+                      </div>
+
+                      {/* Groups Button */}
+                      <div 
+                        className="relative bg-emerald-50 hover:bg-emerald-100 transition-colors rounded-xl px-2 py-1.5 sm:py-2 cursor-pointer flex-1 sm:flex-none sm:min-w-24 flex flex-col items-center justify-center"
+                        onClick={handleOpenGroupManagement}
+                      >
+                        {isMe && hasNewGroupMessages && (
+                          /* 1. Moved to -top-1 and -right-1 to overlap the edge */
+                          <div className="absolute -top-1 -right-1 flex items-center justify-center z-10">
+                            {/* 2. Increased ping size to match new badge size */}
+                            <span className="absolute inline-flex h-4 w-4 rounded-full opacity-75 animate-ping bg-emerald-600" />
+                            
+                            {/* 3. Increased container to w-5 h-5 and added a thicker border for that "pop" */}
+                            <div className="relative flex items-center justify-center w-5 h-5 rounded-full border-2 border-white shadow-sm bg-emerald-600">
+                              {/* 4. Reduced icon size to 11 for a cleaner fit inside the badge */}
+                              <Bell size={11} className="text-white fill-white" />
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="h-5 sm:h-7 flex items-center justify-center">
+                          <Users size={18} className="text-emerald-600"/>
+                        </div>
+                        <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Groups
+                        </div>
+                      </div>
+                    </div>
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                    <Badge icon={<Stars size={14} className="fill-current"/>} color="bg-indigo-100 text-indigo-700 border border-indigo-200" label={`${formData.gems} Gems`}/>
+                    {followerCount > 10 && <Badge icon={<Stars size={14}/>} color="bg-amber-100 text-amber-600" label="Social" />}
+                    {profileImage && <Badge icon={<Camera size={14}/>} color="bg-blue-100 text-blue-600" label="Photogenic" />}
+                    {followingCount > 0 && <Badge icon={<TrendingUp size={14}/>} color="bg-green-100 text-green-600" label="Networker" />}
                   </div>
-                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Vitals</span>
-                </button>
+                </div>
+              </div>
 
-                {/* Schedule Button */}
+              {/* BOTTOM SECTION: Basic Information Fields */}
+              <div className="pt-2 mt-4 border-t border-slate-50 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <InputField 
+                    label="Name" 
+                    value={formData.name} 
+                    onChange={(v) => setFormData({...formData, name: v})} 
+                    onBlur={() => updateBasicInfo('name', formData.name)}
+                    disabled={!isMe}
+                  />
+                  <InputField 
+                    label="Goal" 
+                    value={formData.goal} 
+                    onChange={(v) => setFormData({...formData, goal: v})} 
+                    onBlur={() => updateBasicInfo('goal', formData.goal)}
+                    icon={<Flag size={16}/>} 
+                    disabled={!isMe}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+                  {/* SEX FIELD */}
+                  <PrivacyWrapper fieldKey="sex" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <SexInputField 
+                      label="Sex" 
+                      value={formData.sex} 
+                      onChange={(v) => {
+                        setFormData({ ...formData, sex: v });
+                        updateBasicInfo('sex', v);
+                      }} 
+                      disabled={!isMe} // Pass disabled to child
+                    />
+                  </PrivacyWrapper>
+
+                  {/* AGE FIELD */}
+                  <PrivacyWrapper fieldKey="age" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <AgeInputField 
+                      label="Age" 
+                      value={formData.age} 
+                      isMe={isMe} 
+                      onIconClick={() => isMe && setShowDOBModal(true)} 
+                      disabled={!isMe}
+                    />
+                  </PrivacyWrapper>
+
+                  {/* HEIGHT FIELD */}
+                  <PrivacyWrapper fieldKey="height" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField 
+                      label="Height (cm)" 
+                      type="number" 
+                      value={formData.height} 
+                      onChange={(v) => setFormData({...formData, height: v})} 
+                      onBlur={() => updateBasicInfo('height', formData.height)}
+                      disabled={!isMe}
+                    />
+                  </PrivacyWrapper>
+
+                  {/* WEIGHT FIELD */}
+                  <PrivacyWrapper fieldKey="weight" isMe={isMe} hiddenOther={hiddenOther} toggleVisibilityOther={toggleVisibilityOther}>
+                    <InputField 
+                      label="Weight (kg)" 
+                      type="number" 
+                      value={formData.weight} 
+                      onChange={(v) => setFormData({...formData, weight: v})} 
+                      onBlur={() => updateBasicInfo('weight', formData.weight)}
+                      disabled={!isMe}
+                    />
+                  </PrivacyWrapper>
+                </div>
+                {isMe && !!window.ReactNativeWebView && (
+                    <HealthSyncSection 
+                      userId={userId!} 
+                      isMe={isMe} 
+                      steps={steps} 
+                      lastSynced={lastSynced} 
+                      onSyncComplete={(newSteps, syncTime, earnedGems) => {
+                        setSteps(newSteps);
+                        setLastSynced(syncTime);
+                        if (earnedGems > 0) {
+                          setFormData(prev => ({
+                            ...prev,
+                            gems: (parseInt(prev.gems || '0', 10) + earnedGems).toString()
+                          }));
+                        }
+                      }}
+                    />
+                  )}
+              </div>
+            </div>
+
+            {!isMe && (
+              <FollowButton 
+                targetUserId={userId!} 
+                targetUserName={formData.name} 
+                isFollowingInitial={isFollowing}
+                onFollowChange={handleFollowUpdate}
+              />
+            )}
+
+            {/* QUICK ACTIONS DASHBOARD */}
+            {isMe && (
+              <div className="bg-white p-4 md:p-5 3xl border-slate-100">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <Stars size={14} className="text-indigo-400"/> Quick Logs & Actions
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Exercises Button */}
+                  <button 
+                    onClick={() => setShowExerciseModal(true)} 
+                    className="flex flex-col items-center justify-center p-3 sm:p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                      <Dumbbell className="text-indigo-600" size={20}/>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Exercises</span>
+                  </button>
+
+                  {/* Vitals Button */}
+                  <button 
+                    onClick={() => setShowVitalModal(true)} 
+                    className="flex flex-col items-center justify-center p-3 sm:p-4 bg-rose-50/50 rounded-2xl border border-rose-100 shadow-sm hover:bg-rose-50 hover:border-rose-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                      <Activity className="text-rose-500" size={20}/>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Vitals</span>
+                  </button>
+
+                  {/* Schedule Button */}
                 <button 
-                  onClick={() => setShowScheduleModal(true)} 
+                  onClick={() => setShowPrivacyModal(true)}
                   className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all group"
                 >
                   <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
-                    <Calendar className="text-blue-500" size={20}/>
+                    <Settings className="text-blue-500" size={20}/>
                   </div>
-                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Schedule</span>
+                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Settings</span>
+                </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
+
+        {/* RIGHT COLUMN: Active History */}
+        <div className={`${activeTab === 'history' ? 'block' : 'hidden lg:block'} lg:sticky lg:top-4 h-full`}>
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
+            
+            {/* UNIFIED HEADER: Mirrored Tab Switcher */}
+            <div className="p-2 md:p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between shrink-0">
+              
+              {/* Desktop Title: Visible only on lg screens */}
+              <h3 className="hidden lg:flex text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2 px-1">
+                <LineChart size={14} className="text-indigo-400" /> Active History
+              </h3>
+
+              {/* Mobile Tab Navigator: Matches Profile side exactly */}
+              <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-full">
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeTab === 'profile' 
+                      ? 'bg-white text-indigo-600 shadow-sm' 
+                      : 'text-slate-500 hover:bg-slate-200/30'
+                  }`}
+                >
+                  <User size={12} /> Profile
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeTab === 'history' 
+                      ? 'bg-white text-indigo-600 shadow-sm' 
+                      : 'text-slate-500 hover:bg-slate-200/30'
+                  }`}
+                >
+                  <LineChart size={12} /> History
                 </button>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* RIGHT COLUMN: Analytics/Charts */}
-        <div className="lg:sticky lg:top-4 h-full">
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
-            <div className="p-3 border-b border-slate-50 bg-slate-50/50 shrink-0">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <TrendingUp size={14} /> Analytics
-              </h3>
+            {/* Content Area */}
+            <div className="flex-1 min-h-100">
+              <DataScreen 
+                userId={userId!} 
+                refreshTrigger={refreshTrigger} 
+                isMe={isMe} 
+                hiddenOther={hiddenOther} 
+              />
             </div>
-            <div className="flex-1">
-              <DataScreen userId={userId!} refreshTrigger={refreshTrigger} isMe={isMe} hiddenOther={hiddenOther} />
-            </div>
-          </div>
+        </div>
         </div>
       </div>
 
@@ -680,9 +762,9 @@ const ProfileScreen: React.FC = () => {
         isMe={isMe}
       />
 
-      <ModalSchedule 
-        isOpen={showScheduleModal} 
-        onClose={() => setShowScheduleModal(false)} 
+      <ModalPrivacy 
+        isOpen={showPrivacyModal} 
+        onClose={() => setShowPrivacyModal(false)} 
         userId={userId!} 
       />
     </div>

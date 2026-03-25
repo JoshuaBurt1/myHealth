@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { ChevronDown, Timer } from 'lucide-react';
 
+// Common style constant to ensure perfect sync
+const SHARED_INPUT_CLASSES = `
+  w-full bg-slate-50 border border-slate-100 rounded-xl 
+  text-slate-700 font-medium outline-none transition-all
+  focus:border-indigo-500 focus:bg-white
+  disabled:opacity-60 disabled:cursor-not-allowed
+  text-xs sm:text-sm 
+  p-2.5 sm:p-3
+`;
+
 // 1. Badge Component
 export const Badge: React.FC<{ 
   icon: React.ReactNode; 
@@ -27,7 +37,7 @@ export const StatItem: React.FC<{
 // 3. Input Field Component
 interface InputFieldProps {
   label: string;
-  value: string;
+  value: string | number;
   onChange: (v: string) => void;
   onBlur?: () => void;
   type?: string;
@@ -40,12 +50,19 @@ export const InputField: React.FC<InputFieldProps> = ({
   label, value, onChange, onBlur, type = "text", disabled, icon, placeholder 
 }) => {
   return (
-    <div className="flex flex-col gap-1.5 flex-1">
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">
+    <div className="flex flex-col gap-1 flex-1">
+      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">
         {label}
       </label>
       <div className="relative">
-        {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon}</div>}
+        {icon && React.isValidElement(icon) && (
+          <div className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center">
+            {React.cloneElement(icon as React.ReactElement<any>, { 
+              size: 16,
+              className: "shrink-0" 
+            })}
+          </div>
+        )}
         <input
           type={type}
           value={value}
@@ -53,7 +70,7 @@ export const InputField: React.FC<InputFieldProps> = ({
           onBlur={onBlur}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-indigo-500 transition-all ${icon ? 'pl-10' : ''} ${disabled ? 'opacity-60' : ''}`}
+          className={`${SHARED_INPUT_CLASSES} ${icon ? 'pl-8 sm:pl-10' : ''}`}
         />
       </div>
     </div>
@@ -68,21 +85,24 @@ interface SexInputFieldProps {
   disabled?: boolean;
 }
 
-export const SexInputField: React.FC<SexInputFieldProps> = ({ label, value, onChange, disabled = false }) => (
-  <div className="flex flex-col space-y-1">
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">{label}</label>
-    <div className="relative flex items-center">
+// 2. Sex Input Field (Select Dropdown) - Now matches InputField exactly
+export const SexInputField: React.FC<SexInputFieldProps> = ({ label, value, onChange, disabled }) => (
+  <div className="flex flex-col gap-1 flex-1">
+    <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">
+      {label}
+    </label>
+    <div className="relative">
       <select
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-400 appearance-none cursor-pointer outline-none transition-all shadow-sm disabled:cursor-default"
+        className={`${SHARED_INPUT_CLASSES} appearance-none cursor-pointer pr-8 sm:pr-10`}
       >
         <option value="" disabled>--</option>
         <option value="M">M</option>
         <option value="F">F</option>
       </select>
-      <div className="absolute right-3 p-1.5 bg-indigo-50 text-indigo-600 rounded-lg pointer-events-none">
+      <div className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
         <ChevronDown size={14} />
       </div>
     </div>
@@ -109,9 +129,9 @@ export const AgeInputField: React.FC<AgeInputFieldProps> = ({ label, value, onIc
     {isMe && onIconClick && (
       <button 
         onClick={onIconClick}
-        className="absolute right-3 top-8.5 p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+        className="absolute right-2 sm:right-2.5 bottom-1.25 sm:bottom-1.5 p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
       >
-        <Timer size={14} />
+        <Timer size={14} className="sm:w-4 sm:h-4 w-3.5 h-3.5" />
       </button>
     )}
   </div>

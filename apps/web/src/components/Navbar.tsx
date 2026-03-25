@@ -63,8 +63,8 @@ const Navbar = ({ user }: NavbarProps) => {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Home', hasBadge: false },
-    { path: '/forum', icon: MessageSquare, label: 'Forum', hasBadge: hasNewReplies, badgeColor: 'bg-blue-600' },
     { path: profilePath, icon: UserIcon, label: 'Profile', hasBadge: hasNewGroupMessages, badgeColor: 'bg-emerald-600' },
+    { path: '/forum', icon: MessageSquare, label: 'Forum', hasBadge: hasNewReplies, badgeColor: 'bg-blue-600' },
     { path: '/store', icon: Store, label: 'Store', hasBadge: false },
   ];
 

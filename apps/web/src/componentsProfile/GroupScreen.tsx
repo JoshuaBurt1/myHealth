@@ -8,8 +8,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { 
-  ArrowLeft, Send, Users, Loader2, CalendarDays, Info, 
-  MessageSquare, ShieldCheck, BarChart2,
+  ArrowLeft, Send, Users, Loader2, CalendarDays, Info, Trophy,
+  MessageSquare, ShieldCheck, BarChart2, Activity, TrendingUp,
   X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon, Database, ListFilter
 } from 'lucide-react';
 
@@ -18,13 +18,17 @@ import { GroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/
 
 // --- NEW IMPORTS ---
 import { 
-  VITAL_KEY_MAP, EXERCISE_KEY_MAP, extractValues, calcMean, 
-  calcStdDev, calcZScore, calcPercentile, type CompareData, type CategoryComparison 
+  VITAL_KEY_MAP, EXERCISE_KEY_MAP, calcMean, 
+  calcStdDev, calcZScore, calcPercentile, type CategoryComparison 
 } from './compareUtils';
 import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
 import { GroupComparePercentile } from './componentsGroupScreen/GroupComparePercentile';
 import { ManageDataSourceModal } from './componentsGroupScreen/ManageDataSourceModal';
 import { ManageDataFieldsModal } from './componentsGroupScreen/ManageDataFieldsModal';
+import { GroupCompareTrend } from './componentsGroupScreen/GroupCompareTrend';
+import { AllTimeRanking } from './componentsGroupScreen/AllTimeRanking';
+import { extractDetailedValues } from './compareUtils';
+
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -57,7 +61,7 @@ export const GroupScreen: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<TabType | 'schedule' | 'compare'>('messages');
+  const [activeTab, setActiveTab] = useState<TabType | 'schedule' | 'compareExercise' | 'compareVitals'>('messages');
   const [scheduleEvents, setScheduleEvents] = useState<GroupScheduleEvent[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
@@ -72,8 +76,12 @@ export const GroupScreen: React.FC = () => {
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // --- Compare Data State ---
-  const [compareData, setCompareData] = useState<CompareData | null>(null);
+  // INSIDE COMPONENT STATE:
+  type CompareViewMode = 'percentile' | 'zscore' | 'delta' | 'allTime';
+  const [compareView, setCompareView] = useState<CompareViewMode>('percentile');
+  const [exerciseData, setExerciseData] = useState<CategoryComparison[] | null>(null);
+  const [vitalsData, setVitalsData] = useState<CategoryComparison[] | null>(null);
+  
   const [isCalculatingStats, setIsCalculatingStats] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -142,96 +150,6 @@ export const GroupScreen: React.FC = () => {
     };
 
   }, [groupId, navigate]);
-
-  // --- Z-Score & Percentile Engine ---
-  useEffect(() => {
-    if (!group) return;
-    
-    if (!group.features?.zScoreCompare) return;
-
-    let isMounted = true;
-
-    const fetchAndProcessStats = async () => {
-      setIsCalculatingStats(true);
-      try {
-        // FILTER: Opted out users AND Admin Excluded users
-        const participatingMembers = group.members.filter(m => {
-          const isUserOptedOut = (group as any).optedOutDataUids?.includes(m.userId);
-          const isAdminExcluded = (group as any).adminExcludedUids?.includes(m.userId);
-          return !isUserOptedOut && !isAdminExcluded;
-        });
-
-        const memberDataSnapshots = await Promise.all(
-          participatingMembers.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
-        );
-
-        const memberProfiles = participatingMembers.map((m, i) => ({
-          userId: m.userId,
-          displayName: m.display_name,
-          data: memberDataSnapshots[i].exists() ? memberDataSnapshots[i].data() : {}
-        }));
-
-        const processMetrics = (keyMap: Record<string, string>): CategoryComparison[] => {
-          const results: CategoryComparison[] = [];
-          const activeFields = (group as any).activeDataFields; // Retrieve allowed fields
-          
-          Object.entries(keyMap).forEach(([name, key]) => {
-            // FILTER: Skip field if admin has disabled it
-            if (activeFields && !activeFields.includes(key)) return;
-
-            const rawMembers = memberProfiles.map(mp => {
-              const vals = extractValues(mp.data, key);
-              const recent = vals.length > 0 ? vals[vals.length - 1] : null;
-              const avg = vals.length > 0 ? calcMean(vals) : null;
-              return { ...mp, recent, avg };
-            });
-
-            const validRecents = rawMembers.map(m => m.recent).filter(v => v !== null) as number[];
-            const validAvgs = rawMembers.map(m => m.avg).filter(v => v !== null) as number[];
-
-            if (validRecents.length === 0 && validAvgs.length === 0) return;
-
-            const recentMean = calcMean(validRecents);
-            const recentSd = calcStdDev(validRecents, recentMean);
-            
-            const avgMean = calcMean(validAvgs);
-            const avgSd = calcStdDev(validAvgs, avgMean);
-
-            const members = rawMembers.map(m => ({
-              userId: m.userId,
-              displayName: m.displayName,
-              recentValue: m.recent,
-              avgValue: m.avg,
-              recentZScore: m.recent !== null ? calcZScore(m.recent, recentMean, recentSd) : null,
-              avgZScore: m.avg !== null ? calcZScore(m.avg, avgMean, avgSd) : null,
-              recentPercentile: m.recent !== null ? calcPercentile(validRecents, m.recent) : null,
-              avgPercentile: m.avg !== null ? calcPercentile(validAvgs, m.avg) : null,
-            }));
-
-            if (members.some(m => m.recentValue !== null || m.avgValue !== null)) {
-              results.push({ metricName: name, metricKey: key, members });
-            }
-          });
-          return results;
-        };
-
-        const vitalsData = processMetrics(VITAL_KEY_MAP);
-        const exercisesData = processMetrics(EXERCISE_KEY_MAP);
-
-        if (isMounted) {
-          setCompareData({ vitals: vitalsData, exercises: exercisesData });
-        }
-      } catch (err) {
-        console.error("Error processing group stats:", err);
-      } finally {
-        if (isMounted) setIsCalculatingStats(false);
-      }
-    };
-
-    fetchAndProcessStats();
-
-    return () => { isMounted = false; };
-  }, [group?.memberUids, group?.features?.zScoreCompare, (group as any)?.optedOutDataUids, (group as any)?.adminExcludedUids, (group as any)?.activeDataFields]);
 
   // --- User Search Logic ---
   useEffect(() => {
@@ -308,6 +226,146 @@ export const GroupScreen: React.FC = () => {
     const member = group?.members.find(m => m.userId === userId);
     return member ? member.display_name : 'Unknown User';
   };
+
+  // --- Z-Score & Percentile Engine ---
+  useEffect(() => {
+    if (!group) return;
+
+    const needsExercise = activeTab === 'compareExercise' && !exerciseData && group.features?.compareExercise;
+    const needsVitals = activeTab === 'compareVitals' && !vitalsData && group.features?.compareVitals;
+    
+    // Only fetch if a tab is active and data hasn't been cached yet
+    if (!needsExercise && !needsVitals) return;
+
+    let isMounted = true;
+
+    const fetchAndProcessStats = async () => {
+      setIsCalculatingStats(true);
+      try {
+        const participatingMembers = group.members.filter(m => {
+          const isUserOptedOut = (group as any).optedOutDataUids?.includes(m.userId);
+          const isAdminExcluded = (group as any).adminExcludedUids?.includes(m.userId);
+          return !isUserOptedOut && !isAdminExcluded;
+        });
+
+        // Fetch User Docs
+        const memberDataSnapshots = await Promise.all(
+          participatingMembers.map(m => getDoc(doc(db, 'users', m.userId, 'profile', 'user_data')))
+        );
+
+        const memberProfiles = participatingMembers.map((m, i) => ({
+          userId: m.userId,
+          displayName: m.display_name,
+          data: memberDataSnapshots[i].exists() ? memberDataSnapshots[i].data() : {}
+        }));
+
+        const processMetrics = (keyMap: Record<string, string>): CategoryComparison[] => {
+          const results: CategoryComparison[] = [];
+          const activeFields = (group as any).activeDataFields; 
+          
+          Object.entries(keyMap).forEach(([name, key]) => {
+            if (activeFields && !activeFields.includes(key)) return;
+
+            const rawMembers = memberProfiles.map(mp => {
+              const details = extractDetailedValues(mp.data, key);
+              const vals = details.map(d => d.value);
+              
+              const recent = vals.length > 0 ? vals[vals.length - 1] : null;
+              const previous = vals.length > 1 ? vals[vals.length - 2] : null;
+              const avg = vals.length > 0 ? calcMean(vals) : null;
+              
+              // Delta Velocity
+              const velocity = (recent !== null && previous !== null) ? (recent - previous) : null;
+
+              // All-Time Records
+              let allTimeHigh: number | null = null;
+              let allTimeHighDate: string | null = null;
+              let allTimeLow: number | null = null;
+              let allTimeLowDate: string | null = null;
+
+              if (details.length > 0) {
+                const sorted = [...details].sort((a, b) => b.value - a.value);
+                allTimeHigh = sorted[0].value;
+                allTimeHighDate = sorted[0].date || null;
+                allTimeLow = sorted[sorted.length - 1].value;
+                allTimeLowDate = sorted[sorted.length - 1].date || null;
+              }
+
+              return { ...mp, recent, avg, velocity, allTimeHigh, allTimeHighDate, allTimeLow, allTimeLowDate };
+            });
+
+            // Distributions
+            const validRecents = rawMembers.map(m => m.recent).filter(v => v !== null) as number[];
+            const validAvgs = rawMembers.map(m => m.avg).filter(v => v !== null) as number[];
+            const validVelocities = rawMembers.map(m => m.velocity).filter(v => v !== null) as number[];
+
+            if (validRecents.length === 0 && validAvgs.length === 0) return;
+
+            const recentMean = calcMean(validRecents);
+            const recentSd = calcStdDev(validRecents, recentMean);
+            
+            const avgMean = calcMean(validAvgs);
+            const avgSd = calcStdDev(validAvgs, avgMean);
+
+            const trendMean = calcMean(validVelocities);
+            const trendSd = calcStdDev(validVelocities, trendMean);
+
+            const members = rawMembers.map(m => ({
+              userId: m.userId,
+              displayName: m.displayName,
+              recentValue: m.recent,
+              avgValue: m.avg,
+              
+              recentZScore: m.recent !== null ? calcZScore(m.recent, recentMean, recentSd) : null,
+              avgZScore: m.avg !== null ? calcZScore(m.avg, avgMean, avgSd) : null,
+              recentPercentile: m.recent !== null ? calcPercentile(validRecents, m.recent) : null,
+              avgPercentile: m.avg !== null ? calcPercentile(validAvgs, m.avg) : null,
+              recentVsAvgZScore: m.recent !== null ? calcZScore(m.recent, avgMean, avgSd) : null,
+              recentVsAvgPercentile: m.recent !== null ? calcPercentile(validAvgs, m.recent) : null,
+              
+              trendDelta: m.velocity,
+              trendZScore: m.velocity !== null ? calcZScore(m.velocity, trendMean, trendSd) : null,
+
+              allTimeHigh: m.allTimeHigh,
+              allTimeHighDate: m.allTimeHighDate,
+              allTimeLow: m.allTimeLow,
+              allTimeLowDate: m.allTimeLowDate
+            }));
+
+            if (members.some(m => m.recentValue !== null || m.avgValue !== null)) {
+              results.push({ metricName: name, metricKey: key, members });
+            }
+          });
+          return results;
+        };
+
+        if (isMounted) {
+          if (needsExercise) {
+            setExerciseData(processMetrics(EXERCISE_KEY_MAP));
+          }
+          if (needsVitals) {
+            setVitalsData(processMetrics(VITAL_KEY_MAP));
+          }
+        }
+      } catch (err) {
+        console.error("Error processing group stats:", err);
+      } finally {
+        if (isMounted) setIsCalculatingStats(false);
+      }
+    };
+
+    fetchAndProcessStats();
+
+    return () => { isMounted = false; };
+  }, [
+    activeTab, 
+    group,
+    exerciseData,
+    vitalsData,
+    (group as any)?.optedOutDataUids, 
+    (group as any)?.adminExcludedUids, 
+    (group as any)?.activeDataFields
+  ]);
 
   // --- Membership Action Handlers ---
   const handleAddMember = async (user: SearchUser) => {
@@ -536,45 +594,56 @@ export const GroupScreen: React.FC = () => {
         </div>
 
         {/* --- SECTION 2: BODY (Sidebar + Content) --- */}
-        <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative">
           
-          {/* LEFT VERTICAL TAB BAR (Sidebar) */}
-          <nav className="w-20 md:w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 shrink-0 z-20 shadow-[4px_0_15px_-10px_rgba(0,0,0,0.05)]">
+        {/* LEFT VERTICAL TAB BAR (Sidebar) */}
+        <nav className="w-20 md:w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 shrink-0 z-20 shadow-[4px_0_15px_-10px_rgba(0,0,0,0.05)]">
+          <div className="flex flex-col gap-4 w-full px-3">
+            <button 
+              onClick={() => setActiveTab('messages')}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
+                activeTab === 'messages' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+              }`}
+            >
+              <MessageSquare size={24} className="mb-1" />
+              <span className="text-[10px] font-bold">Chat</span>
+            </button>
             
-            <div className="flex flex-col gap-4 w-full px-3">
+            <button 
+              onClick={() => setActiveTab('schedule')}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
+                activeTab === 'schedule' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+              }`}
+            >
+              <CalendarDays size={24} className="mb-1" />
+              <span className="text-[10px] font-bold">Schedule</span>
+            </button>
+            
+            {group?.features?.compareExercise && (
               <button 
-                onClick={() => setActiveTab('messages')}
+                onClick={() => setActiveTab('compareExercise')}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
-                  activeTab === 'messages' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                  activeTab === 'compareExercise' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
                 }`}
               >
-                <MessageSquare size={24} className="mb-1" />
-                <span className="text-[10px] font-bold">Chat</span>
+                <Activity size={24} className="mb-1" />
+                <span className="text-[10px] font-bold">Exercise</span>
               </button>
-              
+            )}
+
+            {group?.features?.compareVitals && (
               <button 
-                onClick={() => setActiveTab('schedule')}
+                onClick={() => setActiveTab('compareVitals')}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
-                  activeTab === 'schedule' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                  activeTab === 'compareVitals' ? 'bg-amber-100 text-amber-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
                 }`}
               >
-                <CalendarDays size={24} className="mb-1" />
-                <span className="text-[10px] font-bold">Schedule</span>
+                <BarChart2 size={24} className="mb-1" />
+                <span className="text-[10px] font-bold">Vitals</span>
               </button>
-              
-                {group.features?.zScoreCompare && (
-                  <button 
-                    onClick={() => setActiveTab('compare')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
-                      activeTab === 'compare' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-                    }`}
-                  >
-                    <BarChart2 size={24} className="mb-1" />
-                    <span className="text-[10px] font-bold">Compare</span>
-                  </button>
-                )}
-            </div>
-          </nav>
+            )}
+          </div>
+        </nav>
 
           {/* MAIN CONTENT AREA */}
           <main className="flex-1 flex overflow-hidden w-full relative">
@@ -663,23 +732,85 @@ export const GroupScreen: React.FC = () => {
                 />
               )}
 
-              {/* --- COMPARE TAB --- */}
-              {activeTab === 'compare' && group.features?.zScoreCompare && (
-                <section className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6 bg-slate-50">
-                  <div className="max-w-5xl mx-auto w-full">
-                    
-                    {isCalculatingStats ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="animate-spin mb-4 text-emerald-500" size={40} />
-                        <p className="font-medium text-sm">Calculating group statistics...</p>
+              {/* --- COMPARE TABS (EXERCISE & VITALS) --- */}
+              {(activeTab === 'compareExercise' || activeTab === 'compareVitals') && (
+              <section className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6 bg-slate-50">
+                <div className="max-w-5xl mx-auto w-full">
+                  
+                  {/* View Toggle Header */}
+                  {!isCalculatingStats && ((activeTab === 'compareExercise' && exerciseData) || (activeTab === 'compareVitals' && vitalsData)) && (
+                    <div className="flex items-center justify-center mb-8">
+                      <div className="bg-slate-200/50 p-1.5 rounded-2xl flex items-center shadow-inner border border-slate-200 overflow-x-auto">
+                        <button 
+                          onClick={() => setCompareView('percentile')}
+                          className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                            compareView === 'percentile' 
+                            ? `bg-white shadow-md transform scale-105 ${activeTab === 'compareExercise' ? 'text-emerald-600' : 'text-amber-600'}` 
+                            : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          <BarChart2 size={18} /> Percentile
+                        </button>
+                        <button 
+                          onClick={() => setCompareView('zscore')}
+                          className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                            compareView === 'zscore' 
+                            ? 'bg-white text-blue-600 shadow-md transform scale-105' 
+                            : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          <Activity size={18} /> Z-Score
+                        </button>
+                        <button 
+                          onClick={() => setCompareView('delta')}
+                          className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                            compareView === 'delta' 
+                            ? 'bg-white text-purple-600 shadow-md transform scale-105' 
+                            : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          <TrendingUp size={18} /> Trend Delta
+                        </button>
+                        <button 
+                          onClick={() => setCompareView('allTime')}
+                          className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                            compareView === 'allTime' 
+                            ? 'bg-white text-amber-600 shadow-md transform scale-105' 
+                            : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          <Trophy size={18} /> All-Time
+                        </button>
                       </div>
-                    ) : compareData && (
-                      <div className="space-y-4">
-                        <GroupCompareZScore data={compareData} />
-                        <GroupComparePercentile data={compareData} />
-                      </div>
-                    )}
+                    </div>
+                  )}
 
+                  {isCalculatingStats ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <Loader2 className={`animate-spin mb-4 ${activeTab === 'compareExercise' ? 'text-emerald-500' : 'text-amber-500'}`} size={40} />
+                      <p className="font-medium text-sm">Calculating group statistics...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {activeTab === 'compareExercise' && exerciseData && (
+                        <>
+                          {compareView === 'percentile' && <GroupComparePercentile data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'delta' && <GroupCompareTrend data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: exerciseData, vitals: [] }} />}
+                        </>
+                      )}
+                      
+                      {activeTab === 'compareVitals' && vitalsData && (
+                        <>
+                          {compareView === 'percentile' && <GroupComparePercentile data={{ exercises: [], vitals: vitalsData }} />}
+                          {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: [], vitals: vitalsData }} />}
+                          {compareView === 'delta' && <GroupCompareTrend data={{ exercises: [], vitals: vitalsData }} />}
+                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: [], vitals: vitalsData }} />}
+                        </>
+                      )}
+                    </div>
+                  )}
                   </div>
                 </section>
               )}

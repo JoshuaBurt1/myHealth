@@ -408,7 +408,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     } flex flex-col hover:border-indigo-200`}>
       {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
       <div 
-        className={`bg-slate-50 p-3 sm:p-4 cursor-pointer hover:bg-slate-100 transition-colors flex items-start gap-3 sm:gap-4 ${isPostVisible ? 'border-b border-slate-200 rounded-t-xl sm:rounded-t-2xl' : 'rounded-xl sm:rounded-2xl'}`}
+        className={`bg-white p-3 sm:p-4 cursor-pointer hover:bg-slate-100 transition-colors flex items-start gap-3 sm:gap-4 ${isPostVisible ? 'border-b border-slate-200 rounded-t-xl sm:rounded-t-2xl' : 'rounded-xl sm:rounded-2xl'}`}
         onClick={handleTogglePost}
       >
         <div className="flex flex-col items-center gap-1.5 shrink-0">

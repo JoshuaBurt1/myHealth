@@ -1,5 +1,6 @@
+// GroupMngScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2 } from 'lucide-react';
 import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -22,7 +23,9 @@ export const GroupMngScreen: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
 
-  const [enableZScore, setEnableZScore] = useState(false);
+  // Split Compare Features
+  const [enableCompareExercise, setEnableCompareExercise] = useState(false);
+  const [enableCompareVitals, setEnableCompareVitals] = useState(false);
 
   const isLoadingGroups = userGroups === null || userData === null;
 
@@ -76,7 +79,7 @@ export const GroupMngScreen: React.FC = () => {
     };
 
     cleanupOrphanedGroupFields();
-  }, [userData, userGroups]); // Re-run if user data or group list changes
+  }, [userData, userGroups]); 
   
   // Handle User Search
   useEffect(() => {
@@ -146,7 +149,7 @@ export const GroupMngScreen: React.FC = () => {
   };
 
   const handleSaveGroup = async () => {
-    if (!groupName.trim() || selectedMembers.length === 0 || !auth.currentUser) return;
+    if (!groupName.trim() || !auth.currentUser) return;
     
     setIsSaving(true);
     try {
@@ -171,7 +174,8 @@ export const GroupMngScreen: React.FC = () => {
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
         features: {
-          zScoreCompare: enableZScore 
+          compareExercise: enableCompareExercise,
+          compareVitals: enableCompareVitals
         }
       };
 
@@ -422,18 +426,33 @@ export const GroupMngScreen: React.FC = () => {
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-slate-700 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                       />
                       
-                      {/* NEW: Z-Score Feature Toggle */}
-                      <div className="mt-4 flex items-center gap-3 ml-1">
-                        <input 
-                          type="checkbox" 
-                          id="zScoreCheck"
-                          checked={enableZScore}
-                          onChange={(e) => setEnableZScore(e.target.checked)}
-                          className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
-                        />
-                        <label htmlFor="zScoreCheck" className="text-sm font-semibold text-slate-600 cursor-pointer select-none">
-                          Enable Z-Score Comparisons for this group
-                        </label>
+                      {/* NEW: Split Compare Feature Toggles */}
+                      <div className="mt-4 flex flex-col gap-3 ml-1">
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="exerciseCompareCheck"
+                            checked={enableCompareExercise}
+                            onChange={(e) => setEnableCompareExercise(e.target.checked)}
+                            className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
+                          />
+                          <label htmlFor="exerciseCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
+                            <Activity size={16} className="text-emerald-500" /> Enable Exercise Comparisons
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="vitalsCompareCheck"
+                            checked={enableCompareVitals}
+                            onChange={(e) => setEnableCompareVitals(e.target.checked)}
+                            className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-amber-500 focus:ring-offset-1 cursor-pointer"
+                          />
+                          <label htmlFor="vitalsCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
+                            <BarChart2 size={16} className="text-emerald-500" /> Enable Vitals Comparisons
+                          </label>
+                        </div>
                       </div>
                     </div>
 
@@ -511,7 +530,7 @@ export const GroupMngScreen: React.FC = () => {
                   <div className="p-6 md:p-8 bg-slate-50/80 border-t border-slate-100">
                     <button 
                       onClick={handleSaveGroup}
-                      disabled={!groupName.trim() || selectedMembers.length === 0 || isSaving}
+                      disabled={!groupName.trim() || isSaving}
                       className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all flex justify-center items-center gap-2 text-lg active:scale-[0.98]"
                     >
                       {isSaving ? <Loader2 size={24} className="animate-spin" /> : "Save Group"}
