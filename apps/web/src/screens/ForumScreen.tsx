@@ -83,7 +83,7 @@ const ForumScreen: React.FC = () => {
   const [isHazardOpen, setIsHazardOpen] = useState(false);
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [radius, setRadius] = useState(20000); 
+  const [radius, setRadius] = useState(2500); 
   const [currentPage, setCurrentPage] = useState(1);
   const [showTypes, setShowTypes] = useState({ post: true, poll: true, petition: true });
   const [showOnlyNew, setShowOnlyNew] = useState(false);

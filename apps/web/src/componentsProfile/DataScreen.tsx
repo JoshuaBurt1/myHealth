@@ -3,13 +3,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { doc, onSnapshot, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { 
-  RefreshCw, Calendar, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  LayoutGrid, Maximize2, AlertTriangle, AlertCircle, TrendingUp, TrendingDown, Minus, X
+  RefreshCw, Calendar, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
 } from 'lucide-react';
 // Add to DataScreen.tsx imports
 import { SINGLE_GRAPHS } from '../componentsProfile/profileConstants';
-import { useNotifications } from '../componentsProfile/componentsDataScreen/useNotifications';
-import { MetricChartRenderer } from '../componentsProfile/componentsDataScreen/MetricChartRenderer';
+import { useNotifications } from './componentsDataScreen/useActiveAlerts';
+import { MetricChartRenderer } from './componentsDataScreen/MetricChartRenderer';
+import { ActiveAlerts } from './componentsDataScreen/ActiveAlerts';
 
 type TimeRange = '24H' | '7D' | '1M' | '3M' | 'YTD' | '1Y' | 'Max';
 
@@ -24,6 +24,7 @@ interface DataScreenProps {
   refreshTrigger?: number;
   isMe: boolean;
   hiddenOther: string[];
+  onExportAlerts?: (alerts: any[], dismissFunc: (id: string) => void) => void;
 }
 
 const toDateTimeLocal = (date: Date) => {
@@ -32,17 +33,12 @@ const toDateTimeLocal = (date: Date) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-const renderTrendArrow = (trend: string) => {
-  if (trend === 'up') return <TrendingUp size={14} />;
-  if (trend === 'down') return <TrendingDown size={14} />;
-  return <Minus size={14} />;
-};
-
 // --- MAIN COMPONENT ---
 const DataScreen: React.FC<DataScreenProps> = ({ 
   userId, 
   isMe, 
-  hiddenOther
+  hiddenOther,
+  onExportAlerts
 }) => {
   const [vitalsData, setVitalsData] = useState<any[]>([]);
   const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
@@ -57,31 +53,30 @@ const DataScreen: React.FC<DataScreenProps> = ({
   // View states
   const [showAll, setShowAll] = useState(false);
   const [currentGraphIndex, setCurrentGraphIndex] = useState(0);
-
-  const [expandedAlerts, setExpandedAlerts] = useState<Record<string, boolean>>({});
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
   // Derive Notifications
   const notifications = useNotifications(vitalsData);
 
-  // Helper functions
-  const toggleExpand = (id: string) => {
-    setExpandedAlerts(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const dismissAlert = (id: string) => {
+  const dismissAlert = React.useCallback((id: string) => {
     setDismissedAlerts(prev => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  // Filter out dismissed alerts
   const activeAlerts = useMemo(() => 
     notifications.filter(a => !dismissedAlerts.has(a.id)),
     [notifications, dismissedAlerts]
   );
+
+  // 2. Add this useEffect to export alerts up to ProfileScreen
+  useEffect(() => {
+    if (onExportAlerts) {
+      onExportAlerts(activeAlerts, dismissAlert);
+    }
+  }, [activeAlerts, dismissAlert, onExportAlerts]);
 
   const handleOpenDatePicker = () => {
     if (!customStart) setCustomStart(toDateTimeLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
@@ -372,82 +367,12 @@ const DataScreen: React.FC<DataScreenProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8 pb-10">
       
-      {/* 3. NOTIFICATIONS PANEL (Now placed below Analytics) */}
-      {activeAlerts.length > 0 && (
-        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
-          {activeAlerts.map((alert) => {
-            const isExpanded = !!expandedAlerts[alert.id];
-            const alertDate = alert.timestamp ? alert.timestamp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown Time';
-
-            return (
-              <div 
-                key={alert.id}
-                className={`group flex flex-col rounded-2xl border transition-all duration-300 overflow-hidden ${
-                  alert.type === 'critical' 
-                    ? 'bg-red-50/50 border-red-100' 
-                    : 'bg-yellow-50/50 border-yellow-100'
-                }`}
-              >
-                {/* Header: Clickable to Expand */}
-                <div 
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-black/5"
-                  onClick={() => toggleExpand(alert.id)}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={alert.type === 'critical' ? 'text-red-500' : 'text-yellow-500'}>
-                      {alert.type === 'critical' ? <AlertTriangle size={20} /> : <AlertCircle size={20} />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold uppercase tracking-tight text-xs text-slate-900">
-                          {alert.title}
-                        </h4>
-                        <span className="text-[10px] font-medium opacity-40 px-2 py-0.5 bg-black/5 rounded-full">
-                          {alertDate}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* Trends displayed in header */}
-                    <div className="flex gap-1">
-                      {alert.trends.map((trend: string, i: number) => (
-                        <span key={i} className={alert.type === 'critical' ? 'text-red-600' : 'text-yellow-600'}>
-                          {renderTrendArrow(trend)}
-                        </span>
-                      ))}
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); dismissAlert(alert.id); }}
-                      className="p-1.5 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600"
-                    >
-                      <X size={16} />
-                    </button>
-                    <div className="text-slate-400">
-                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expandable Body */}
-                {isExpanded && (
-                  <div className="px-12 pb-5 pt-0 animate-in slide-in-from-top-2 duration-300">
-                    <p className={`text-xs font-bold mb-2 ${alert.type === 'critical' ? 'text-red-700/80' : 'text-yellow-700/80'}`}>
-                      {alert.metricText}
-                    </p>
-                    <p className={`text-sm leading-relaxed ${alert.type === 'critical' ? 'text-red-800' : 'text-yellow-800'}`}>
-                      {alert.reasoning}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* 3. NOTIFICATIONS PANEL */}
+      <ActiveAlerts 
+      alerts={activeAlerts} 
+      onDismiss={dismissAlert} 
+      className="hidden lg:flex" 
+    />
 
       {/* REMAINDER OF YOUR UI (Controls & Graphs) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
@@ -523,47 +448,47 @@ const DataScreen: React.FC<DataScreenProps> = ({
       ) : (
         <div className={showAll ? "grid grid-cols-1 gap-8 w-full" : "relative w-full"}>
           
-  {showAll && visibleGraphs.map((graph, idx) => (
-    <div key={idx} className="w-full h-125"> 
-      <MetricChartRenderer 
-        graph={graph} 
-        filteredData={filteredData} 
-        onPointClick={handlePointClick} 
-      />
-    </div>
-  ))}
+        {showAll && visibleGraphs.map((graph, idx) => (
+          <div key={idx} className="w-full h-125"> 
+            <MetricChartRenderer 
+              graph={graph} 
+              filteredData={filteredData} 
+              onPointClick={handlePointClick} 
+            />
+          </div>
+        ))}
 
-  {!showAll && (
-    <div className="relative flex items-center group w-full h-125"> 
-      {visibleGraphs.length > 1 && (
-        <button 
-          onClick={handlePrevGraph} 
-          className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
-        >
-          <ChevronLeft size={24} />
-        </button>
-      )}
+        {!showAll && (
+          <div className="relative flex items-center group w-full h-125"> 
+            {visibleGraphs.length > 1 && (
+              <button 
+                onClick={handlePrevGraph} 
+                className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
 
-      {/* Added h-full wrapper for the single graph */}
-      <div className="w-full h-full">
-        <MetricChartRenderer 
-          graph={visibleGraphs[currentGraphIndex]} 
-          filteredData={filteredData} 
-          onPointClick={handlePointClick} 
-        />
+            {/* Added h-full wrapper for the single graph */}
+            <div className="w-full h-full">
+              <MetricChartRenderer 
+                graph={visibleGraphs[currentGraphIndex]} 
+                filteredData={filteredData} 
+                onPointClick={handlePointClick} 
+              />
+            </div>
+
+            {visibleGraphs.length > 1 && (
+              <button 
+                onClick={handleNextGraph} 
+                className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+              >
+                <ChevronRight size={24} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
-
-      {visibleGraphs.length > 1 && (
-        <button 
-          onClick={handleNextGraph} 
-          className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
-        >
-          <ChevronRight size={24} />
-        </button>
-      )}
-    </div>
-  )}
-</div>
       )}
 
       {selectedPoint && (

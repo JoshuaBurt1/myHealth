@@ -25,6 +25,7 @@ import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
 import FollowButton from '../componentsProfile/FollowButton';
 import DataScreen from '../componentsProfile/DataScreen';
 import type { Group } from '../componentsProfile/componentsGroupScreen/group';
+import { ActiveAlerts } from '../componentsProfile/componentsDataScreen/ActiveAlerts';
 
 import { 
   VITAL_KEY_MAP, STRENGTH_KEY_MAP, SPEED_KEY_MAP, 
@@ -60,7 +61,21 @@ const ProfileScreen: React.FC = () => {
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showVitalModal, setShowVitalModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
+  
+  // Updated to include 'status'
+  const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'status'>('profile');
+  const [mobileAlerts, setMobileAlerts] = useState<any[]>([]);
+  const [dismissAlertCb, setDismissAlertCb] = useState<((id: string) => void) | null>(null);
+
+  // Obtains the active alerts Datascreen.tsx
+  const handleExportAlerts = React.useCallback((alerts: any[], dismissFunc: (id: string) => void) => {
+    setMobileAlerts(alerts);
+    setDismissAlertCb(() => dismissFunc);
+    setActiveAlertCount(alerts.length);
+  }, []);
+  
+  // State to track if there are active alerts
+  const [activeAlertCount, setActiveAlertCount] = useState<number>(0);
 
   // Unread Groups State
   const { userData: myUserData, userGroups: myGroups } = useNotifications();
@@ -260,7 +275,7 @@ const ProfileScreen: React.FC = () => {
       unsubFollowing();
       unsubStatus();
     };
-  }, [userId, isMe, currentUserId]);
+  }, [userId, isMe, currentUserId, refreshTrigger]);
 
   // Compute Unread Badge for Groups
   const hasNewGroupMessages = useMemo(() => {
@@ -373,6 +388,51 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
+  // Shared Mobile Tabs Component to keep code DRY
+  const renderMobileTabs = () => (
+    <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-full">
+      <button
+        onClick={() => setActiveTab('profile')}
+        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+          activeTab === 'profile' 
+            ? 'bg-white text-indigo-600 shadow-sm' 
+            : 'text-slate-500 hover:bg-slate-200/30'
+        }`}
+      >
+        <User size={12} /> Profile
+      </button>
+      <button
+        onClick={() => setActiveTab('history')}
+        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+          activeTab === 'history' 
+            ? 'bg-white text-indigo-600 shadow-sm' 
+            : 'text-slate-500 hover:bg-slate-200/30'
+        }`}
+      >
+        <LineChart size={12} /> History
+      </button>
+      <button
+        onClick={() => setActiveTab('status')}
+        className={`relative flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all overflow-hidden
+          ${activeTab === 'status' 
+            ? `bg-white shadow-sm ${activeAlertCount > 0 ? 'text-red-600' : 'text-indigo-600'}` 
+            : `${activeAlertCount > 0 ? 'text-red-600' : 'text-slate-500 hover:bg-slate-200/30'}`
+          }`}
+      >
+        {/* The Pulse Layer: Only visible when there are alerts */}
+        {activeAlertCount > 0 && (
+          <div className="absolute inset-0 bg-red-500/20 animate-pulse" />
+        )}
+
+        {/* Content Layer: Stays solid because it's not the one pulsing */}
+        <div className="relative flex items-center gap-1 sm:gap-2 z-10">
+          <Activity size={12} /> 
+          <span>Status</span>
+        </div>
+      </button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -390,7 +450,7 @@ const ProfileScreen: React.FC = () => {
         
         <div className="space-y-4">
   
-        {/* LEFT COLUMN: Profile (Hidden on mobile if history tab is active) */}
+        {/* LEFT COLUMN: Profile (Hidden on mobile if history/status tab is active) */}
       <div className={`${activeTab === 'profile' ? 'block' : 'hidden lg:block'} space-y-4`}>
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           
@@ -403,28 +463,7 @@ const ProfileScreen: React.FC = () => {
               </h3>
 
               {/* Mobile Tab Navigator: Replaces title on smaller screens */}
-              <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-100">
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'profile' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:bg-slate-200/30'
-                  }`}
-                >
-                  <User size={12} /> Profile
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'history' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:bg-slate-200/30'
-                  }`}
-                >
-                  <LineChart size={12} /> History
-                </button>
-              </div>
+              {renderMobileTabs()}
             </div>
                 
             {/* COMPACT PROFILE HEADER */}
@@ -679,44 +718,53 @@ const ProfileScreen: React.FC = () => {
               
               {/* Desktop Title: Visible only on lg screens */}
               <h3 className="hidden lg:flex text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2 px-1">
-                <LineChart size={14} className="text-indigo-400" /> Active History
+                <LineChart size={14} className="text-indigo-400" /> Health History and Status
               </h3>
 
               {/* Mobile Tab Navigator: Matches Profile side exactly */}
-              <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-full">
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'profile' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:bg-slate-200/30'
-                  }`}
-                >
-                  <User size={12} /> Profile
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'history' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:bg-slate-200/30'
-                  }`}
-                >
-                  <LineChart size={12} /> History
-                </button>
-              </div>
+              {renderMobileTabs()}
             </div>
 
             {/* Content Area */}
             <div className="flex-1 min-h-100">
               <DataScreen 
                 userId={userId!} 
-                refreshTrigger={refreshTrigger} 
                 isMe={isMe} 
                 hiddenOther={hiddenOther} 
+                onExportAlerts={handleExportAlerts} 
               />
             </div>
+          </div>
         </div>
+        
+        {/* THIRD TAB: Status (Mobile Only) */}
+        <div className={`${activeTab === 'status' ? 'block' : 'hidden'} lg:hidden space-y-4`}>
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            
+            <div className="p-2 md:p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between shrink-0">
+              {renderMobileTabs()}
+            </div>
+
+            <div className="p-4 md:p-5">
+              <ActiveAlerts 
+                alerts={mobileAlerts} 
+                onDismiss={(id) => {
+                  if (dismissAlertCb) dismissAlertCb(id);
+                }} 
+              />
+              
+              {/* Fallback layout if no active alerts */}
+              {activeAlertCount === 0 && (
+                <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 animate-in fade-in duration-300">
+                  <div className="h-16 w-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+                    <Activity size={32} className="text-emerald-500" />
+                  </div>
+                  <h4 className="text-lg font-bold text-slate-800 mb-1">In Good Health</h4>
+                  <p className="text-sm">You have no active alerts at this time. Keep it up!</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Users, Globe, Lock, X, Check } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 interface PrivacySettingsModalProps {
   isOpen: boolean;
@@ -15,7 +15,6 @@ interface PrivacySettings {
   allowPublic: boolean;
 }
 
-// Default values used for both state and initial database creation
 const DEFAULT_SETTINGS: PrivacySettings = {
   allowFollowers: true,
   allowGroupMembers: true,
@@ -30,10 +29,14 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
   const [settings, setSettings] = useState<PrivacySettings>(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load existing privacy settings or create defaults if they don't exist
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!userId) return;
+      // IMPROVEMENT: Verify userId exists and matches the authenticated user
+      const currentUser = auth.currentUser;
+      if (!userId || !currentUser || userId !== currentUser.uid) {
+        console.warn("Unauthorized or invalid privacy fetch attempt blocked.");
+        return;
+      }
       
       try {
         const privacyDocRef = doc(db, 'users', userId, 'myHealth_privacy', 'settings');
@@ -42,13 +45,12 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
         if (docSnap.exists()) {
           setSettings(docSnap.data() as PrivacySettings);
         } else {
-          // Document doesn't exist: initialize it in Firestore with defaults
-          await setDoc(privacyDocRef, DEFAULT_SETTINGS);
-          setSettings(DEFAULT_SETTINGS);
-          console.log("Privacy settings initialized for user:", userId);
+          // Logic removed: We no longer initialize defaults here.
+          // We assume settings were created during registration.
+          console.warn("Privacy settings document not found. Ensure it was created at registration.");
         }
       } catch (error) {
-        console.error("Error fetching/initializing privacy settings:", error);
+        console.error("Error fetching privacy settings:", error);
       }
     };
 
@@ -64,11 +66,11 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
     setIsSaving(true);
     try {
       const privacyDocRef = doc(db, 'users', userId, 'myHealth_privacy', 'settings');
-      // Using merge: true ensures we don't accidentally overwrite other potential fields
+      // Update only: using merge: true to avoid overwriting unrelated fields
       await setDoc(privacyDocRef, { [key]: newValue }, { merge: true });
     } catch (error) {
       console.error("Error updating privacy settings:", error);
-      // Revert state on error
+      // Revert local state on failure
       setSettings(prev => ({ ...prev, [key]: !newValue }));
     } finally {
       setIsSaving(false);
@@ -174,7 +176,6 @@ const PrivacyToggle: React.FC<PrivacyToggleProps> = ({ icon, title, description,
       </div>
     </div>
     
-    {/* Custom Toggle Switch */}
     <div className={`w-12 h-6 rounded-full relative transition-colors ${
       isActive ? 'bg-emerald-500' : 'bg-slate-200'
     }`}>

@@ -86,8 +86,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
   useEffect(() => {
     const fetchAuthorImage = async () => {
-      // Only fetch if a user is logged in AND we have an authorId
-      if (!auth.currentUser || !post.authorId) return;
+      // We only return early if there is no authorId. 
+      if (!post.authorId) return;
 
       try {
         const imgDocRef = doc(db, 'users', post.authorId, 'profile', 'image_data');
@@ -96,13 +96,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
           setAuthorImageId(imgSnap.data().imageId);
         }
       } catch (err) {
-        // This catch currently logs the error you see in the console
+        // If rules block this for logged-out users, it will land here.
         console.error("Failed to fetch image for user:", post.authorId);
       }
     };
 
     fetchAuthorImage();
-  }, [post.authorId, auth.currentUser]);
+  }, [post.authorId]);
 
   const formatHelpDate = (ts: any) => {
     if (!ts) return null;

@@ -72,7 +72,13 @@ const ReplyNode: React.FC<{ reply: Reply, allReplies: Reply[], postId: string }>
   };
 
   const handleNestedReply = async () => {
-    if (!user || !replyContent.trim()) return;
+    if (!user) {
+        return alert("Please log in to reply!");
+    }
+
+    if (!replyContent.trim()) {
+        return;
+    }
 
     const postRef = doc(db, 'myHealth_posts', postId);
     const newReplyRef = doc(collection(db, `${reply.fullPath}/myHealth_replies`));

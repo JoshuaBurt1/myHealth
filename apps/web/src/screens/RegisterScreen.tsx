@@ -60,6 +60,14 @@ const RegisterScreen: React.FC = () => {
         goal: ""
       });
 
+      // 4. Initialize 'myHealth_privacy/settings' (NEW)
+      // This ensures ModalPrivacy.tsx always finds a document to read
+      await setDoc(doc(db, 'users', uid, 'myHealth_privacy', 'settings'), {
+        allowFollowers: true,
+        allowGroupMembers: true,
+        allowPublic: false,
+      });
+
       notifyMobileApp(uid);
 
       // Navigate to profile using the new UID
