@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AlertTriangle, AlertCircle, X, ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+// Removed 'X' from imports
+import { AlertTriangle, AlertCircle, ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export interface Alert {
   id: string;
@@ -13,7 +14,6 @@ export interface Alert {
 
 interface ActiveAlertsProps {
   alerts: Alert[];
-  onDismiss: (id: string) => void;
   className?: string;
 }
 
@@ -23,7 +23,7 @@ const renderTrendArrow = (trend: string) => {
   return <Minus size={14} />;
 };
 
-export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ alerts = [], onDismiss, className = "" }) => {
+export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ alerts = [], className = "" }) => {
   const [expandedAlerts, setExpandedAlerts] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (id: string) => {
@@ -36,8 +36,6 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ alerts = [], onDismi
     <div className={`flex flex-col gap-3 animate-in fade-in slide-in-from-top-4 duration-500 ${className}`}>
       {alerts.map((alert) => {
         const isExpanded = !!expandedAlerts[alert.id];
-        
-        // Handle both Firestore Timestamps and standard Dates
         const dateObj = alert.timestamp?.toDate ? alert.timestamp.toDate() : new Date(alert.timestamp);
         const alertDate = dateObj.toLocaleString([], { 
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
@@ -74,12 +72,7 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ alerts = [], onDismi
                     </span>
                   ))}
                 </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onDismiss(alert.id); }}
-                  className="p-1.5 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600"
-                >
-                  <X size={16} />
-                </button>
+                {/* CLOSE BUTTON REMOVED FROM HERE */}
                 <div className="text-slate-400">
                   {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </div>

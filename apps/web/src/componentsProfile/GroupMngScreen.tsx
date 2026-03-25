@@ -437,7 +437,7 @@ export const GroupMngScreen: React.FC = () => {
                             className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
                           />
                           <label htmlFor="exerciseCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
-                            <Activity size={16} className="text-emerald-500" /> Enable Exercise Comparisons
+                            <Activity size={16} className="text-emerald-500" /> Group Exercise Comparisons
                           </label>
                         </div>
                         
@@ -450,7 +450,7 @@ export const GroupMngScreen: React.FC = () => {
                             className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-amber-500 focus:ring-offset-1 cursor-pointer"
                           />
                           <label htmlFor="vitalsCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
-                            <BarChart2 size={16} className="text-emerald-500" /> Enable Vitals Comparisons
+                            <BarChart2 size={16} className="text-emerald-500" /> Group Vitals Comparisons
                           </label>
                         </div>
                       </div>

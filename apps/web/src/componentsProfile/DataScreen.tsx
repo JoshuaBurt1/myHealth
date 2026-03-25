@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 // Add to DataScreen.tsx imports
 import { SINGLE_GRAPHS } from '../componentsProfile/profileConstants';
-import { useNotifications } from './componentsDataScreen/useActiveAlerts';
+import { useNotifications } from './componentsGroupScreen/userActiveAlerts';
 import { MetricChartRenderer } from './componentsDataScreen/MetricChartRenderer';
 import { ActiveAlerts } from './componentsDataScreen/ActiveAlerts';
 
@@ -24,7 +24,7 @@ interface DataScreenProps {
   refreshTrigger?: number;
   isMe: boolean;
   hiddenOther: string[];
-  onExportAlerts?: (alerts: any[], dismissFunc: (id: string) => void) => void;
+  onExportAlerts?: (alerts: any[]) => void;
 }
 
 const toDateTimeLocal = (date: Date) => {
@@ -53,30 +53,15 @@ const DataScreen: React.FC<DataScreenProps> = ({
   // View states
   const [showAll, setShowAll] = useState(false);
   const [currentGraphIndex, setCurrentGraphIndex] = useState(0);
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
   // Derive Notifications
   const notifications = useNotifications(vitalsData);
 
-  const dismissAlert = React.useCallback((id: string) => {
-    setDismissedAlerts(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  }, []);
-
-  const activeAlerts = useMemo(() => 
-    notifications.filter(a => !dismissedAlerts.has(a.id)),
-    [notifications, dismissedAlerts]
-  );
-
-  // 2. Add this useEffect to export alerts up to ProfileScreen
   useEffect(() => {
     if (onExportAlerts) {
-      onExportAlerts(activeAlerts, dismissAlert);
+      onExportAlerts(notifications);
     }
-  }, [activeAlerts, dismissAlert, onExportAlerts]);
+  }, [notifications, onExportAlerts]);
 
   const handleOpenDatePicker = () => {
     if (!customStart) setCustomStart(toDateTimeLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
@@ -369,8 +354,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
       
       {/* 3. NOTIFICATIONS PANEL */}
       <ActiveAlerts 
-      alerts={activeAlerts} 
-      onDismiss={dismissAlert} 
+      alerts={notifications} 
       className="hidden lg:flex" 
     />
 

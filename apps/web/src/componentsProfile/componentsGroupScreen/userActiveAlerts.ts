@@ -1,4 +1,4 @@
-// /componentsProfile/componentsDataScreen/useActiveAlerts.ts
+// componentsProfile/componentsGroupScreen/userActiveAlerts.ts
 import { useMemo } from 'react';
 
 // Exported so DataScreen can use it for parsing Firebase timestamps

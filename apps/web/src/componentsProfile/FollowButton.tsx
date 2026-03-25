@@ -58,8 +58,6 @@ const FollowButton: React.FC<FollowButtonProps> = ({
         await batch.commit();
         onFollowChange(1, true);
       }
-      // Note: We removed setIsFollowing(!isFollowing) because 
-      // the parent's onSnapshot will update the 'isFollowing' prop automatically.
     } catch (err) {
       console.error("Follow Toggle Error:", err);
     } finally {

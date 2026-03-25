@@ -29,7 +29,6 @@ import { GroupCompareTrend } from './componentsGroupScreen/GroupCompareTrend';
 import { AllTimeRanking } from './componentsGroupScreen/AllTimeRanking';
 import { extractDetailedValues } from './compareUtils';
 
-
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const getUserColor = (userId: string) => {
@@ -83,6 +82,7 @@ export const GroupScreen: React.FC = () => {
   const [vitalsData, setVitalsData] = useState<CategoryComparison[] | null>(null);
   
   const [isCalculatingStats, setIsCalculatingStats] = useState(false);
+  const [activeAlertsMap, setActiveAlertsMap] = useState<Record<string, any[]>>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -150,6 +150,34 @@ export const GroupScreen: React.FC = () => {
     };
 
   }, [groupId, navigate]);
+
+  // --- Alert Syncing Engine ---
+  useEffect(() => {
+    if (!group || !group.memberUids.length) return;
+
+    const unsubscribes = group.memberUids.map(uid => {
+      const userDocRef = doc(db, 'users', uid, 'profile', 'user_data');
+      return onSnapshot(userDocRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setActiveAlertsMap(prev => {
+            const newAlerts = JSON.stringify(data.activeAlerts || []);
+            const oldAlerts = JSON.stringify(prev[uid] || []);
+            if (newAlerts !== oldAlerts) {
+              return { ...prev, [uid]: data.activeAlerts || [] };
+            }
+            return prev;
+          });
+        } else {
+          setActiveAlertsMap(prev => ({ ...prev, [uid]: [] }));
+        }
+      });
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [group?.memberUids]);
 
   // --- User Search Logic ---
   useEffect(() => {
@@ -367,6 +395,24 @@ export const GroupScreen: React.FC = () => {
     (group as any)?.activeDataFields
   ]);
 
+  const handleToggleDataSharing = async () => {
+    if (!group || !groupId || !auth.currentUser) return;
+    
+    const currentUid = auth.currentUser.uid;
+    const isOptedOut = (group as any).optedOutDataUids?.includes(currentUid);
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+    
+    try {
+      if (isOptedOut) {
+        await updateDoc(groupRef, { optedOutDataUids: arrayRemove(currentUid) });
+      } else {
+        await updateDoc(groupRef, { optedOutDataUids: arrayUnion(currentUid) });
+      }
+    } catch (err) {
+      console.error("Error updating sharing preferences:", err);
+    }
+  };
+
   // --- Membership Action Handlers ---
   const handleAddMember = async (user: SearchUser) => {
     if (!group || !groupId) return;
@@ -490,24 +536,6 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
-  const handleToggleDataSharing = async () => {
-    if (!group || !groupId || !auth.currentUser) return;
-    
-    const currentUid = auth.currentUser.uid;
-    const isOptedOut = (group as any).optedOutDataUids?.includes(currentUid);
-    const groupRef = doc(db, 'myHealth_groups', groupId);
-    
-    try {
-      if (isOptedOut) {
-        await updateDoc(groupRef, { optedOutDataUids: arrayRemove(currentUid) });
-      } else {
-        await updateDoc(groupRef, { optedOutDataUids: arrayUnion(currentUid) });
-      }
-    } catch (err) {
-      console.error("Error updating sharing preferences:", err);
-    }
-  };
-
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-emerald-500" size={40} />
@@ -563,6 +591,8 @@ export const GroupScreen: React.FC = () => {
               {group.members.map((member) => {
                 const colorClasses = getUserColor(member.userId);
                 const isCreator = member.userId === group.adminId;
+                const hasActiveAlert = activeAlertsMap[member.userId]?.length > 0;
+                
                 return (
                   <div 
                     key={member.userId} 
@@ -575,6 +605,9 @@ export const GroupScreen: React.FC = () => {
                         <div className="absolute -top-1 -right-1 bg-white rounded-full">
                           <ShieldCheck size={10} className="text-emerald-500 fill-white" />
                         </div>
+                      )}
+                      {hasActiveAlert && (
+                        <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
                       )}
                     </div>
                     <span className="text-xs font-bold whitespace-nowrap">{member.display_name}</span>
@@ -838,7 +871,6 @@ export const GroupScreen: React.FC = () => {
               {/* Sidebar Content */}
               <div className="p-4 md:p-6 space-y-8 flex-1 w-full min-w-0">
                 
-                {/* Team Members Section */}
                 <div className="lg:hidden"> 
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Users size={14} /> Team Members
@@ -847,6 +879,8 @@ export const GroupScreen: React.FC = () => {
                     {group.members.map((member) => {
                       const colorClasses = getUserColor(member.userId);
                       const isCreator = member.userId === group.adminId;
+                      const hasActiveAlert = activeAlertsMap[member.userId]?.length > 0;
+                      
                       return (
                         <div 
                           key={member.userId}
@@ -858,6 +892,9 @@ export const GroupScreen: React.FC = () => {
                               {member.display_name.charAt(0).toUpperCase()}
                               {isCreator && (
                                 <ShieldCheck size={12} className="absolute -top-1 -right-1 text-emerald-500 fill-white" />
+                              )}
+                              {hasActiveAlert && (
+                                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
                               )}
                             </div>
                             <span className="font-bold text-sm text-slate-700 truncate min-w-0">

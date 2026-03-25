@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -65,12 +65,11 @@ const ProfileScreen: React.FC = () => {
   // Updated to include 'status'
   const [activeTab, setActiveTab] = useState<'profile' | 'history' | 'status'>('profile');
   const [mobileAlerts, setMobileAlerts] = useState<any[]>([]);
-  const [dismissAlertCb, setDismissAlertCb] = useState<((id: string) => void) | null>(null);
 
+  const lastSavedAlertsRef = useRef<string>('');
   // Obtains the active alerts Datascreen.tsx
-  const handleExportAlerts = React.useCallback((alerts: any[], dismissFunc: (id: string) => void) => {
+  const handleExportAlerts = React.useCallback((alerts: any[]) => {
     setMobileAlerts(alerts);
-    setDismissAlertCb(() => dismissFunc);
     setActiveAlertCount(alerts.length);
   }, []);
   
@@ -292,9 +291,9 @@ const ProfileScreen: React.FC = () => {
     });
   }, [myUserData, myGroups, currentUserId]);
 
-  const handleFollowUpdate = (delta: number, followingStatus: boolean) => {
-  setRefreshTrigger(p => p + 1); 
-};
+  const handleFollowUpdate = () => {
+    setRefreshTrigger(p => p + 1); 
+  };
 
   const toggleVisibilityOther = async (fieldName: string) => {
     const isHidden = hiddenOther.includes(fieldName);
@@ -376,6 +375,41 @@ const ProfileScreen: React.FC = () => {
       console.error(`Error autosaving ${field}:`, err);
     }
   };
+
+  useEffect(() => {
+    // 1. Only write if we have a userId and it's our own profile
+    if (!userId || !isMe) return;
+
+    // 2. Map the alerts to the requested DB format (onset and type)
+    // 'id' from the hook (e.g., 'sirs-critical') maps to 'type'
+    // 'timestamp' maps to 'onset'
+    const activeAlertsMap = mobileAlerts.map(a => ({
+      type: a.id,
+      onset: a.timestamp
+    }));
+
+    // 3. Create a unique signature to check for changes
+    const currentHash = JSON.stringify(activeAlertsMap);
+
+    if (currentHash !== lastSavedAlertsRef.current) {
+      const syncAlertsToDB = async () => {
+        try {
+          const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+          
+          await setDoc(profileRef, { 
+            activeAlerts: activeAlertsMap 
+          }, { merge: true });
+
+          lastSavedAlertsRef.current = currentHash;
+          console.log("✅ Sync: activeAlerts updated in Firestore");
+        } catch (err) {
+          console.error("❌ Sync Error: Failed to write activeAlerts", err);
+        }
+      };
+
+      syncAlertsToDB();
+    }
+  }, [mobileAlerts, userId, isMe]);
 
   // Shared Mobile Tabs Component to keep code DRY
   const renderMobileTabs = () => (
@@ -737,9 +771,6 @@ const ProfileScreen: React.FC = () => {
             <div className="p-4 md:p-5">
               <ActiveAlerts 
                 alerts={mobileAlerts} 
-                onDismiss={(id) => {
-                  if (dismissAlertCb) dismissAlertCb(id);
-                }} 
               />
               
               {/* Fallback layout if no active alerts */}
