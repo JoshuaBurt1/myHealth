@@ -6,22 +6,21 @@ import { UserPlus, UserMinus, Loader2 } from 'lucide-react';
 interface FollowButtonProps {
   targetUserId: string;
   targetUserName: string;
-  isFollowingInitial: boolean;
-  onFollowChange: (newCountDelta: number, isFollowing: boolean) => void;
+  isFollowing: boolean;
+  onFollowChange: (newCountDelta: number, nextStatus: boolean) => void;
 }
 
 const FollowButton: React.FC<FollowButtonProps> = ({ 
   targetUserId, 
   targetUserName, 
-  isFollowingInitial,
+  isFollowing,
   onFollowChange 
 }) => {
-  const [isFollowing, setIsFollowing] = useState(isFollowingInitial);
   const [loading, setLoading] = useState(false);
   const currentUserId = auth.currentUser?.uid;
 
   const handleToggleFollow = async () => {
-    if (!currentUserId || targetUserId === currentUserId) return;
+    if (!currentUserId || targetUserId === currentUserId || loading) return;
     
     setLoading(true);
     try {
@@ -30,13 +29,12 @@ const FollowButton: React.FC<FollowButtonProps> = ({
       const followersRef = doc(db, 'users', targetUserId, 'followers', currentUserId);
 
       if (isFollowing) {
-        // --- UNFOLLOW ---
         batch.delete(followingRef);
         batch.delete(followersRef);
+        await batch.commit();
         onFollowChange(-1, false);
       } else {
-        // --- FOLLOW ---
-        // Fetch current user's name from their profile to avoid "User" fallback
+        // Fetch current user's name
         let myName = auth.currentUser?.displayName || "User";
         const myProfileRef = doc(db, 'users', currentUserId, 'profile', 'user_data');
         const myProfileSnap = await getDoc(myProfileRef);
@@ -57,14 +55,13 @@ const FollowButton: React.FC<FollowButtonProps> = ({
           uid: currentUserId 
         });
         
+        await batch.commit();
         onFollowChange(1, true);
       }
-
-      await batch.commit();
-      setIsFollowing(!isFollowing);
+      // Note: We removed setIsFollowing(!isFollowing) because 
+      // the parent's onSnapshot will update the 'isFollowing' prop automatically.
     } catch (err) {
       console.error("Follow Toggle Error:", err);
-      alert("Action failed. Please try again.");
     } finally {
       setLoading(false);
     }

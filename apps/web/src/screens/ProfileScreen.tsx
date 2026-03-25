@@ -293,19 +293,8 @@ const ProfileScreen: React.FC = () => {
   }, [myUserData, myGroups, currentUserId]);
 
   const handleFollowUpdate = (delta: number, followingStatus: boolean) => {
-    setFollowerCount(prev => Math.max(0, prev + delta));
-    setIsFollowing(followingStatus);
-    if (auth.currentUser) {
-      const currentUserId = auth.currentUser.uid;
-      const currentUserName = auth.currentUser.displayName || "You";
-      if (delta > 0) {
-        setFollowersList(prev => [...prev, { uid: currentUserId, name: currentUserName }]);
-      } else {
-        setFollowersList(prev => prev.filter(user => user.uid !== currentUserId));
-      }
-    }
-    setRefreshTrigger(p => p + 1); 
-  };
+  setRefreshTrigger(p => p + 1); 
+};
 
   const toggleVisibilityOther = async (fieldName: string) => {
     const isHidden = hiddenOther.includes(fieldName);
@@ -657,8 +646,8 @@ const ProfileScreen: React.FC = () => {
             {!isMe && (
               <FollowButton 
                 targetUserId={userId!} 
-                targetUserName={formData.name} 
-                isFollowingInitial={isFollowing}
+                targetUserName={formData.name}
+                isFollowing={isFollowing}
                 onFollowChange={handleFollowUpdate}
               />
             )}
