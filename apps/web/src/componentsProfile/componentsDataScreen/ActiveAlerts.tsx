@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-// Removed 'X' from imports
 import { AlertTriangle, AlertCircle, ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export interface Alert {

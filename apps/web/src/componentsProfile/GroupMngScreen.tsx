@@ -1,18 +1,34 @@
 // GroupMngScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2 } from 'lucide-react';
-import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField } from 'firebase/firestore';
+import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2, Stars } from 'lucide-react';
+import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { useNotifications } from '../context/NotificationContext';
 import { type Group, type GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
+import { CohortComparison } from './componentsGroupScreen/CohortComparison';
+
+const RECOMMENDED_MEMBERS: SearchUser[] = [
+  { uid: 'ai_doctor', displayName: 'AI Doctor', imageId: null },
+  { uid: 'personal_trainer', displayName: 'Personal Trainer', imageId: null }
+];
+
+const calculateAge = (dobString: string): number => {
+  if (!dobString) return 0;
+  const today = new Date();
+  const birthDate = new Date(dobString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+};
 
 export const GroupMngScreen: React.FC = () => {
   const navigate = useNavigate();
   const { userData, userGroups } = useNotifications();
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'my-groups' | 'create-group'>('my-groups');
+  // Tab State - Set 'cohort' as default
+  const [activeTab, setActiveTab] = useState<'cohort' | 'my-groups' | 'create-group'>('cohort');
 
   // Existing State
   const [groupName, setGroupName] = useState('');
@@ -20,14 +36,42 @@ export const GroupMngScreen: React.FC = () => {
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
+
+  // Profile Data for Cohort Comparison
+  const [profileData, setProfileData] = useState<any>(null);
+  const [userSex, setUserSex] = useState<string>('');
+  const [userAge, setUserAge] = useState<number>(0);
 
   // Split Compare Features
   const [enableCompareExercise, setEnableCompareExercise] = useState(false);
   const [enableCompareVitals, setEnableCompareVitals] = useState(false);
 
   const isLoadingGroups = userGroups === null || userData === null;
+
+  // Fetch user profile data for Cohort Component
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const profileRef = doc(db, 'users', auth.currentUser.uid, 'profile', 'user_data');
+    const unsub = onSnapshot(profileRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setProfileData(data);
+        setUserSex(data.sex || '');
+        
+        let age = 0;
+        if (data.dob) {
+          age = calculateAge(data.dob);
+        } else if (data.age && Array.isArray(data.age) && data.age.length > 0) {
+          age = parseInt(data.age[data.age.length - 1].value);
+        }
+        setUserAge(age);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const handleGroupClick = (groupId: string) => {
     setOptimisticReadIds(prev => new Set(prev).add(groupId));    
@@ -60,7 +104,6 @@ export const GroupMngScreen: React.FC = () => {
 
         lastReadKeys.forEach(key => {
           const groupIdFromField = key.replace('last_read_group_', '');
-          
           const isStillMember = userGroups.some((g: Group) => g.id === groupIdFromField);
 
           if (!isStillMember) {
@@ -142,6 +185,7 @@ export const GroupMngScreen: React.FC = () => {
     setSelectedMembers(prev => [...prev, user]);
     setSearchQuery('');
     setSearchResults([]);
+    setIsSearchFocused(false);
   };
 
   const removeMember = (uid: string) => {
@@ -149,7 +193,7 @@ export const GroupMngScreen: React.FC = () => {
   };
 
   const handleSaveGroup = async () => {
-    if (!groupName.trim() || !auth.currentUser) return;
+    if (!groupName.trim() || selectedMembers.length < 1 || !auth.currentUser) return;
     
     setIsSaving(true);
     try {
@@ -261,14 +305,18 @@ export const GroupMngScreen: React.FC = () => {
 
           <div className="flex-1 px-6 md:px-8 flex flex-col justify-center">
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3 tracking-tight">
-              {activeTab === 'my-groups' ? (
+              {activeTab === 'cohort' ? (
+                <><BarChart2 className="text-emerald-500" size={28} /> Cohort Overview</>
+              ) : activeTab === 'my-groups' ? (
                 <><Users className="text-emerald-500" size={28} /> My Groups</>
               ) : (
                 <><Plus className="text-emerald-500" size={28} /> Create New Group</>
               )}
             </h2>
             <p className="hidden md:block text-slate-500 text-sm mt-0.5">
-              {activeTab === 'my-groups'
+              {activeTab === 'cohort'
+                ? 'Compare your statistics against similar users'
+                : activeTab === 'my-groups'
                 ? 'Manage and access your current groups'
                 : 'Form a group and invite members'}
             </p>
@@ -276,7 +324,27 @@ export const GroupMngScreen: React.FC = () => {
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-20 md:w-24 border-r border-slate-100 flex flex-col items-center py-6 gap-8 bg-white shrink-0">
+          <div className="w-20 md:w-24 border-r border-slate-100 flex flex-col items-center py-6 gap-6 bg-white shrink-0">
+            
+            {/* NEW: Cohort Tab Button */}
+            <button 
+              onClick={() => setActiveTab('cohort')}
+              className="flex flex-col items-center gap-1.5 w-full group outline-none"
+            >
+              <div className={`p-3 rounded-2xl transition-all duration-200 ${
+                activeTab === 'cohort' 
+                  ? 'bg-emerald-100 text-emerald-600 shadow-sm' 
+                  : 'text-slate-400 group-hover:bg-slate-50'
+              }`}>
+                <BarChart2 size={24} />
+              </div>
+              <span className={`text-[10px] md:text-xs font-bold text-center ${
+                activeTab === 'cohort' ? 'text-emerald-600' : 'text-slate-500'
+              }`}>
+                Cohort
+              </span>
+            </button>
+
             <button 
               onClick={() => setActiveTab('my-groups')}
               className="flex flex-col items-center gap-1.5 w-full group outline-none"
@@ -315,7 +383,23 @@ export const GroupMngScreen: React.FC = () => {
           </div>
 
           <div className="flex-1 bg-slate-50/30 overflow-y-auto">
-            {activeTab === 'my-groups' ? (
+            {activeTab === 'cohort' ? (
+              <div className="p-0 md:p-4 max-w-5xl mx-auto">
+                {profileData && userSex && userAge ? (
+                  <CohortComparison 
+                    userId={auth.currentUser?.uid} 
+                    userData={profileData} 
+                    userSex={userSex} 
+                    userAge={userAge} 
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                    <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
+                    <span className="font-medium text-sm">Loading Cohort Data...</span>
+                  </div>
+                )}
+              </div>
+            ) : activeTab === 'my-groups' ? (
               <div className="p-4 md:p-8">
                 {isLoadingGroups ? (
                   <div className="flex justify-center p-12">
@@ -426,7 +510,6 @@ export const GroupMngScreen: React.FC = () => {
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-slate-700 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                       />
                       
-                      {/* NEW: Split Compare Feature Toggles */}
                       <div className="mt-4 flex flex-col gap-3 ml-1">
                         <div className="flex items-center gap-3">
                           <input 
@@ -466,13 +549,43 @@ export const GroupMngScreen: React.FC = () => {
                           placeholder="Search by name..." 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
+                          onFocus={() => setIsSearchFocused(true)}
+                          onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 py-4 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                         />
                         {isSearching && <Loader2 className="absolute right-4 top-4 text-emerald-500 animate-spin" size={20} />}
                       </div>
 
+                      {/* Default Recommendations when focused and empty */}
+                      {isSearchFocused && searchQuery.trim() === '' && (
+                        <div className="mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl divide-y divide-slate-50 overflow-hidden absolute w-full z-20">
+                          <div className="bg-slate-50 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Recommended
+                          </div>
+                          {RECOMMENDED_MEMBERS.filter(rec => !selectedMembers.some(m => m.uid === rec.uid)).map(user => (
+                            <div 
+                              key={user.uid} 
+                              className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer group/rec"
+                              onClick={() => addMember(user)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500">
+                                  <Stars size={18} />
+                                </div>
+                                <span className="font-semibold text-slate-700 group-hover/rec:text-emerald-600 transition-colors">
+                                  {user.displayName}
+                                </span>
+                              </div>
+                              <button className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-full transition-all">
+                                <Plus size={20} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Search Results Dropdown */}
-                      {searchResults.length > 0 && (
+                      {searchResults.length > 0 && searchQuery.trim().length >= 2 && (
                         <div className="mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl divide-y divide-slate-50 overflow-hidden absolute w-full z-20">
                           {searchResults.map(user => (
                             <div key={user.uid} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
@@ -512,7 +625,7 @@ export const GroupMngScreen: React.FC = () => {
                             <div key={user.uid} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
                               <div className="flex items-center gap-3 truncate">
                                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 font-bold text-xs">
-                                  {user.displayName.charAt(0)}
+                                  {user.displayName === 'AI Doctor' || user.displayName === 'Personal Trainer' ? <Stars size={14}/> : user.displayName.charAt(0)}
                                 </div>
                                 <span className="font-medium text-slate-700 truncate text-sm">{user.displayName}</span>
                               </div>
@@ -530,10 +643,18 @@ export const GroupMngScreen: React.FC = () => {
                   <div className="p-6 md:p-8 bg-slate-50/80 border-t border-slate-100">
                     <button 
                       onClick={handleSaveGroup}
-                      disabled={!groupName.trim() || isSaving}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all flex justify-center items-center gap-2 text-lg active:scale-[0.98]"
+                      disabled={!groupName.trim() || selectedMembers.length < 1 || isSaving}
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:shadow-none text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all flex justify-center items-center gap-2 text-lg active:scale-[0.98]"
                     >
-                      {isSaving ? <Loader2 size={24} className="animate-spin" /> : "Save Group"}
+                      {isSaving ? (
+                        <Loader2 size={24} className="animate-spin" />
+                      ) : !groupName.trim() ? (
+                        "Enter Group Name"
+                      ) : selectedMembers.length < 1 ? (
+                        "Add at least 1 member"
+                      ) : (
+                        "Create Group"
+                      )}
                     </button>
                   </div>
                 </div>

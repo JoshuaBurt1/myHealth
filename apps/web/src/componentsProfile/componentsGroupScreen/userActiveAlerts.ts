@@ -1,4 +1,5 @@
 // componentsProfile/componentsGroupScreen/userActiveAlerts.ts
+// Ideally the threshold values are not hard coded and are obtained from population data alone
 import { useMemo } from 'react';
 
 // Exported so DataScreen can use it for parsing Firebase timestamps

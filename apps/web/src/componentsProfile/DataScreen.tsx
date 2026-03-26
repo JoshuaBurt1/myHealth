@@ -350,8 +350,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   );
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-8 pb-10">
-      
+    <div className="max-w-7xl mx-auto p-6 flex flex-col gap-8 pb-10">      
       {/* 3. NOTIFICATIONS PANEL */}
       <ActiveAlerts 
       alerts={notifications} 
@@ -395,19 +394,30 @@ const DataScreen: React.FC<DataScreenProps> = ({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 w-full">
+          <div className="flex flex-nowrap items-center gap-2 md:gap-4 w-full">
+            {/* Button: shrink-0 ensures it doesn't get squeezed */}
             <button 
               onClick={() => setShowAll(!showAll)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-indigo-600 font-bold text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors shrink-0"
+              className="relative inline-flex items-center justify-center gap-2 px-3 md:px-5 py-2.5 bg-white text-indigo-600 font-bold text-xs md:text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors shrink-0 overflow-hidden"
             >
-              {showAll ? <Maximize2 size={16} /> : <LayoutGrid size={16} />}
-              {showAll ? 'Show Single Graph' : 'Show All Graphs'}
-            </button>
+              {/* 1. The GHOST: Sets max width and original height, but is invisible */}
+              <div className="invisible flex items-center gap-2">
+                <LayoutGrid size={16} />
+                <span className="whitespace-nowrap">All Graphs</span>
+              </div>
 
-            <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex-1 min-w-50 max-w-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                Detail
-              </span>
+              {/* 2. The ACTUAL CONTENT: Centered perfectly over the ghost */}
+              <div className="absolute inset-0 flex items-center justify-center gap-2">
+                {showAll ? <Maximize2 size={16} /> : <LayoutGrid size={16} />}
+                <span className="whitespace-nowrap">
+                  {showAll ? 'Single' : 'All Graphs'}
+                </span>
+              </div>
+            </button>
+            {/* Slider Container: flex-1 + min-w-0 allows it to take up all remaining space and shrink if needed */}
+            <div className="flex items-center gap-2 md:gap-3 bg-white px-3 md:px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex-1 min-w-0">
+              <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Detail</span>
+              
               <input 
                 type="range"
                 min="0"
@@ -415,11 +425,10 @@ const DataScreen: React.FC<DataScreenProps> = ({
                 step="0.01"
                 value={reductionFactor}
                 onChange={(e) => setReductionFactor(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 min-w-0"
               />
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                Summary
-              </span>
+              
+              <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Summary</span>
             </div>
           </div>
         </div>

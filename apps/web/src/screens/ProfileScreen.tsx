@@ -381,8 +381,6 @@ const ProfileScreen: React.FC = () => {
     if (!userId || !isMe) return;
 
     // 2. Map the alerts to the requested DB format (onset and type)
-    // 'id' from the hook (e.g., 'sirs-critical') maps to 'type'
-    // 'timestamp' maps to 'onset'
     const activeAlertsMap = mobileAlerts.map(a => ({
       type: a.id,
       onset: a.timestamp
@@ -780,7 +778,7 @@ const ProfileScreen: React.FC = () => {
                     <Activity size={32} className="text-emerald-500" />
                   </div>
                   <h4 className="text-lg font-bold text-slate-800 mb-1">In Good Health</h4>
-                  <p className="text-sm">You have no active alerts at this time. Keep it up!</p>
+                  <p className="text-sm">No active alerts at this time!</p>
                 </div>
               )}
             </div>

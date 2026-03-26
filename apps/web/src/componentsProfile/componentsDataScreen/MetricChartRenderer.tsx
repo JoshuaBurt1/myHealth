@@ -1,7 +1,7 @@
 // src/components/MetricChartRenderer.tsx
 import React from 'react';
 import { 
-  XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line 
+  XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import { Gauge, PlusCircle } from 'lucide-react';
 
