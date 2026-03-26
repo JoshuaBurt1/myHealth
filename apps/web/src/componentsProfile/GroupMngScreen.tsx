@@ -16,11 +16,6 @@ const RECOMMENDED_MEMBERS: SearchUser[] = [
   { uid: aiDoctorUid, displayName: 'AI Doctor', imageId: aiDoctorImage }
 ];
 
-const getAvatarUrl = (uid: string, imageId: string | null) => {
-  if (!imageId) return null;
-  return imageId;
-};
-
 const calculateAge = (dobString: string): number => {
   if (!dobString) return 0;
   const today = new Date();
@@ -36,7 +31,7 @@ export const GroupMngScreen: React.FC = () => {
   const { userData, userGroups } = useNotifications();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'cohort' | 'my-groups' | 'create-group'>('cohort');
+  const [activeTab, setActiveTab] = useState< 'my-groups' | 'create-group' | 'cohort' >('my-groups');
   
   const [hasStartedCohort, setHasStartedCohort] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -324,25 +319,6 @@ export const GroupMngScreen: React.FC = () => {
 
         <div className="flex flex-1 overflow-hidden">
           <div className="w-20 md:w-24 border-r border-slate-100 flex flex-col items-center py-6 gap-6 bg-white shrink-0">
-            
-            {/* NEW: Cohort Tab Button */}
-            <button 
-              onClick={() => setActiveTab('cohort')}
-              className="flex flex-col items-center gap-1.5 w-full group outline-none"
-            >
-              <div className={`p-3 rounded-2xl transition-all duration-200 ${
-                activeTab === 'cohort' 
-                  ? 'bg-emerald-100 text-emerald-600 shadow-sm' 
-                  : 'text-slate-400 group-hover:bg-slate-50'
-              }`}>
-                <BarChart2 size={24} />
-              </div>
-              <span className={`text-[10px] md:text-xs font-bold text-center ${
-                activeTab === 'cohort' ? 'text-emerald-600' : 'text-slate-500'
-              }`}>
-                Cohort
-              </span>
-            </button>
 
             <button 
               onClick={() => setActiveTab('my-groups')}
@@ -377,6 +353,25 @@ export const GroupMngScreen: React.FC = () => {
                 activeTab === 'create-group' ? 'text-emerald-600' : 'text-slate-500'
               }`}>
                 Create<br/>Group
+              </span>
+            </button>
+
+            {/* NEW: Cohort Tab Button */}
+            <button 
+              onClick={() => setActiveTab('cohort')}
+              className="flex flex-col items-center gap-1.5 w-full group outline-none"
+            >
+              <div className={`p-3 rounded-2xl transition-all duration-200 ${
+                activeTab === 'cohort' 
+                  ? 'bg-emerald-100 text-emerald-600 shadow-sm' 
+                  : 'text-slate-400 group-hover:bg-slate-50'
+              }`}>
+                <BarChart2 size={24} />
+              </div>
+              <span className={`text-[10px] md:text-xs font-bold text-center ${
+                activeTab === 'cohort' ? 'text-emerald-600' : 'text-slate-500'
+              }`}>
+                Cohort
               </span>
             </button>
           </div>
@@ -666,7 +661,7 @@ export const GroupMngScreen: React.FC = () => {
                               <div className="flex items-center gap-3">
                                 <div 
                                   className="flex items-center gap-3 cursor-pointer group/name"
-                                  onClick={() => handleProfileClick(user.uid)}
+                                  onClick={() => addMember(user)}
                                 >
                                   {user.imageId ? (
                                     <img src={user.imageId} alt="" className="w-10 h-10 rounded-full object-cover bg-slate-100" />
@@ -699,7 +694,10 @@ export const GroupMngScreen: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {selectedMembers.map(user => (
                             <div key={user.uid} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm transition-all hover:border-emerald-100">
-                              <div className="flex items-center gap-3 truncate">
+                              <div 
+                                className="flex items-center gap-3 truncate cursor-pointer group/member-link" 
+                                onClick={() => handleProfileClick(user.uid)} // Now links to profile
+                              >
                                 {/* Display Image if it exists, otherwise fall back to icon or initial */}
                                 <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 overflow-hidden">
                                   {user.imageId ? (

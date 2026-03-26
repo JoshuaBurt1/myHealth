@@ -28,6 +28,7 @@ import { ManageDataFieldsModal } from './componentsGroupScreen/ManageDataFieldsM
 import { GroupCompareTrend } from './componentsGroupScreen/GroupCompareTrend';
 import { AllTimeRanking } from './componentsGroupScreen/AllTimeRanking';
 import { extractDetailedValues } from './compareUtils';
+import { getAiDoctorResponse } from '../services/aiDoctorService';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -82,14 +83,20 @@ export const GroupScreen: React.FC = () => {
   const [vitalsData, setVitalsData] = useState<CategoryComparison[] | null>(null);
   
   const [isCalculatingStats, setIsCalculatingStats] = useState(false);
-  const [activeAlertsMap, setActiveAlertsMap] = useState<Record<string, any[]>>({});
-  
+  const [memberProfilesMap, setMemberProfilesMap] = useState<Record<string, any>>({}); //active alert
+  const [isAiResponding, setIsAiResponding] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const AI_DOCTOR_UID = 'vMnnZIs6xYhVqT9KgTvrnF7Ehvg2';
   
   const scrollToBottom = () => {
     setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const getMemberDisplayName = (userId: string) => {
+    const member = group?.members.find(m => m.userId === userId);
+    return member ? member.display_name : 'Unknown User';
   };
 
   useEffect(() => {
@@ -160,16 +167,9 @@ export const GroupScreen: React.FC = () => {
       return onSnapshot(userDocRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          setActiveAlertsMap(prev => {
-            const newAlerts = JSON.stringify(data.activeAlerts || []);
-            const oldAlerts = JSON.stringify(prev[uid] || []);
-            if (newAlerts !== oldAlerts) {
-              return { ...prev, [uid]: data.activeAlerts || [] };
-            }
-            return prev;
-          });
+          setMemberProfilesMap(prev => ({ ...prev, [uid]: data }));
         } else {
-          setActiveAlertsMap(prev => ({ ...prev, [uid]: [] }));
+          setMemberProfilesMap(prev => ({ ...prev, [uid]: {} }));
         }
       });
     });
@@ -240,18 +240,21 @@ export const GroupScreen: React.FC = () => {
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const user = auth.currentUser;
-    if (!newMessage.trim() || !groupId || !user) return;
+    if (!newMessage.trim() || !groupId || !user || !group) return;
 
+    const messageText = newMessage.trim();
     setIsSending(true);
+
     try {
       const groupRef = doc(db, 'myHealth_groups', groupId);
       const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
       const userRef = doc(db, 'users', user.uid);
 
+      // 1. Write the user's message and update metadata
       const messagePromise = addDoc(messagesRef, {
-        text: newMessage.trim(),
+        text: messageText,
         authorId: user.uid,
-        authorName: getMemberDisplayName(user.uid), 
+        authorName: getMemberDisplayName(user.uid),
         createdAt: serverTimestamp()
       });
 
@@ -266,18 +269,67 @@ export const GroupScreen: React.FC = () => {
       }, { merge: true });
 
       await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
-
       setNewMessage('');
+
+      // --- 2. Trigger AI Doctor (Background Process) ---
+      if (group.memberUids.includes(AI_DOCTOR_UID) && user.uid !== AI_DOCTOR_UID) {
+        
+        // Extract available cohort stats for this specific user
+        const userCohortStats: any = {};
+        const extractStats = (data: CategoryComparison[] | null, category: string) => {
+          if (!data) return;
+          data.forEach(metric => {
+            const memberStat = metric.members.find(m => m.userId === user.uid);
+            if (memberStat) {
+              userCohortStats[`${category}_${metric.metricName}`] = memberStat;
+            }
+          });
+        };
+
+        extractStats(exerciseData, 'Exercise');
+        extractStats(vitalsData, 'Vitals');
+
+        // Build a clean summary of the user's RAW vital signs for the LLM
+        const rawProfile = memberProfilesMap[user.uid] || {};
+        const cleanVitalSummary: Record<string, any> = {};
+
+        Object.entries(VITAL_KEY_MAP).forEach(([readableName, dbKey]) => {
+          const extracted = extractDetailedValues(rawProfile, dbKey);
+          if (extracted && extracted.length > 0) {
+            // Grab the most recent reading
+            cleanVitalSummary[readableName] = extracted[extracted.length - 1].value;
+          }
+        });
+
+        cleanVitalSummary['Active Alerts'] = rawProfile.activeAlerts || rawProfile.activeAlert || 'None';
+
+        // Start the UI indicator
+        setIsAiResponding(true);
+
+        getAiDoctorResponse(
+          messageText,
+          getMemberDisplayName(user.uid),
+          cleanVitalSummary,
+          userCohortStats
+        )
+          .then(async (aiReply) => {
+            if (aiReply) {
+              await addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
+                text: aiReply,
+                authorId: AI_DOCTOR_UID,
+                authorName: 'AI Doctor',
+                createdAt: serverTimestamp()
+              });
+            }
+          })
+          .catch(err => console.error("Error getting AI response:", err))
+          .finally(() => setIsAiResponding(false)); // Hide indicator regardless of outcome
+      }
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
       setIsSending(false);
     }
-  };
-
-  const getMemberDisplayName = (userId: string) => {
-    const member = group?.members.find(m => m.userId === userId);
-    return member ? member.display_name : 'Unknown User';
   };
 
   // --- Z-Score & Percentile Engine ---
@@ -419,6 +471,45 @@ export const GroupScreen: React.FC = () => {
     (group as any)?.adminExcludedUids, 
     (group as any)?.activeDataFields
   ]);
+
+  // --- AI DOCTOR: TRIGGER ---
+  useEffect(() => {
+    if (!group || !memberProfilesMap || messages.length === 0) return;
+
+    const hasAiDoctor = group.memberUids.includes(AI_DOCTOR_UID);
+    if (!hasAiDoctor) return;
+
+    Object.entries(memberProfilesMap).forEach(([_, profile]) => {
+      // Check for plural 'activeAlerts' or singular 'activeAlert'
+      const alertList = profile.activeAlerts || (profile.activeAlert ? [profile.activeAlert] : []);
+      
+      alertList.forEach((alert: any) => {
+        if (alert && alert.type && alert.onset) {
+          const userName = profile.name || profile.display_name || 'Member';
+          const alertType = alert.type;
+          const onset = alert.onset;
+
+          // PREVENT DUPLICATE WRITES
+          const alreadyNotified = messages.some(msg => 
+            msg.authorId === AI_DOCTOR_UID && 
+            msg.text.includes(alertType) && 
+            msg.text.includes(onset)
+          );
+
+          if (!alreadyNotified) {
+            const initialAiMessage = `Hi ${userName}, I see that you have an active ${alertType} alert starting from ${onset}. How are you feeling right now? Do you want to discuss your recent vitals?`;
+            
+            addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
+              text: initialAiMessage,
+              authorId: AI_DOCTOR_UID,
+              authorName: 'AI Doctor',
+              createdAt: serverTimestamp()
+            }).catch(err => console.error("Error sending AI alert message:", err));
+          }
+        }
+      });
+    });
+  }, [group, memberProfilesMap, messages]);
 
   const handleToggleDataSharing = async () => {
     if (!group || !groupId || !auth.currentUser) return;
@@ -591,7 +682,6 @@ export const GroupScreen: React.FC = () => {
               {group.members.map((member) => {
                 const colorClasses = getUserColor(member.userId);
                 const isCreator = member.userId === group.adminId;
-                const hasActiveAlert = activeAlertsMap[member.userId]?.length > 0;
                 
                 return (
                   <div 
@@ -605,9 +695,6 @@ export const GroupScreen: React.FC = () => {
                         <div className="absolute -top-1 -right-1 bg-white rounded-full">
                           <ShieldCheck size={10} className="text-emerald-500 fill-white" />
                         </div>
-                      )}
-                      {hasActiveAlert && (
-                        <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
                       )}
                     </div>
                     <span className="text-xs font-bold whitespace-nowrap">{member.display_name}</span>
@@ -727,6 +814,20 @@ export const GroupScreen: React.FC = () => {
                           );
                         })
                       )}
+
+                      {/* AI RESPONSE INDICATOR - Placed after the message list but before the scroll ref */}
+                      {isAiResponding && (
+                        <div className="flex flex-col items-start animate-pulse pb-4">
+                          <span className="text-xs font-bold mb-1 ml-2 text-slate-400">
+                            AI Doctor
+                          </span>
+                          <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-slate-400 italic text-sm rounded-tl-none shadow-sm">
+                            <Loader2 size={14} className="animate-spin text-emerald-500" />
+                            AI Doctor is responding...
+                          </div>
+                        </div>
+                      )}
+
                       <div ref={messagesEndRef} />
                     </div>
                   </div>
@@ -804,16 +905,18 @@ export const GroupScreen: React.FC = () => {
                         >
                           <TrendingUp size={18} /> Trend Delta
                         </button>
-                        <button 
-                          onClick={() => setCompareView('allTime')}
-                          className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                            compareView === 'allTime' 
-                            ? 'bg-white text-amber-600 shadow-md transform scale-105' 
-                            : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          <Trophy size={18} /> All-Time
-                        </button>
+                        {activeTab !== 'compareVitals' && (
+                          <button 
+                            onClick={() => setCompareView('allTime')}
+                            className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                              compareView === 'allTime' 
+                              ? 'bg-white text-amber-600 shadow-md transform scale-105' 
+                              : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            <Trophy size={18} /> All-Time
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -879,7 +982,6 @@ export const GroupScreen: React.FC = () => {
                     {group.members.map((member) => {
                       const colorClasses = getUserColor(member.userId);
                       const isCreator = member.userId === group.adminId;
-                      const hasActiveAlert = activeAlertsMap[member.userId]?.length > 0;
                       
                       return (
                         <div 
@@ -892,9 +994,6 @@ export const GroupScreen: React.FC = () => {
                               {member.display_name.charAt(0).toUpperCase()}
                               {isCreator && (
                                 <ShieldCheck size={12} className="absolute -top-1 -right-1 text-emerald-500 fill-white" />
-                              )}
-                              {hasActiveAlert && (
-                                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
                               )}
                             </div>
                             <span className="font-bold text-sm text-slate-700 truncate min-w-0">
