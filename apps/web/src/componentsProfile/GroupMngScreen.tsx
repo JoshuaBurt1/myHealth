@@ -1,17 +1,25 @@
 // GroupMngScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2, Stars } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2, Stars, Info, ShieldCheck } from 'lucide-react';
 import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { useNotifications } from '../context/NotificationContext';
 import { type Group, type GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
-import { CohortComparison } from './componentsGroupScreen/CohortComparison';
+import aiDoctorImage from '../assets/_aiDoctor.jpg';
 
+//import { CohortComparison } from './componentsGroupScreen/CohortComparison';
+const CohortComparison = React.lazy(() => import('./componentsGroupScreen/CohortComparison'));
+
+const aiDoctorUid = 'vMnnZIs6xYhVqT9KgTvrnF7Ehvg2';
 const RECOMMENDED_MEMBERS: SearchUser[] = [
-  { uid: 'ai_doctor', displayName: 'AI Doctor', imageId: null },
-  { uid: 'personal_trainer', displayName: 'Personal Trainer', imageId: null }
+  { uid: aiDoctorUid, displayName: 'AI Doctor', imageId: aiDoctorImage }
 ];
+
+const getAvatarUrl = (uid: string, imageId: string | null) => {
+  if (!imageId) return null;
+  return imageId;
+};
 
 const calculateAge = (dobString: string): number => {
   if (!dobString) return 0;
@@ -27,10 +35,10 @@ export const GroupMngScreen: React.FC = () => {
   const navigate = useNavigate();
   const { userData, userGroups } = useNotifications();
 
-  // Tab State - Set 'cohort' as default
+  // Tab State
   const [activeTab, setActiveTab] = useState<'cohort' | 'my-groups' | 'create-group'>('cohort');
-
-  // Existing State
+  
+  const [hasStartedCohort, setHasStartedCohort] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
@@ -288,17 +296,15 @@ export const GroupMngScreen: React.FC = () => {
     batch.delete(groupRef);
     await batch.commit();
   };
-    
+
   return (
     <div className="max-w-7xl mx-auto p-0 md:p-6 bg-slate-50 min-h-screen pb-20 relative">
       <div className="contents md:flex md:flex-col md:flex-1 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 md:mt-2 md:overflow-hidden">
+        
+        {/* Header Section */}
         <div className="h-20 md:h-24 border-b border-slate-100 flex items-center shrink-0 bg-white md:rounded-t-3xl">
           <div className="w-20 md:w-24 flex justify-center border-r border-slate-100 h-full items-center">
-            <button 
-              onClick={() => navigate(-1)} 
-              className="flex md:hidden p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
-              title="Go Back"
-            >
+            <button onClick={() => navigate(-1)} className="flex md:hidden p-2 text-slate-400 hover:text-slate-600 rounded-full transition-colors">
               <ArrowLeft size={28} />
             </button>
           </div>
@@ -313,13 +319,6 @@ export const GroupMngScreen: React.FC = () => {
                 <><Plus className="text-emerald-500" size={28} /> Create New Group</>
               )}
             </h2>
-            <p className="hidden md:block text-slate-500 text-sm mt-0.5">
-              {activeTab === 'cohort'
-                ? 'Compare your statistics against similar users'
-                : activeTab === 'my-groups'
-                ? 'Manage and access your current groups'
-                : 'Form a group and invite members'}
-            </p>
           </div>
         </div>
 
@@ -382,21 +381,83 @@ export const GroupMngScreen: React.FC = () => {
             </button>
           </div>
 
+          {/* Main Content Area */}
           <div className="flex-1 bg-slate-50/30 overflow-y-auto">
             {activeTab === 'cohort' ? (
-              <div className="p-0 md:p-4 max-w-5xl mx-auto">
-                {profileData && userSex && userAge ? (
-                  <CohortComparison 
-                    userId={auth.currentUser?.uid} 
-                    userData={profileData} 
-                    userSex={userSex} 
-                    userAge={userAge} 
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-12 text-slate-400">
-                    <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
-                    <span className="font-medium text-sm">Loading Cohort Data...</span>
+              <div className="p-0 md:p-6 max-w-5xl mx-auto">
+                
+                {!hasStartedCohort ? (
+                  /* MODIFICATION: Initial Explanation Screen */
+                  <div className="bg-white rounded-4xl border border-slate-100 shadow-sm overflow-hidden mt-4 md:mt-0">
+                    <div className="p-8 md:p-12 flex flex-col items-center text-center">
+                      <div className="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center text-emerald-500 mb-6">
+                        <BarChart2 size={40} />
+                      </div>
+                      
+                      <h3 className="text-2xl font-black text-slate-800 mb-4">Understanding Cohort Data</h3>
+                      
+                      <div className="space-y-4 max-w-lg mb-10">
+                        <div className="flex items-start gap-4 text-left">
+                          <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-500"><ShieldCheck size={20}/></div>
+                          <p className="text-slate-600 text-sm">
+                            <strong>Anonymized Comparison:</strong> Compare your vitals and health metrics against an aggregated group of users in your age bracket and sex.
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-4 text-left">
+                          <div className="mt-1 bg-emerald-50 p-2 rounded-lg text-emerald-500"><Info size={20}/></div>
+                          <p className="text-slate-600 text-sm">
+                            <strong>Personalized Insights:</strong> Calculations are performed in real-time to show where you stand relative to the 50th percentile (median) of your peer group.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => setHasStartedCohort(true)}
+                        className="group flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-slate-200 hover:shadow-emerald-100"
+                      >
+                        Generate Cohort Analysis
+                        <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  /* Existing Cohort Data Logic (Only renders/calculates if hasStartedCohort is true) */
+                  <>
+                    {profileData && userSex && userAge ? (
+                      <React.Suspense fallback={
+                        <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                          <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
+                          <span className="font-medium text-sm">Loading Analysis Tools...</span>
+                        </div>
+                      }>
+                        <CohortComparison 
+                          userId={auth.currentUser?.uid} 
+                          userData={profileData} 
+                          userSex={userSex} 
+                          userAge={userAge} 
+                        />
+                      </React.Suspense>
+                    ) : !userSex || !userAge ? (
+                      <div className="text-center p-12 text-slate-500 bg-white rounded-3xl border border-slate-100 shadow-sm max-w-lg mx-auto mt-10">
+                        <Activity size={48} className="mx-auto mb-4 text-slate-200" />
+                        <p className="text-lg font-medium text-slate-600">Profile Incomplete</p>
+                        <p className="text-sm mt-1 text-slate-400">
+                          We need your age and sex to find a matching cohort for comparison.
+                        </p>
+                        <button 
+                          onClick={() => navigate(`/profile/${auth.currentUser?.uid}`)}
+                          className="mt-6 px-6 py-2.5 bg-emerald-50 text-emerald-600 font-bold rounded-xl hover:bg-emerald-100 transition-colors"
+                        >
+                          Update Profile
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                        <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
+                        <span className="font-medium text-sm">Loading Cohort Data...</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : activeTab === 'my-groups' ? (
@@ -556,26 +617,40 @@ export const GroupMngScreen: React.FC = () => {
                         {isSearching && <Loader2 className="absolute right-4 top-4 text-emerald-500 animate-spin" size={20} />}
                       </div>
 
-                      {/* Default Recommendations when focused and empty */}
-                      {isSearchFocused && searchQuery.trim() === '' && (
+                      {/* Default Recommendations: Hide if search is focused but the doctor is already selected */}
+                      {isSearchFocused && 
+                      searchQuery.trim() === '' && 
+                      !selectedMembers.some(m => m.uid === aiDoctorUid) && ( // Added this check
                         <div className="mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl divide-y divide-slate-50 overflow-hidden absolute w-full z-20">
                           <div className="bg-slate-50 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                             Recommended
                           </div>
-                          {RECOMMENDED_MEMBERS.filter(rec => !selectedMembers.some(m => m.uid === rec.uid)).map(user => (
+                          {RECOMMENDED_MEMBERS.map(user => (
                             <div 
                               key={user.uid} 
                               className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer group/rec"
                               onClick={() => addMember(user)}
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500">
-                                  <Stars size={18} />
+                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 overflow-hidden">
+                                  {user.imageId ? (
+                                    <img 
+                                      src={user.imageId} 
+                                      alt={user.displayName} 
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <Stars size={18} />
+                                  )}
                                 </div>
-                                <span className="font-semibold text-slate-700 group-hover/rec:text-emerald-600 transition-colors">
-                                  {user.displayName}
-                                </span>
+                                
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-slate-700 group-hover/rec:text-emerald-600 transition-colors">
+                                    {user.displayName}
+                                  </span>
+                                </div>
                               </div>
+                              
                               <button className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-full transition-all">
                                 <Plus size={20} />
                               </button>
@@ -583,7 +658,6 @@ export const GroupMngScreen: React.FC = () => {
                           ))}
                         </div>
                       )}
-
                       {/* Search Results Dropdown */}
                       {searchResults.length > 0 && searchQuery.trim().length >= 2 && (
                         <div className="mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl divide-y divide-slate-50 overflow-hidden absolute w-full z-20">
@@ -619,17 +693,37 @@ export const GroupMngScreen: React.FC = () => {
                     {/* Selected Members List */}
                     {selectedMembers.length > 0 && (
                       <div className="pt-4">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Selected ({selectedMembers.length})</label>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                          Selected ({selectedMembers.length})
+                        </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {selectedMembers.map(user => (
-                            <div key={user.uid} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                            <div key={user.uid} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm transition-all hover:border-emerald-100">
                               <div className="flex items-center gap-3 truncate">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 font-bold text-xs">
-                                  {user.displayName === 'AI Doctor' || user.displayName === 'Personal Trainer' ? <Stars size={14}/> : user.displayName.charAt(0)}
+                                {/* Display Image if it exists, otherwise fall back to icon or initial */}
+                                <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 overflow-hidden">
+                                  {user.imageId ? (
+                                    <img 
+                                      src={user.imageId} 
+                                      alt={user.displayName} 
+                                      className="w-full h-full object-cover" 
+                                    />
+                                  ) : (
+                                    <div className="font-bold text-xs">
+                                      {user.displayName === 'AI Doctor' || user.displayName === 'Personal Trainer' 
+                                        ? <Stars size={14}/> 
+                                        : user.displayName.charAt(0)}
+                                    </div>
+                                  )}
                                 </div>
-                                <span className="font-medium text-slate-700 truncate text-sm">{user.displayName}</span>
+                                <span className="font-medium text-slate-700 truncate text-sm">
+                                  {user.displayName}
+                                </span>
                               </div>
-                              <button onClick={() => removeMember(user.uid)} className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                              <button 
+                                onClick={() => removeMember(user.uid)} 
+                                className="p-1.5 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              >
                                 <Minus size={16} />
                               </button>
                             </div>

@@ -237,17 +237,42 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
-  const handleAddGroupEvent = (eventData: Omit<GroupScheduleEvent, 'id'>) => {
-      const newEvent: GroupScheduleEvent = {
-          id: Date.now().toString(),
-          ...eventData
-      };
-      handleSaveGroupSchedule([...scheduleEvents, newEvent]);
-  };
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const user = auth.currentUser;
+    if (!newMessage.trim() || !groupId || !user) return;
 
-  const handleRemoveGroupEvent = (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      handleSaveGroupSchedule(scheduleEvents.filter(ev => ev.id !== id));
+    setIsSending(true);
+    try {
+      const groupRef = doc(db, 'myHealth_groups', groupId);
+      const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
+      const userRef = doc(db, 'users', user.uid);
+
+      const messagePromise = addDoc(messagesRef, {
+        text: newMessage.trim(),
+        authorId: user.uid,
+        authorName: getMemberDisplayName(user.uid), 
+        createdAt: serverTimestamp()
+      });
+
+      const groupUpdatePromise = updateDoc(groupRef, {
+        lastUpdated: serverTimestamp(),
+        lastUpdatedBy: user.uid
+      });
+
+      const userUpdatePromise = setDoc(userRef, {
+        last_login: serverTimestamp(),
+        [`last_read_group_${groupId}`]: serverTimestamp()
+      }, { merge: true });
+
+      await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
+
+      setNewMessage('');
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const getMemberDisplayName = (userId: string) => {
@@ -413,6 +438,19 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
+  const handleAddGroupEvent = (eventData: Omit<GroupScheduleEvent, 'id'>) => {
+      const newEvent: GroupScheduleEvent = {
+          id: Date.now().toString(),
+          ...eventData
+      };
+      handleSaveGroupSchedule([...scheduleEvents, newEvent]);
+  };
+
+  const handleRemoveGroupEvent = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      handleSaveGroupSchedule(scheduleEvents.filter(ev => ev.id !== id));
+  };
+
   // --- Membership Action Handlers ---
   const handleAddMember = async (user: SearchUser) => {
     if (!group || !groupId) return;
@@ -495,44 +533,6 @@ export const GroupScreen: React.FC = () => {
         console.error("Failed to update group schedule", err);
     } finally {
         setIsSavingSchedule(false);
-    }
-  };
-
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const user = auth.currentUser;
-    if (!newMessage.trim() || !groupId || !user) return;
-
-    setIsSending(true);
-    try {
-      const groupRef = doc(db, 'myHealth_groups', groupId);
-      const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
-      const userRef = doc(db, 'users', user.uid);
-
-      const messagePromise = addDoc(messagesRef, {
-        text: newMessage.trim(),
-        authorId: user.uid,
-        authorName: getMemberDisplayName(user.uid), 
-        createdAt: serverTimestamp()
-      });
-
-      const groupUpdatePromise = updateDoc(groupRef, {
-        lastUpdated: serverTimestamp(),
-        lastUpdatedBy: user.uid
-      });
-
-      const userUpdatePromise = setDoc(userRef, {
-        last_login: serverTimestamp(),
-        [`last_read_group_${groupId}`]: serverTimestamp()
-      }, { merge: true });
-
-      await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
-
-      setNewMessage('');
-    } catch (error) {
-      console.error("Error sending message:", error);
-    } finally {
-      setIsSending(false);
     }
   };
 

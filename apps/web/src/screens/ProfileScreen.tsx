@@ -468,11 +468,9 @@ const ProfileScreen: React.FC = () => {
 
       {/* RESPONSIVE TWO-COLUMN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start mt-2">
-        
-        <div className="space-y-4">
-  
         {/* LEFT COLUMN: Profile (Hidden on mobile if history/status tab is active) */}
       <div className={`${activeTab === 'profile' ? 'block' : 'hidden lg:block'} space-y-4`}>
+         <div className="space-y-4">
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           
           {/* INTERNAL HEADER: Matches Active History style */}

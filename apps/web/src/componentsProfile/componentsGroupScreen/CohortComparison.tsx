@@ -84,7 +84,7 @@ const calculateAge = (dobString: string): number => {
 };
 
 // --- COMPONENT ---
-export const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge }) => {
+const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge }) => {
   const [cohortRange, setCohortRange] = useState<CohortRange>(10);
   const [loading, setLoading] = useState(false);
   const [sampleData, setSampleData] = useState<any[]>([]);
@@ -357,3 +357,5 @@ const renderCategoryGroup = (groupTitle: string, categories: {title: string, key
     </div>
   );
 };
+
+export default CohortComparison;
