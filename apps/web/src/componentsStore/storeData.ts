@@ -1,10 +1,16 @@
 // storeData.ts
+
+// 1. Import your local assets
+import n95Img from '../assets/storeItems/n95Mask.jpg';
+import nitrileImg from '../assets/storeItems/nitrileGloves.jpg';
+
 export interface StoreItem {
   id: string;
   name: string;
   description: string;
   category: 'Supplements' | 'Diagnostic Equipment' | 'Medical Supplies' | 'Specialized Care' | 'Environmental Safety' | 'Personnel';
   price: string;
+  image?: string;
 }
 
 export const storeItems: StoreItem[] = [
@@ -40,9 +46,9 @@ export const storeItems: StoreItem[] = [
   { id: 'sc5', name: 'Ostomy Kit (Large)', category: 'Specialized Care', price: '$52.00', description: 'High-capacity pouching system designed for extended wear and secure effluent management.' },
   
   // Environmental Safety
-  { id: 'e1', name: 'Masks (N95/KN95)', category: 'Environmental Safety', price: '$15.00', description: 'High-filtration respirators to protect against airborne particles.' },
+  { id: 'e1', name: 'Masks (N95/KN95)', category: 'Environmental Safety', price: '$15.00', description: 'High-filtration respirators to protect against airborne particles.', image: n95Img },
   { id: 'e2', name: 'Surgical Masks', category: 'Environmental Safety', price: '$8.00', description: 'Standard 3-ply disposable masks for general fluid resistance and breathability.' },
-  { id: 'e3', name: 'Gloves (Nitrile)', category: 'Environmental Safety', price: '$12.00', description: 'Powder-free, latex-free gloves for sterile handling and protection.' },
+  { id: 'e3', name: 'Gloves (Nitrile)', category: 'Environmental Safety', price: '$12.00', description: 'Powder-free, latex-free gloves for sterile handling and protection.', image: nitrileImg },
   { id: 'e4', name: 'Standard Exam Gloves', category: 'Environmental Safety', price: '$9.00', description: 'Ambidextrous vinyl or latex-free gloves for non-sterile everyday protection.' },
   { id: 'e5', name: 'Face Shield', category: 'Environmental Safety', price: '$7.00', description: 'Transparent barrier to protect the face from splashes and debris.' },
   { id: 'e6', name: 'Yellow Isolation Gown', category: 'Environmental Safety', price: '$22.00', description: 'Fluid-resistant protective apparel with elastic cuffs for full-body coverage.' },

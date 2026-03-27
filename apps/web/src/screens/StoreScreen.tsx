@@ -1,6 +1,6 @@
-// StoreScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { Loader2, Plus, Minus, Search, History, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react';
+// Added 'X' to imports
+import { Loader2, Plus, Minus, Search, History, ChevronDown, ChevronRight, ShoppingCart, X } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, increment, serverTimestamp, collection, onSnapshot } from 'firebase/firestore';
 import CartScreen from '../componentsStore/CartScreen';
@@ -17,7 +17,9 @@ const StoreScreen: React.FC = () => {
   const [successId, setSuccessId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // New Mobile States
+  // Modal State
+  const [selectedItem, setSelectedItem] = useState<StoreItem | null>(null);
+  
   const [isCartMobileOpen, setIsCartMobileOpen] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [cartAnimating, setCartAnimating] = useState(false);
@@ -33,7 +35,6 @@ const StoreScreen: React.FC = () => {
     Object.fromEntries(storeItems.map(item => [item.id, 1]))
   );
 
-  // Listen to Cart items to update the badge counter globally for this screen
   useEffect(() => {
     if (!user) return;
     const cartRef = collection(db, 'users', user.uid, 'cart');
@@ -47,25 +48,24 @@ const StoreScreen: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Handle auto-expansion based on search input
   useEffect(() => {
-  const isSearchEmpty = searchQuery.trim() === '';
-  const newExpandedState: Record<string, boolean> = {};
-  
-  categories.forEach(cat => {
-    if (isSearchEmpty) {
-      newExpandedState[cat] = false;
-    } else {
-      const hasMatch = storeItems.some(item => 
-        item.category === cat && 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      newExpandedState[cat] = hasMatch;
-    }
-  });
+    const isSearchEmpty = searchQuery.trim() === '';
+    const newExpandedState: Record<string, boolean> = {};
+    
+    categories.forEach(cat => {
+      if (isSearchEmpty) {
+        newExpandedState[cat] = false;
+      } else {
+        const hasMatch = storeItems.some(item => 
+          item.category === cat && 
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        newExpandedState[cat] = hasMatch;
+      }
+    });
 
-  setExpandedCats(newExpandedState);
-}, [searchQuery]);
+    setExpandedCats(newExpandedState);
+  }, [searchQuery]);
 
   const toggleCategory = (cat: string) => {
     setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
@@ -97,11 +97,8 @@ const StoreScreen: React.FC = () => {
       
       setSuccessId(item.id);
       setLocalQuantities(prev => ({ ...prev, [item.id]: 1 }));
-      
-      // Trigger Cart Animation
       setCartAnimating(true);
       setTimeout(() => setCartAnimating(false), 300);
-      
       setTimeout(() => setSuccessId(null), 2000);
     } catch (error) {
       console.error("Error adding to cart: ", error);
@@ -111,51 +108,48 @@ const StoreScreen: React.FC = () => {
   };
 
   return (
-  <div className="flex flex-col lg:flex-row gap-6 p-4 bg-slate-50 min-h-screen overflow-x-hidden">    
-    <div className={`flex-1 ${!user ? 'max-w-4xl w-full' : ''}`}>      
-      <header className="mb-8 flex justify-between items-start">
-        <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
-          <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
-        </div>
-          
+    <div className="flex flex-col lg:flex-row gap-6 p-4 bg-slate-50 min-h-screen overflow-x-hidden relative">    
+      <div className={`flex-1 ${!user ? 'max-w-4xl w-full' : ''}`}>      
+        <header className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
+            <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
+          </div>
+            
           {user && (
             <div className="flex flex-col items-end gap-2 shrink-0">
-            {/* Mobile "Cart" Button */}
-            <button 
-              onClick={() => setIsCartMobileOpen(true)}
-              className={`lg:hidden relative flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-indigo-600 rounded-2xl text-sm sm:text-base font-bold text-white shadow-lg shadow-indigo-100 transition-all duration-300 active:scale-95
-                ${cartAnimating ? 'scale-110 -translate-y-1 bg-indigo-500 shadow-xl' : 'hover:bg-indigo-700'}
-              `}
-            >
-              <ShoppingCart size={20} />
-              <span>Cart</span>
-              {cartItemCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-in zoom-in duration-200">
-                  {cartItemCount}
-                </span>
-              )}
-            </button>
+              <button 
+                onClick={() => setIsCartMobileOpen(true)}
+                className={`lg:hidden relative flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-indigo-600 rounded-2xl text-sm sm:text-base font-bold text-white shadow-lg shadow-indigo-100 transition-all duration-300 active:scale-95
+                  ${cartAnimating ? 'scale-110 -translate-y-1 bg-indigo-500 shadow-xl' : 'hover:bg-indigo-700'}
+                `}
+              >
+                <ShoppingCart size={20} />
+                <span>Cart</span>
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-in zoom-in duration-200">
+                    {cartItemCount}
+                  </span>
+                )}
+              </button>
 
-            {/* Orders Button */}
-            <button 
-              onClick={() => {
-                if (window.innerWidth < 1024) { // lg breakpoint
-                  setIsOrdersMobileOpen(true);
-                } else {
-                  window.location.href = '/orders';
-                }
-              }} 
-              className="flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-white border border-slate-200 rounded-2xl text-sm sm:text-base font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
-            >
-              <History size={20} className="text-indigo-600" />
-              <span>Orders</span>
-            </button>
-          </div>
+              <button 
+                onClick={() => {
+                  if (window.innerWidth < 1024) {
+                    setIsOrdersMobileOpen(true);
+                  } else {
+                    window.location.href = '/orders';
+                  }
+                }} 
+                className="flex items-center justify-center gap-2 w-28 sm:w-32 py-3 bg-white border border-slate-200 rounded-2xl text-sm sm:text-base font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+              >
+                <History size={20} className="text-indigo-600" />
+                <span>Orders</span>
+              </button>
+            </div>
           )}
         </header>
         
-        {/* Search Bar */}
         <div className="relative mb-10 max-w-2xl mx-auto lg:mx-0">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
@@ -167,7 +161,6 @@ const StoreScreen: React.FC = () => {
           />
         </div>
 
-        {/* Categories Loop */}
         {categories.map((cat) => {
           const filteredItems = storeItems.filter(item => 
             item.category === cat && 
@@ -187,22 +180,65 @@ const StoreScreen: React.FC = () => {
               </button>
               
               {isOpen && filteredItems.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2 duration-200">
                   {filteredItems.map((item) => (
-                    <div key={item.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-                      <div>
-                        <h3 className="font-bold text-slate-800">{item.name}</h3>
-                        <p className="text-slate-500 text-xs mb-4 line-clamp-2">{item.description}</p>
-                        <p className="text-indigo-600 font-bold mb-4">{item.price}</p>
+                    <div 
+                      key={item.id} 
+                      className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition-all duration-300 overflow-hidden"
+                    >
+                      <div className="p-5 flex flex-col gap-4">
+                        <div className="flex gap-4">
+                          {/* CLICKABLE IMAGE CONTAINER */}
+                          <button 
+                            onClick={() => setSelectedItem(item)}
+                            className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center hover:ring-2 hover:ring-indigo-100 transition-all group relative"
+                          >
+                            {item.image ? (
+                              <img 
+                                src={item.image} 
+                                alt={item.name} 
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                              />
+                            ) : (
+                              <div className="text-slate-300 text-[10px] font-bold uppercase text-center px-1">
+                                No Image
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 flex items-center justify-center transition-colors">
+                               <Search size={14} className="text-white opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all" />
+                            </div>
+                          </button>
+
+                          <div className="flex flex-col justify-center">
+                            <h3 className="font-bold text-slate-800 leading-tight">
+                              {item.name}
+                            </h3>
+                            <p className="text-indigo-600 font-bold mt-1">
+                              {item.price}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="text-slate-500 text-xs leading-relaxed">
+                          {item.description}
+                        </p>
                       </div>
 
-                      <div className="flex items-center gap-3 mt-auto">
-                        <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
-                          <button onClick={() => updateLocalQty(item.id, -1)} className="p-2 hover:bg-white rounded-lg transition-colors">
+                      <div className="mt-auto p-5 pt-0 flex flex-col sm:flex-row items-center gap-3">
+                        <div className="flex items-center bg-slate-100 rounded-xl p-1 w-full sm:w-auto justify-between">
+                          <button 
+                            onClick={() => updateLocalQty(item.id, -1)} 
+                            className="p-2 hover:bg-white rounded-lg transition-colors text-slate-600"
+                          >
                             <Minus size={14} />
                           </button>
-                          <span className="w-8 text-center font-bold text-sm">{localQuantities[item.id] || 1}</span>
-                          <button onClick={() => updateLocalQty(item.id, 1)} className="p-2 hover:bg-white rounded-lg transition-colors">
+                          <span className="w-8 text-center font-bold text-sm text-slate-900">
+                            {localQuantities[item.id] || 1}
+                          </span>
+                          <button 
+                            onClick={() => updateLocalQty(item.id, 1)} 
+                            className="p-2 hover:bg-white rounded-lg transition-colors text-slate-600"
+                          >
                             <Plus size={14} />
                           </button>
                         </div>
@@ -210,10 +246,21 @@ const StoreScreen: React.FC = () => {
                         <button 
                           onClick={() => handleAddToCart(item)}
                           disabled={addingId === item.id}
-                          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                            ${successId === item.id ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-indigo-600'}`}
+                          className={`flex-1 w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                            ${successId === item.id 
+                              ? 'bg-green-500 text-white' 
+                              : 'bg-slate-900 text-white hover:bg-indigo-600 active:scale-95'}`}
                         >
-                          {addingId === item.id ? <Loader2 className="animate-spin" size={16}/> : 'Add'}
+                          {addingId === item.id ? (
+                            <Loader2 className="animate-spin" size={16}/>
+                          ) : successId === item.id ? (
+                            'Added to Cart'
+                          ) : (
+                            <>
+                              <ShoppingCart size={16} />
+                              <span>Add</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -229,17 +276,72 @@ const StoreScreen: React.FC = () => {
         })}
       </div>
 
-      {/* Desktop Sidebar Cart (Hidden on Mobile) */}
+      {/* QUICK VIEW MODAL */}
+      {selectedItem && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            onClick={() => setSelectedItem(null)}
+          />
+          <div className="relative bg-white w-full max-w-lg rounded-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            {/* Close Button */}
+            <button 
+              onClick={() => setSelectedItem(null)}
+              className="absolute top-5 right-5 z-10 p-2 bg-white/80 backdrop-blur-md rounded-full text-slate-500 hover:text-slate-900 hover:bg-white transition-all shadow-sm"
+            >
+              <X size={20} strokeWidth={3} />
+            </button>
+
+            {/* Modal Content */}
+            <div className="flex flex-col">
+              <div className="w-full aspect-square bg-slate-50 flex items-center justify-center border-b border-slate-100">
+                {selectedItem.image ? (
+                  <img 
+                    src={selectedItem.image} 
+                    alt={selectedItem.name} 
+                    className="w-full h-full object-contain p-8"
+                  />
+                ) : (
+                  <div className="text-slate-300 font-bold uppercase tracking-widest">No Image</div>
+                )}
+              </div>
+              <div className="p-8">
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-2 block">
+                  {selectedItem.category}
+                </span>
+                <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mb-2">
+                  {selectedItem.name}
+                </h2>
+                <p className="text-slate-500 text-sm leading-relaxed mb-6">
+                  {selectedItem.description}
+                </p>
+                <div className="flex items-center justify-between pt-6 border-t border-slate-100">
+                  <span className="text-2xl font-black text-slate-900">{selectedItem.price}</span>
+                  <button 
+                    onClick={() => {
+                      handleAddToCart(selectedItem);
+                      setSelectedItem(null);
+                    }}
+                    className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-all active:scale-95"
+                  >
+                    Add to Cart
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebars and Overlays */}
       {user && (
         <aside className="hidden lg:block lg:w-96 shrink-0 border-l border-slate-200 bg-slate-50">
-          {/* Remove pt-1 and change top-0 to top-4 to match the parent's p-4 offset */}
           <div className="sticky top-4 pl-6">
             <CartScreen isEmbedded={true} />
           </div>
         </aside>
       )}
 
-      {/* Mobile Cart Drawer Overlay */}
       {isCartMobileOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
@@ -247,38 +349,31 @@ const StoreScreen: React.FC = () => {
         />
       )}
 
-      {/* Mobile Cart Drawer (Sliding from right) */}
       <div className={`fixed top-0 right-0 h-dvh w-[90%] max-w-90 bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${isCartMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           <CartScreen isEmbedded={true} onClose={() => setIsCartMobileOpen(false)} />
       </div>
 
-      {/* Mobile Orders Drawer Overlay */}
       {isOrdersMobileOpen && (
-  <div 
-    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
-    onClick={() => setIsOrdersMobileOpen(false)}
-  />
-)}
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
+          onClick={() => setIsOrdersMobileOpen(false)}
+        />
+      )}
 
-{/* Mobile Orders Drawer (Sliding from right) */}
-<div className={`fixed top-0 right-0 h-dvh w-[90%] max-w-md bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl flex flex-col ${isOrdersMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-  {/* Header inside the drawer */}
-  <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10 shrink-0">
-    <h2 className="font-bold text-xl text-slate-900">My Orders</h2>
-    <button 
-      onClick={() => setIsOrdersMobileOpen(false)} 
-      className="p-2 text-slate-500 font-bold hover:text-slate-800 transition-colors"
-    >
-      Close
-    </button>
-  </div>
-  
-  {/* Scrollable Content Area */}
-  <div className="flex-1 overflow-y-auto">
-    <OrderHistoryScreen isEmbedded={true} />
-  </div>
-</div>
-
+      <div className={`fixed top-0 right-0 h-dvh w-[90%] max-w-md bg-slate-50 z-50 transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl flex flex-col ${isOrdersMobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10 shrink-0">
+          <h2 className="font-bold text-xl text-slate-900">My Orders</h2>
+          <button 
+            onClick={() => setIsOrdersMobileOpen(false)} 
+            className="p-2 text-slate-500 font-bold hover:text-slate-800 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <OrderHistoryScreen isEmbedded={true} />
+        </div>
+      </div>
     </div>
   );
 };
