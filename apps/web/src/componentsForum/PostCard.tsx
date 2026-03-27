@@ -1,9 +1,8 @@
-//PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   doc, updateDoc, arrayRemove, arrayUnion, getDoc, collectionGroup, query, where, getDocs, writeBatch, deleteField,
-  addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp
+  addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp, setDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
@@ -171,7 +170,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
         const postRef = doc(db, 'myHealth_posts', post.id);
         batch.delete(postRef);
 
-        // 4. Commit everything
+        // 4. DUAL WRITE: Delete the news document if applicable
+        if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+          const newsRef = doc(db, 'myHealth_news', post.id);
+          batch.delete(newsRef);
+        }
+
+        // 5. Commit everything
         if (repliesSnapshot.size > 498) {
           throw new Error("Too many replies to delete in one go. Please use a Cloud Function.");
         }
@@ -199,7 +204,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
           if (!postDoc.exists()) throw new Error("Post missing");
           const currentConfirms = postDoc.data().confirm || [];
           const updatedConfirms = currentConfirms.filter((c: any) => c.userId !== user.uid);
+          
           transaction.update(postRef, { confirm: updatedConfirms });
+
+          // DUAL WRITE to news
+          if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+            const newsRef = doc(db, 'myHealth_news', post.id);
+            transaction.set(newsRef, {
+              confirm: updatedConfirms,
+              lastUpdated: serverTimestamp()
+            }, { merge: true });
+          }
         });
       } catch (err) {
         console.error("Remove confirm failed:", err);
@@ -233,50 +248,29 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
         location: locToSave,
         confirmTime: Timestamp.now()
       };      
-      await updateDoc(postRef, {
+      
+      const updatePayload = {
         confirm: arrayUnion(newConfirm),
         lastUpdated: serverTimestamp(),
         lastUpdatedBy: user.uid
-      });
+      };
+
+      await updateDoc(postRef, updatePayload);
+      
+      // DUAL WRITE to news
+      if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+        const newsRef = doc(db, 'myHealth_news', post.id);
+        const { lastUpdatedBy, ...newsData } = updatePayload;
+        await setDoc(newsRef, {
+          ...newsData,
+        }, { merge: true });
+      }
       
       setIsConfirmModalOpen(false);
       setCustomLat('');
       setCustomLng('');
     } catch (err) {
       console.error("Submit confirm failed:", err);
-    }
-  };
-
-  const handleReaction = async (e: React.MouseEvent, reactionType: 'like' | 'dislike') => {
-    e.stopPropagation();
-    if (!user) return alert("Please log in!");
-    const postRef = doc(db, 'myHealth_posts', post.id);
-
-    const likes = post.likes || [];
-    const dislikes = post.dislikes || [];
-    
-    try {
-      if (reactionType === 'like') {
-        if (hasLiked) {
-          await updateDoc(postRef, { likes: arrayRemove(user.uid) });
-        } else {
-          await updateDoc(postRef, { 
-            likes: arrayUnion(user.uid),
-            dislikes: hasDisliked ? arrayRemove(user.uid) : dislikes
-          });
-        }
-      } else {
-        if (hasDisliked) {
-          await updateDoc(postRef, { dislikes: arrayRemove(user.uid) });
-        } else {
-          await updateDoc(postRef, { 
-            dislikes: arrayUnion(user.uid),
-            likes: hasLiked ? arrayRemove(user.uid) : likes
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Reaction failed:", err);
     }
   };
 
@@ -312,10 +306,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
           };
         }
 
-        transaction.update(postRef, {
+        const updatePayload = {
           options: updatedOptions,
-          [`userVotes.${user.uid}`]: optionIndex
-        });
+          [`userVotes.${user.uid}`]: optionIndex,
+          lastUpdated: serverTimestamp() // Added so voting bumps the feed
+        };
+
+        transaction.update(postRef, updatePayload);
+
+        // DUAL WRITE to news
+        if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+          const newsRef = doc(db, 'myHealth_news', post.id);
+          transaction.set(newsRef, updatePayload, { merge: true });
+        }
       });
     } catch (err) {
       console.error("Vote Transaction failed:", err);
@@ -328,13 +331,54 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
     const postRef = doc(db, 'myHealth_posts', post.id);
     
     try {
-      if (hasSigned) {
-        await updateDoc(postRef, { signatures: arrayRemove(user.uid) }); 
-      } else {
-        await updateDoc(postRef, { signatures: arrayUnion(user.uid) });
+      const updatePayload = hasSigned 
+        ? { signatures: arrayRemove(user.uid), lastUpdated: serverTimestamp() }
+        : { signatures: arrayUnion(user.uid), lastUpdated: serverTimestamp() };
+
+      await updateDoc(postRef, updatePayload);
+
+      // DUAL WRITE to news
+      if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+        const newsRef = doc(db, 'myHealth_news', post.id);
+        await setDoc(newsRef, updatePayload, { merge: true });
       }
     } catch (err) {
       console.error("Signature failed:", err);
+    }
+  };
+
+  const handleReaction = async (e: React.MouseEvent, reactionType: 'like' | 'dislike') => {
+    e.stopPropagation();
+    if (!user) return alert("Please log in!");
+    const postRef = doc(db, 'myHealth_posts', post.id);
+
+    const likes = post.likes || [];
+    const dislikes = post.dislikes || [];
+    let updatePayload: any = {};
+    
+    try {
+      if (reactionType === 'like') {
+        updatePayload = hasLiked
+          ? { likes: arrayRemove(user.uid) }
+          : { likes: arrayUnion(user.uid), dislikes: hasDisliked ? arrayRemove(user.uid) : dislikes };
+      } else {
+        updatePayload = hasDisliked
+          ? { dislikes: arrayRemove(user.uid) }
+          : { dislikes: arrayUnion(user.uid), likes: hasLiked ? arrayRemove(user.uid) : likes };
+      }
+
+      await updateDoc(postRef, updatePayload);
+
+      // DUAL WRITE to news
+      if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+        const newsRef = doc(db, 'myHealth_news', post.id);
+        await setDoc(newsRef, { 
+          ...updatePayload, 
+          lastUpdated: serverTimestamp() 
+        }, { merge: true });
+      }
+    } catch (err) {
+      console.error("Reaction failed:", err);
     }
   };
 
@@ -375,12 +419,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
       await addDoc(collection(db, 'myHealth_posts', post.id, 'myHealth_replies'), replyData);
 
-      // Sets lastUpdatedBy so you don't receive notifications for your own activity
-      await updateDoc(doc(db, 'myHealth_posts', post.id), {
+      const updatePayload = {
         replyCount: increment(1),
         lastUpdated: serverTimestamp(),
         lastUpdatedBy: user.uid
-      });
+      };
+
+      await updateDoc(doc(db, 'myHealth_posts', post.id), updatePayload);
+
+      // DUAL WRITE to news
+      if (post.forumSection === 'Population Health' && (post.hazard || post.help)) {
+        const newsRef = doc(db, 'myHealth_news', post.id);
+        const { lastUpdatedBy, ...newsData } = updatePayload;
+        await setDoc(newsRef, newsData, { merge: true });
+      }
 
       setIsExpanded(true);
       setReplyContent('');

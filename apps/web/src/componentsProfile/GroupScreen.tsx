@@ -627,6 +627,12 @@ export const GroupScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (activeTab === 'compareVitals' && compareView === 'allTime') {
+      setCompareView('percentile');
+    }
+  }, [activeTab, compareView]);
+
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-emerald-500" size={40} />

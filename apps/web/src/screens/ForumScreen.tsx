@@ -1,6 +1,6 @@
 //ForumScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -112,16 +112,10 @@ const ForumScreen: React.FC = () => {
 
     return posts
       .filter((post) => {
-        // RULE 1: It must be your post to show up as a notification bell
         if (post.authorId !== user.uid) return false;
-
-        // RULE 2: Someone ELSE must have been the last person to update it
         if (!post.lastUpdatedBy || post.lastUpdatedBy === user.uid) return false;
-
-        // RULE 3: Check against your personal "last read" ledger
         const lastReadEntry = userData[`last_read_post_${post.id}`];
         const postUpdatedMillis = post.lastUpdated?.toMillis() || 0;
-
         // If there is activity from someone else and you've NEVER read the post, it's unread
         if (!lastReadEntry) return true;
 
@@ -143,8 +137,17 @@ const ForumScreen: React.FC = () => {
         if (post.help && post.helpEndDate) {
           const expiry = post.helpEndDate.toDate ? post.helpEndDate.toDate() : new Date(post.helpEndDate);
           if (now > expiry) {
-            console.log(`Post ${post.id} expired. Deleting...`);
+            console.log(`Post ${post.id} expired. Deleting from posts and global feed...`);
+            
+            // 1. Delete original post
             await deleteDoc(doc(db, 'myHealth_posts', post.id));
+            
+            // 2. Delete the separate news document
+            try {
+              await deleteDoc(doc(db, 'myHealth_news', post.id));
+            } catch (e) {
+              console.error("Error removing expired post from news collection:", e);
+            }
           }
         }
       });
@@ -281,7 +284,26 @@ const ForumScreen: React.FC = () => {
         finalPostData = { ...finalPostData, type: 'petition', title: postTitle.trim(), content: newPostContent.trim(), signatures: [] };
       }
 
-      await addDoc(collection(db, 'myHealth_posts'), finalPostData);
+      const postDocRef = await addDoc(collection(db, 'myHealth_posts'), finalPostData);
+
+      // --- THE DUAL WRITE (Separate Document Approach) ---
+      if (activeSection === 'Population Health' && (finalPostData.hazard || finalPostData.help)) {
+        try {
+          const newsRef = doc(db, 'myHealth_news', postDocRef.id);
+
+          const { 
+            authorId, authorName, forumSection, lastUpdatedBy, 
+            ...newsData 
+          } = finalPostData;
+
+          await setDoc(newsRef, {
+            ...newsData,
+          }, { merge: true });
+        } catch (e) {
+          console.error("Failed to write to news collection:", e);
+        }
+      }
+
       resetModal();
     } catch (err) {
       console.error("Error creating post:", err);
