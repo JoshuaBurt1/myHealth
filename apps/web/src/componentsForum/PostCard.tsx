@@ -1,4 +1,4 @@
-//PostCard.tsx
+// PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -23,7 +23,7 @@ interface PostCardProps {
 const authorImageCache: Record<string, string> = {};
 
 export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, isAutoExpanded }) => {
-    const [authorImageId, setAuthorImageId] = useState<string | null>(
+  const [authorImageId, setAuthorImageId] = useState<string | null>(
     post.authorId ? authorImageCache[post.authorId] || null : null
   );
   const [isExpanded, setIsExpanded] = useState(false);
@@ -132,6 +132,56 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
 
     fetchAuthorImage();
   }, [post.authorId]);
+
+  // --- AUTO-PURGE EXPIRED HELP POSTS ---
+  useEffect(() => {
+    if (!post.help || !post.helpEndDate) return;
+
+    const autoPurgePost = async () => {
+      try {
+        const batch = writeBatch(db);
+
+        // 1. Find all nested replies
+        const allRepliesQuery = query(
+          collectionGroup(db, 'myHealth_replies'),
+          where('rootPostId', '==', post.id)
+        );
+        const repliesSnapshot = await getDocs(allRepliesQuery);
+        repliesSnapshot.forEach((replyDoc) => batch.delete(replyDoc.ref));
+
+        // 2. Delete parent post
+        batch.delete(doc(db, 'myHealth_posts', post.id));
+
+        // 3. Delete from news dual-write
+        if (post.forumSection === 'Population Health') {
+          batch.delete(doc(db, 'myHealth_news', post.id));
+        }
+
+        await batch.commit();
+        console.log(`Auto-purged expired post: ${post.id}`);
+      } catch (err) {
+        console.error("Auto-purge failed:", err);
+      }
+    };
+
+    const checkExpiry = () => {
+      const now = Date.now();
+      const expiryTime = post.helpEndDate.toMillis();
+
+      if (now >= expiryTime) {
+        autoPurgePost();
+      } else {
+        const timeRemaining = expiryTime - now;
+        const timer = setTimeout(() => {
+          autoPurgePost();
+        }, timeRemaining);
+
+        return () => clearTimeout(timer);
+      }
+    };
+
+    checkExpiry();
+  }, [post.id, post.helpEndDate, post.help, post.forumSection]);
 
   const formatHelpDate = (ts: any) => {
     if (!ts) return null;
@@ -474,7 +524,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
   };
 
   const toggleReplies = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // <-- CRITICAL FIX: Stops the parent card navigation from firing
     
     // If we are opening the replies section and it has an unread notification, mark it as read
     if (!isExpanded) {
