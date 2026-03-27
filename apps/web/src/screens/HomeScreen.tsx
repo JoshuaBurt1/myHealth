@@ -1,13 +1,28 @@
-// HomeScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, query, limit, onSnapshot, orderBy } from 'firebase/firestore';
-import { Vote, FileSignature, ArrowRight, Globe, AlertTriangle, HeartHandshake } from 'lucide-react';
+import { Vote, FileSignature, ArrowRight, Globe, AlertTriangle, HeartHandshake, MapPin, Navigation } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
-
-// Import the MapComponent 
 import { ExpandableMap } from '../componentsForum/MapComponents';
+import { radiusToZoom, zoomToRadius } from '../componentsForum/mapUtils';
+
+// Ticker Animation Style
+const tickerStyles = `
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .animate-ticker {
+    display: flex;
+    gap: 2rem;
+    animation: ticker 30s linear infinite;
+    width: max-content;
+  }
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
+`;
 
 interface NewsItem {
   id: string;
@@ -43,14 +58,16 @@ const HELP_COLORS: Record<string, string> = {
 const HomeScreen: React.FC = () => {
   const { userLocation, locationError } = useLocation();
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
-  const [mapZoom, setMapZoom] = useState(2);
+  
+  const [radius, setRadius] = useState(2500); 
+  const [overrideLocation, setOverrideLocation] = useState<[number, number] | null>(null);
+  const [latInput, setLatInput] = useState('');
+  const [lngInput, setLngInput] = useState('');
+
+  const mapZoom = useMemo(() => radiusToZoom(radius), [radius]);
+  const effectiveLocation = overrideLocation || userLocation;
 
   useEffect(() => {
-    if (userLocation) setMapZoom(9);
-  }, [userLocation]);
-
-  useEffect(() => {
-    // Single source of truth: myHealth_news
     const newsRef = collection(db, 'myHealth_news');
     const newsQ = query(newsRef, orderBy('lastUpdated', 'desc'), limit(100));
 
@@ -62,27 +79,44 @@ const HomeScreen: React.FC = () => {
     return () => unsubNews();
   }, []);
 
-  // Derived state for the top highlight cards
-  const activePoll = useMemo(() => newsItems.find(i => i.type === 'poll'), [newsItems]);
-  const activePetition = useMemo(() => newsItems.find(i => i.type === 'petition'), [newsItems]);
+  const handleApplyCoordinates = () => {
+    const lat = parseFloat(latInput);
+    const lng = parseFloat(lngInput);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      setOverrideLocation([lat, lng]);
+    } else {
+      alert("Please enter valid numerical coordinates.");
+    }
+  };
 
-  // Derived feeds
-  const hazardsFeed = useMemo(() => 
-    newsItems.filter(i => i.hazard), 
-  [newsItems]);
-  
-  const helpFeed = useMemo(() => 
-    newsItems.filter(i => i.help), 
-  [newsItems]);
+  const filteredNews = useMemo(() => {
+    return newsItems.filter(item => {
+      if (effectiveLocation && item.location && radius < 20000) {
+        const [postLat, postLng] = item.location;
+        const [userLat, userLng] = effectiveLocation;
+        const distInDegrees = Math.sqrt(Math.pow(postLat - userLat, 2) + Math.pow(postLng - userLng, 2));
+        if (distInDegrees > radius * 0.009) return false;
+      }
+      return true;
+    });
+  }, [newsItems, effectiveLocation, radius]);
+
+  const newsLinks = useMemo(() => {
+    const links = [];
+    const poll = filteredNews.find(i => i.type === 'poll');
+    const petition = filteredNews.find(i => i.type === 'petition');
+    if (poll) links.push({ ...poll, icon: <Vote size={14} />, label: 'Active Poll', color: 'indigo' });
+    if (petition) links.push({ ...petition, icon: <FileSignature size={14} />, label: 'New Petition', color: 'emerald' });
+    return [...links, ...links];
+  }, [filteredNews]);
+
+  const hazardsFeed = useMemo(() => filteredNews.filter(i => i.hazard), [filteredNews]);
+  const helpFeed = useMemo(() => filteredNews.filter(i => i.help), [filteredNews]);
 
   const renderFeedItem = (item: NewsItem, color: string) => {
-  const targetPath = `/forum/${item.id}`;
-
-  const displayDate = item.lastUpdated?.toDate 
-    ? item.lastUpdated.toDate() 
-    : (item.lastUpdated ? new Date(item.lastUpdated) : null);
-
-  const locationCount = item.confirm ? item.confirm.length : (item.location ? 1 : 0);
+    const targetPath = `/forum/${item.id}`;
+    const displayDate = item.lastUpdated?.toDate ? item.lastUpdated.toDate() : (item.lastUpdated ? new Date(item.lastUpdated) : null);
+    const locationCount = item.confirm ? item.confirm.length : (item.location ? 1 : 0);
 
     return (
       <Link 
@@ -107,85 +141,135 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 p-4 bg-slate-50 min-h-screen">
-      <div className="flex-1 max-w-2xl w-full space-y-8"> 
-        <header>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Desk</h1>
-          <p className="text-slate-500 mt-1">
-            {locationError ? "Location access limited." : "Showing updates based on recent activity."}
-          </p>
+    /* Changed to max-w-7xl and added pb-24 to match reference */
+    <div className="flex flex-col p-4 bg-slate-50 min-h-screen pb-24 max-w-7xl mx-auto">
+      <style>{tickerStyles}</style>
+      <div className="w-full space-y-8"> 
+        
+        {/* HEADER & TICKER RIBBON */}
+        <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 overflow-hidden">
+          <div className="flex-shrink-0">
+            {/* Changed font-black to font-bold and text size to match reference */}
+            <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">Health Desk</h1>
+            {/* Adjusted typography for the description */}
+            <p className="text-slate-500 mt-1 text-sm lg:text-base">
+              Showing {filteredNews.length} updates based on your active map radius.
+            </p>
+          </div>
+          
+          {newsLinks.length > 0 && (
+            <div className="flex-1 relative overflow-hidden h-14 bg-white/50 rounded-2xl border border-slate-200 backdrop-blur-sm mt-2">
+              <div className="animate-ticker py-2 px-4">
+                {newsLinks.map((link, idx) => (
+                  <Link 
+                    key={`${link.id}-${idx}`}
+                    to={`/forum/${link.id}`}
+                    className="flex items-center gap-3 px-4 py-2 hover:bg-white rounded-xl transition-colors group border border-transparent hover:border-slate-100"
+                  >
+                    <div className={`p-1.5 rounded-md ${link.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      {link.icon}
+                    </div>
+                    <div className="whitespace-nowrap">
+                      <span className={`text-[9px] font-black uppercase tracking-widest mr-2 ${link.color === 'indigo' ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                        {link.label}
+                      </span>
+                      <span className="text-sm font-bold text-slate-800">{link.title}</span>
+                    </div>
+                    <ArrowRight size={12} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {activePoll && (
-            <Link to={`/forum/${activePoll.id}`} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-indigo-50 transition-colors shadow-sm group">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-white transition-colors"><Vote className="text-indigo-600" size={20} /></div>
-                <div>
-                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Poll</p>
-                  <p className="text-sm font-semibold text-slate-800 truncate max-w-35">{activePoll.title}</p>
+        {/* MAP SECTION */}
+        <div className="w-full">
+          <div className="bg-white p-2 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="w-full aspect-6/1 relative z-0 overflow-hidden rounded-2xl bg-slate-100">
+              <ExpandableMap 
+                userLocation={effectiveLocation} 
+                mapZoom={mapZoom} 
+                activeSection="Population Health" 
+                filteredPosts={filteredNews.map(item => ({...item, forumSection: 'Population Health'} as any))} 
+                radius={radius}
+              />
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6 p-4">
+              <div className="flex-1 space-y-2">
+                <div className="flex justify-between items-end">
+                  <label className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                    <MapPin size={14} className="text-indigo-500" /> Filter Radius
+                  </label>
+                  <span className="text-sm font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                    {radius >= 20000 ? "Global" : `${radius}km`}
+                  </span>
+                </div>
+                {effectiveLocation ? (
+                  <input 
+                    type="range"
+                    min="2" max="18" step="1"
+                    value={radiusToZoom(radius)}
+                    onChange={(e) => setRadius(zoomToRadius(parseInt(e.target.value)))}
+                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 scale-x-[-1]" 
+                  />
+                ) : (
+                  <div className="text-[10px] font-bold text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                    {locationError ? `Error: ${locationError}` : "Enable location to use distance filter"}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 border-l border-slate-100 pl-6 flex flex-col justify-center">
+                <label className="text-xs font-bold text-slate-600 flex items-center gap-2 mb-2">
+                  <Navigation size={14} className="text-emerald-500" /> Override Location
+                </label>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <input type="number" step="any" value={latInput} onChange={e => setLatInput(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none focus:border-indigo-500 text-sm" placeholder="Lat" />
+                  </div>
+                  <div className="flex-1">
+                    <input type="number" step="any" value={lngInput} onChange={e => setLngInput(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none focus:border-indigo-500 text-sm" placeholder="Lng" />
+                  </div>
+                  <button onClick={handleApplyCoordinates} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors">Apply</button>
                 </div>
               </div>
-              <ArrowRight size={16} className="text-indigo-400 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          )}
-          {activePetition && (
-            <Link to={`/forum/${activePetition.id}`} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-emerald-50 transition-colors shadow-sm group">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-white transition-colors"><FileSignature className="text-emerald-600" size={20} /></div>
-                <div>
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">New Petition</p>
-                  <p className="text-sm font-semibold text-slate-800 truncate max-w-35">{activePetition.title}</p>
-                </div>
-              </div>
-              <ArrowRight size={16} className="text-emerald-400 group-hover:translate-x-1 transition-transform" />
-            </Link>
-          )}
+            </div>
+          </div>
         </div>
 
-        <section>
-          <div className="flex items-center gap-2 mb-4 border-b border-slate-200 pb-2">
-            <AlertTriangle size={18} className="text-orange-500" />
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Active Hazards</h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {hazardsFeed.map(item => renderFeedItem(item, HAZARD_COLORS[item.hazard?.type || ''] || '#ef4444'))}
-          </div>
-        </section>
+        {/* FEEDS GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <HeartHandshake size={18} className="text-indigo-500" />
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Community Help</h2>
+            </div>
+            {helpFeed.length > 0 ? (
+              <div className="grid gap-4">
+                {helpFeed.map(item => renderFeedItem(item, HELP_COLORS[item.help?.type || ''] || '#6366f1'))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 font-medium">No help requests within range.</p>
+            )}
+          </section>
 
-        <section>
-          <div className="flex items-center gap-2 mb-4 border-b border-slate-200 pb-2">
-            <HeartHandshake size={18} className="text-indigo-500" />
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Community Help</h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {helpFeed.map(item => renderFeedItem(item, HELP_COLORS[item.help?.type || ''] || '#6366f1'))}
-          </div>
-        </section>
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <AlertTriangle size={18} className="text-orange-500" />
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Active Hazards</h2>
+            </div>
+            {hazardsFeed.length > 0 ? (
+              <div className="grid gap-4">
+                {hazardsFeed.map(item => renderFeedItem(item, HAZARD_COLORS[item.hazard?.type || ''] || '#ef4444'))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 font-medium">No hazards within range.</p>
+            )}
+          </section>
+        </div>
       </div>
-
-      <aside className="w-full lg:w-80 shrink-0 space-y-6">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Activity Map</h3>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${userLocation ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'}`}>
-              {userLocation ? 'Live' : 'Global View'}
-            </span>
-          </div>
-
-          <ExpandableMap 
-            userLocation={userLocation} 
-            mapZoom={mapZoom} 
-            activeSection="Population Health" 
-            filteredPosts={newsItems.map(item => ({...item, forumSection: 'Population Health'}))} 
-          />
-        </div>
-
-        <div className="bg-indigo-600 p-6 rounded-3xl shadow-lg">
-           <h4 className="text-white font-bold text-lg leading-tight mb-2">Community Shield</h4>
-           <p className="text-indigo-100 text-xs">When you confirm a hazard from your device, you add a coordinate to the global health map.</p>
-        </div>
-      </aside>
     </div>
   );
 };
