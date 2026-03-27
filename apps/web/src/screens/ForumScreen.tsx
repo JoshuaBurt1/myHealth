@@ -1,9 +1,11 @@
 //ForumScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, setDoc } from 'firebase/firestore';
+import { useParams, useNavigate } from 'react-router-dom';
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useLocation } from '../context/LocationContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useForum } from '../context/ForumContext';
 import { MessageSquarePlus, Globe, Search, ChevronLeft, ChevronRight, MapPin, Bell } from 'lucide-react';
 
 // Components & Types
@@ -11,7 +13,6 @@ import { ForumSkeleton } from '../componentsForum/ForumSkeleton';
 import { PostCard } from '../componentsForum/PostCard';
 import { CreatePostModal } from '../componentsForum/CreatePostModal';
 import { ExpandableMap } from '../componentsForum/MapComponents';
-import type { Post } from '../componentsForum/forum';
 
 // Constants & Utils
 import { 
@@ -45,8 +46,7 @@ const DropdownGroup = ({ label, items, current, setter, closer }: { label: strin
 const ForumScreen: React.FC = () => {
   const { userLocation, locationError } = useLocation();
   const { userData } = useNotifications();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { posts, loading } = useForum();
   const user = auth.currentUser;
   
   // App State
@@ -86,14 +86,40 @@ const ForumScreen: React.FC = () => {
   const [radius, setRadius] = useState(2500); 
   const [currentPage, setCurrentPage] = useState(1);
   const [showTypes, setShowTypes] = useState({ post: true, poll: true, petition: true });
-  const [showOnlyNew, setShowOnlyNew] = useState(false);
 
   // Population Health "help" type Post Deletion
   const [helpStartDate, setHelpStartDate] = useState('');
   const [helpEndDate, setHelpEndDate] = useState('');
-  
+
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
+  const { postId } = useParams<{ postId: string }>();
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const lastProcessedId = React.useRef<string | null>(null);
+  const navigate = useNavigate();
+
   const POSTS_PER_PAGE = 10;
   const mapZoom = useMemo(() => radiusToZoom(radius), [radius]);
+
+  const handleGeneralInteraction = (targetPostId?: string) => {
+    if (!postId) return; // Already at /forum
+    
+    // If we clicked a post, check if it's the one currently in the URL
+    if (targetPostId === postId) return;
+
+    // Otherwise, reset route to base forum
+    navigate('/forum');
+  };
+
+  const handleSectionChange = (section: string) => {
+    handleGeneralInteraction();
+    setActiveSection(section);
+  };
+
+  const handleOpenModal = (mode: 'post' | 'poll' | 'petition') => {
+    handleGeneralInteraction();
+    setModalMode(mode);
+    setIsModalOpen(true);
+  };
 
   // Window Resize Listeners
   useEffect(() => {
@@ -105,63 +131,6 @@ const ForumScreen: React.FC = () => {
   useEffect(() => {
     if (!isMobile) setIsFilterDrawerOpen(false);
   }, [isMobile]);
-
-  // Unread Notifications Logic
-  const unreadPostIds = useMemo(() => {
-    if (!userData || !posts.length || !user) return [];
-
-    return posts
-      .filter((post) => {
-        if (post.authorId !== user.uid) return false;
-        if (!post.lastUpdatedBy || post.lastUpdatedBy === user.uid) return false;
-        const lastReadEntry = userData[`last_read_post_${post.id}`];
-        const postUpdatedMillis = post.lastUpdated?.toMillis() || 0;
-        // If there is activity from someone else and you've NEVER read the post, it's unread
-        if (!lastReadEntry) return true;
-
-        // It's unread ONLY if the post was updated AFTER you last clicked it
-        return postUpdatedMillis > lastReadEntry.toMillis();
-      })
-      .map((post) => post.id);
-  }, [posts, userData, user?.uid]);
-
-  // Data Fetching
-  useEffect(() => {
-    const q = query(collection(db, 'myHealth_posts'), orderBy('lastUpdated', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const now = new Date();
-      const allPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Post[];
-      
-      // FRONTEND AUTO-DELETE: Check for expired "Help" posts
-      allPosts.forEach(async (post) => {
-        if (post.help && post.helpEndDate) {
-          const expiry = post.helpEndDate.toDate ? post.helpEndDate.toDate() : new Date(post.helpEndDate);
-          if (now > expiry) {
-            console.log(`Post ${post.id} expired. Deleting from posts and global feed...`);
-            
-            // 1. Delete original post
-            await deleteDoc(doc(db, 'myHealth_posts', post.id));
-            
-            // 2. Delete the separate news document
-            try {
-              await deleteDoc(doc(db, 'myHealth_news', post.id));
-            } catch (e) {
-              console.error("Error removing expired post from news collection:", e);
-            }
-          }
-        }
-      });
-
-      setPosts(allPosts);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Reset page on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeSection, filterHazard, filterTopic, searchQuery, radius, showTypes]);
 
   // Data Derivation
   const filteredPosts = useMemo(() => {
@@ -198,6 +167,72 @@ const ForumScreen: React.FC = () => {
 
   const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE);
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
+
+  // Deep Link Auto-Scroll, Section Switch, & Pagination Jump
+  useEffect(() => {
+  if (!postId || loading || posts.length === 0 || lastProcessedId.current === postId) {
+    return;
+  }
+
+  const linkedPost = posts.find(p => p.id === postId);
+  if (!linkedPost) return;
+
+  // Switch Section
+  if (linkedPost.forumSection !== activeSection) {
+    setActiveSection(linkedPost.forumSection);
+    return; 
+  }
+
+  const postIndex = filteredPosts.findIndex(p => p.id === postId);
+  if (postIndex !== -1) {
+    const targetPage = Math.floor(postIndex / POSTS_PER_PAGE) + 1;
+    
+    if (currentPage !== targetPage) {
+      setCurrentPage(targetPage);
+    }
+
+    lastProcessedId.current = postId;
+
+    // Reduced delay for snappier navigation
+    setTimeout(() => {
+      const element = document.getElementById(`post-${postId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedId(postId);
+      }
+    }, 100); // 100ms is usually plenty with pre-loaded context data
+  }
+}, [postId, loading, posts, filteredPosts, activeSection, currentPage]);
+
+  useEffect(() => {
+    // If the user navigates away or to a different post, clear the lock
+    if (postId !== lastProcessedId.current) {
+      lastProcessedId.current = null;
+    }
+  }, [postId]);
+  
+  // Unread Notifications Logic
+  const unreadPostIds = useMemo(() => {
+    if (!userData || !posts.length || !user) return [];
+
+    return posts
+      .filter((post) => {
+        if (post.authorId !== user.uid) return false;
+        if (!post.lastUpdatedBy || post.lastUpdatedBy === user.uid) return false;
+        const lastReadEntry = userData[`last_read_post_${post.id}`];
+        const postUpdatedMillis = post.lastUpdated?.toMillis() || 0;
+        if (!lastReadEntry) return true;
+
+        // It's unread ONLY if the post was updated AFTER you last clicked it
+        return postUpdatedMillis > lastReadEntry.toMillis();
+      })
+      .map((post) => post.id);
+  }, [posts, userData, user?.uid]);
+
+  // Reset page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSection, filterHazard, filterTopic, searchQuery, radius, showTypes]);
 
   const handleTogglePostLocation = () => {
     if (postLocation) {
@@ -292,7 +327,7 @@ const ForumScreen: React.FC = () => {
           const newsRef = doc(db, 'myHealth_news', postDocRef.id);
 
           const { 
-            authorId, authorName, forumSection, lastUpdatedBy, 
+            authorId, authorName, lastUpdatedBy, 
             ...newsData 
           } = finalPostData;
 
@@ -463,7 +498,7 @@ const ForumScreen: React.FC = () => {
           
           <div className="flex flex-col items-end gap-2 shrink-0">
             <button 
-              onClick={() => setIsModalOpen(true)} 
+              onClick={() => handleOpenModal('post')}
               className="flex items-center justify-center gap-2 bg-indigo-600 text-white w-28 sm:w-32 py-3 lg:px-6 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 whitespace-nowrap order-1"
             >
               <MessageSquarePlus size={20} />
@@ -494,7 +529,7 @@ const ForumScreen: React.FC = () => {
               <div key={section.id} className="relative flex-1">
                 <button
                   onClick={() => { 
-                    setActiveSection(section.id); 
+                    handleSectionChange(section.id);
                     setFilterHazard('none'); 
                     setFilterTopic('none'); 
                     setSearchQuery('');
@@ -538,12 +573,28 @@ const ForumScreen: React.FC = () => {
           ) : paginatedPosts.length > 0 ? (
             <>
               {paginatedPosts.map((post) => (
-                <PostCard 
+                <div 
                   key={post.id} 
-                  post={post} 
-                  isUnread={unreadPostIds.includes(post.id)} 
-                  onMarkRead={() => handleMarkRead(post.id)} 
-                />
+                  id={`post-${post.id}`}
+                  onClick={() => {
+                    if (postId !== post.id) {
+                      navigate(`/forum/${post.id}`);
+                    }
+                  }}
+                  className={`group relative cursor-pointer rounded-xl sm:rounded-2xl transition-transform ${
+                    highlightedId === post.id ? 'z-10 scale-[1.01] shadow-xl' : 'scale-100'
+                  }`}
+                >
+                  {highlightedId === post.id && (
+                    <div className="absolute inset-0 border-4 border-indigo-500 rounded-xl sm:rounded-2xl pointer-events-none z-20" />
+                  )}
+                  <PostCard 
+                    post={post} 
+                    isUnread={unreadPostIds.includes(post.id)} 
+                    onMarkRead={() => handleMarkRead(post.id)}
+                    isAutoExpanded={post.id === postId}
+                  />
+                </div>
               ))}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 mt-6">
@@ -560,7 +611,7 @@ const ForumScreen: React.FC = () => {
           ) : (
             <div className="text-center py-12 bg-white rounded-3xl border border-slate-200">
               <p className="text-slate-500 font-medium">No posts found.</p>
-              <button onClick={() => setIsModalOpen(true)} className="mt-4 text-indigo-600 font-bold hover:underline">Be the first to post</button>
+              <button onClick={() => handleOpenModal('post')} className="mt-4 text-indigo-600 font-bold hover:underline">Be the first to post</button>
             </div>
           )}
         </div>

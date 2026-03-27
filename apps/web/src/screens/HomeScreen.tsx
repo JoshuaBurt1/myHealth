@@ -1,3 +1,4 @@
+// HomeScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, query, limit, onSnapshot, orderBy } from 'firebase/firestore';
@@ -76,7 +77,7 @@ const HomeScreen: React.FC = () => {
 
   const renderFeedItem = (item: NewsItem, color: string) => {
     const isForumType = item.type === 'poll' || item.type === 'petition';
-    const targetPath = isForumType ? `/forum` : `/news/${item.id}`;
+    const targetPath = isForumType ? `/forum/${item.id}` : `/news/${item.id}`;
 
     const displayDate = item.lastUpdated?.toDate 
       ? item.lastUpdated.toDate() 
@@ -118,7 +119,7 @@ const HomeScreen: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {activePoll && (
-            <Link to="/forum" className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-indigo-50 transition-colors shadow-sm group">
+            <Link to={`/forum/${activePoll.id}`} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-indigo-50 transition-colors shadow-sm group">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-white transition-colors"><Vote className="text-indigo-600" size={20} /></div>
                 <div>
@@ -130,7 +131,7 @@ const HomeScreen: React.FC = () => {
             </Link>
           )}
           {activePetition && (
-            <Link to="/forum" className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-emerald-50 transition-colors shadow-sm group">
+            <Link to={`/forum/${activePetition.id}`} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:bg-emerald-50 transition-colors shadow-sm group">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-white transition-colors"><FileSignature className="text-emerald-600" size={20} /></div>
                 <div>

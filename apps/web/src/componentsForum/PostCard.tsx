@@ -1,5 +1,6 @@
+//PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   doc, updateDoc, arrayRemove, arrayUnion, getDoc, collectionGroup, query, where, getDocs, writeBatch, deleteField,
   addDoc, collection, serverTimestamp, increment, runTransaction, Timestamp, setDoc
@@ -15,10 +16,15 @@ interface PostCardProps {
   post: Post;
   isUnread?: boolean;
   onMarkRead?: () => void;
+  isAutoExpanded?: boolean;
 }
 
-export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }) => {
-  const [authorImageId, setAuthorImageId] = useState<string | null>(null);
+const authorImageCache: Record<string, string> = {};
+
+export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, isAutoExpanded }) => {
+    const [authorImageId, setAuthorImageId] = useState<string | null>(
+    post.authorId ? authorImageCache[post.authorId] || null : null
+  );
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
@@ -36,6 +42,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
   const [customLng, setCustomLng] = useState('');
 
   const { userLocation } = useLocation();
+  const { postId: urlPostId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
   const user = auth.currentUser;
 
@@ -57,14 +64,34 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
   const options = post.type === 'poll' ? post.options || [] : [];
   const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
 
+  useEffect(() => {
+    if (isAutoExpanded) {
+      setIsPostVisible(true);
+      setIsExpanded(true);
+    }
+  }, [isAutoExpanded]);
+
   // Updated handleTogglePost to use the optimistic handler
   const handleTogglePost = () => {
+    const isCurrentRoute = urlPostId === post.id;
+
+    if (isPostVisible && !isCurrentRoute) {
+      navigate(`/forum/${post.id}`);
+      handleMarkAsReadOptimistically();
+      return;
+    }
+    // Otherwise, behave normally (toggle)
     const newVisibility = !isPostVisible;
     setIsPostVisible(newVisibility);
     
     if (newVisibility) {
+      navigate(`/forum/${post.id}`);
       setIsExpanded(true);
       handleMarkAsReadOptimistically(); 
+    } else {
+      if (isCurrentRoute) {
+        navigate('/forum');
+      }
     }
   };
 
@@ -85,17 +112,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
   useEffect(() => {
     const fetchAuthorImage = async () => {
-      // We only return early if there is no authorId. 
-      if (!post.authorId) return;
+      if (!post.authorId || authorImageCache[post.authorId]) return;
 
       try {
         const imgDocRef = doc(db, 'users', post.authorId, 'profile', 'image_data');
         const imgSnap = await getDoc(imgDocRef);
+        
         if (imgSnap.exists()) {
-          setAuthorImageId(imgSnap.data().imageId);
+          const id = imgSnap.data().imageId;
+          // Save to the persistent cache
+          authorImageCache[post.authorId] = id; 
+          setAuthorImageId(id);
         }
       } catch (err) {
-        // If rules block this for logged-out users, it will land here.
         console.error("Failed to fetch image for user:", post.authorId);
       }
     };
@@ -455,9 +484,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead }
 
   return (
   <>
-    <div className={`group relative bg-white rounded-xl sm:rounded-2xl border transition-all ${
-      showBell ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
-    } flex flex-col hover:border-indigo-200`}>
+    <div 
+      id={`post-${post.id}`}
+      className={`group relative bg-white rounded-xl sm:rounded-2xl border transition-all ${
+        showBell ? 'border-blue-200 ring-1 ring-blue-100 shadow-md' : 'border-slate-100 shadow-sm'
+      } flex flex-col hover:border-indigo-200`}
+    >
       {/* LIGHT GREY HEADER (COLLAPSED VIEW) */}
       <div 
         className={`bg-white p-3 sm:p-4 cursor-pointer hover:bg-slate-100 transition-colors flex items-start gap-3 sm:gap-4 ${isPostVisible ? 'border-b border-slate-200 rounded-t-xl sm:rounded-t-2xl' : 'rounded-xl sm:rounded-2xl'}`}

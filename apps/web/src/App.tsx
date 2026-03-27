@@ -5,6 +5,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
 import { LocationProvider } from './context/LocationContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ForumProvider } from './context/ForumContext';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import Navbar from './components/Navbar';
 import HomeScreen from './screens/HomeScreen';
@@ -31,6 +32,7 @@ function AppContent({ user }: { user: User | null }) {
           <Route path="cart" element={user ? <CartScreen /> : <Navigate to="/login" replace />} />
           <Route path="payment" element={user ? <PaymentScreen /> : <Navigate to="/login" replace />} />
           <Route path="forum" element={<ForumScreen />} />
+          <Route path="forum/:postId" element={<ForumScreen />} />
           <Route path="login" element={<LoginScreen />} />
           <Route path="register" element={<RegisterScreen />} />
           <Route
@@ -78,9 +80,11 @@ export default function App() {
     <PayPalScriptProvider options={paypalOptions}>
       <LocationProvider>
         <NotificationProvider>
-          <Router>
-            <AppContent user={user} />
-          </Router>
+          <ForumProvider>
+            <Router>
+              <AppContent user={user} />
+            </Router>
+          </ForumProvider>
         </NotificationProvider>
       </LocationProvider>
     </PayPalScriptProvider>
