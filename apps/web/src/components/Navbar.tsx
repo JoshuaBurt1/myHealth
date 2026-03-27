@@ -36,10 +36,12 @@ const Navbar = ({ user }: NavbarProps) => {
     const unreadPost = userPosts.some((post: Post) => {
       const updatedTime = post.lastUpdated?.toMillis() || post.createdAt?.toMillis() || 0;
       const readTime = userData[`last_read_post_${post.id}`]?.toMillis() || 0;
-      const isNotMe = post.lastUpdatedBy && post.lastUpdatedBy !== user.uid;
       
-      // Removed prevLoginTime: The notification stays until readTime >= updatedTime
-      return isNotMe && updatedTime > readTime;
+      const isNotMe = post.lastUpdatedBy && post.lastUpdatedBy !== user.uid;
+      const isMyPost = post.authorId === user.uid;
+      
+      // Only show the bell if it's YOUR post, someone ELSE updated it, and it's UNREAD
+      return isMyPost && isNotMe && updatedTime > readTime;
     });
 
     // 2. Check for unread Group Messages

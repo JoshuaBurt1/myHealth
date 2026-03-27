@@ -800,7 +800,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
           
           {/* Render PostReplies Block */}
           {isExpanded && (
-            <div className="mt-4 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div 
+              className="mt-4 border-t border-slate-100 pt-4"
+              onClick={(e) => e.stopPropagation()}
+            >
               <PostReplies postId={post.id} />
             </div>
           )}
