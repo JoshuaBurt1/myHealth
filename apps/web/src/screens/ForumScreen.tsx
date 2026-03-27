@@ -101,12 +101,15 @@ const ForumScreen: React.FC = () => {
   const mapZoom = useMemo(() => radiusToZoom(radius), [radius]);
 
   const handleGeneralInteraction = (targetPostId?: string) => {
-    if (!postId) return; // Already at /forum
+    // If no post is open, there's nothing to "close" or reset
+    if (!postId) return; 
     
-    // If we clicked a post, check if it's the one currently in the URL
+    // If we are navigating to a post that is already the current one, 
+    // do nothing (prevents the 'close then open' flicker)
     if (targetPostId === postId) return;
 
-    // Otherwise, reset route to base forum
+    // Only navigate to base forum if we are actually clearing the view 
+    // (e.g., clicking 'Create' or a New Section)
     navigate('/forum');
   };
 
@@ -120,6 +123,14 @@ const ForumScreen: React.FC = () => {
     setModalMode(mode);
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!postId) {
+      lastProcessedId.current = null;
+      setHighlightedId(null);
+      return;
+    }
+  }, [postId, loading]);
 
   // Window Resize Listeners
   useEffect(() => {
@@ -572,27 +583,27 @@ const ForumScreen: React.FC = () => {
             </>
           ) : paginatedPosts.length > 0 ? (
             <>
-              {paginatedPosts.map((post) => (
+             {paginatedPosts.map((post) => (
                 <div 
                   key={post.id} 
                   id={`post-${post.id}`}
-                  onClick={() => {
-                    if (postId !== post.id) {
-                      navigate(`/forum/${post.id}`);
-                    }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    postId === post.id ? navigate('/forum') : navigate(`/forum/${post.id}`);
                   }}
-                  className={`group relative cursor-pointer rounded-xl sm:rounded-2xl transition-transform ${
-                    highlightedId === post.id ? 'z-10 scale-[1.01] shadow-xl' : 'scale-100'
+                  /* Added: lower z-index by default, only z-10 if NOT highlighted to stay under the map */
+                  className={`group relative cursor-pointer rounded-xl sm:rounded-2xl transition-all duration-300 ${
+                    highlightedId === post.id ? 'z-50 scale-[1.01] shadow-xl' : 'z-0 scale-100'
                   }`}
                 >
+                  {/* The Highlight Frame */}
                   {highlightedId === post.id && (
-                    <div className="absolute inset-0 border-4 border-indigo-500 rounded-xl sm:rounded-2xl pointer-events-none z-20" />
+                    <div className="absolute inset-0 border-4 border-indigo-500 rounded-xl sm:rounded-2xl pointer-events-none z-60" />
                   )}
                   <PostCard 
                     post={post} 
                     isUnread={unreadPostIds.includes(post.id)} 
                     onMarkRead={() => handleMarkRead(post.id)}
-                    isAutoExpanded={post.id === postId}
                   />
                 </div>
               ))}

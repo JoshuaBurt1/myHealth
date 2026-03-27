@@ -1,5 +1,6 @@
 //PostCard.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   doc, updateDoc, arrayRemove, arrayUnion, getDoc, collectionGroup, query, where, getDocs, writeBatch, deleteField,
@@ -808,7 +809,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
     </div>
 
     {/* CONFIRMATION MODAL OVERLAY */}
-    {isConfirmModalOpen && (
+    {isConfirmModalOpen && createPortal(
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsConfirmModalOpen(false)}>
         <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative shadow-2xl animate-in fade-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
           <h3 className="font-bold text-xl text-slate-900 mb-1">Confirm Location</h3>
@@ -895,7 +896,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
           </div>
         </div>
       </div>
-    )}
+    ,
+    document.body
+  )}
   </>
   );
 };
