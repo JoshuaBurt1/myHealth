@@ -66,11 +66,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, isUnread, onMarkRead, 
   const totalVotes = options.reduce((acc, curr) => acc + curr.votes, 0);
 
   useEffect(() => {
-    if (isAutoExpanded) {
+    if (isAutoExpanded || urlPostId === post.id) {
       setIsPostVisible(true);
       setIsExpanded(true);
     }
-  }, [isAutoExpanded]);
+  }, [isAutoExpanded, urlPostId, post.id]);
 
   // Updated handleTogglePost to use the optimistic handler
   const handleTogglePost = () => {

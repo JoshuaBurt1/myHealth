@@ -181,39 +181,39 @@ const ForumScreen: React.FC = () => {
 
   // Deep Link Auto-Scroll, Section Switch, & Pagination Jump
   useEffect(() => {
-  if (!postId || loading || posts.length === 0 || lastProcessedId.current === postId) {
-    return;
-  }
-
-  const linkedPost = posts.find(p => p.id === postId);
-  if (!linkedPost) return;
-
-  // Switch Section
-  if (linkedPost.forumSection !== activeSection) {
-    setActiveSection(linkedPost.forumSection);
-    return; 
-  }
-
-  const postIndex = filteredPosts.findIndex(p => p.id === postId);
-  if (postIndex !== -1) {
-    const targetPage = Math.floor(postIndex / POSTS_PER_PAGE) + 1;
-    
-    if (currentPage !== targetPage) {
-      setCurrentPage(targetPage);
+    if (!postId || loading || posts.length === 0 || lastProcessedId.current === postId) {
+      return;
     }
 
-    lastProcessedId.current = postId;
+    const linkedPost = posts.find(p => p.id === postId);
+    if (!linkedPost) return;
 
-    // Reduced delay for snappier navigation
-    setTimeout(() => {
-      const element = document.getElementById(`post-${postId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setHighlightedId(postId);
+    // Switch Section
+    if (linkedPost.forumSection !== activeSection) {
+      setActiveSection(linkedPost.forumSection);
+      return; 
+    }
+
+    const postIndex = filteredPosts.findIndex(p => p.id === postId);
+    if (postIndex !== -1) {
+      const targetPage = Math.floor(postIndex / POSTS_PER_PAGE) + 1;
+      
+      if (currentPage !== targetPage) {
+        setCurrentPage(targetPage);
       }
-    }, 100); // 100ms is usually plenty with pre-loaded context data
-  }
-}, [postId, loading, posts, filteredPosts, activeSection, currentPage]);
+
+      lastProcessedId.current = postId;
+
+      // Reduced delay for snappier navigation
+      setTimeout(() => {
+        const element = document.getElementById(`post-${postId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedId(postId);
+        }
+      }, 100); // 100ms is usually plenty with pre-loaded context data
+    }
+  }, [postId, loading, posts, filteredPosts, activeSection, currentPage]);
 
   useEffect(() => {
     // If the user navigates away or to a different post, clear the lock
@@ -583,7 +583,7 @@ const ForumScreen: React.FC = () => {
             </>
           ) : paginatedPosts.length > 0 ? (
             <>
-             {paginatedPosts.map((post) => (
+              {paginatedPosts.map((post) => (
                 <div 
                   key={post.id} 
                   id={`post-${post.id}`}
@@ -591,9 +591,8 @@ const ForumScreen: React.FC = () => {
                     e.stopPropagation();
                     postId === post.id ? navigate('/forum') : navigate(`/forum/${post.id}`);
                   }}
-                  /* Added: lower z-index by default, only z-10 if NOT highlighted to stay under the map */
                   className={`group relative cursor-pointer rounded-xl sm:rounded-2xl transition-all duration-300 ${
-                    highlightedId === post.id ? 'z-50 scale-[1.01] shadow-xl' : 'z-0 scale-100'
+                    highlightedId === post.id ? 'z-0 scale-[1.01] shadow-xl' : 'z-0 scale-100'
                   }`}
                 >
                   {/* The Highlight Frame */}
@@ -604,6 +603,7 @@ const ForumScreen: React.FC = () => {
                     post={post} 
                     isUnread={unreadPostIds.includes(post.id)} 
                     onMarkRead={() => handleMarkRead(post.id)}
+                    isAutoExpanded={postId === post.id} // <--- ADD THIS LINE
                   />
                 </div>
               ))}

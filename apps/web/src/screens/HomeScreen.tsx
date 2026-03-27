@@ -76,14 +76,13 @@ const HomeScreen: React.FC = () => {
   [newsItems]);
 
   const renderFeedItem = (item: NewsItem, color: string) => {
-    const isForumType = item.type === 'poll' || item.type === 'petition';
-    const targetPath = isForumType ? `/forum/${item.id}` : `/news/${item.id}`;
+  const targetPath = `/forum/${item.id}`;
 
-    const displayDate = item.lastUpdated?.toDate 
-      ? item.lastUpdated.toDate() 
-      : (item.lastUpdated ? new Date(item.lastUpdated) : null);
+  const displayDate = item.lastUpdated?.toDate 
+    ? item.lastUpdated.toDate() 
+    : (item.lastUpdated ? new Date(item.lastUpdated) : null);
 
-    const locationCount = item.confirm ? item.confirm.length : (item.location ? 1 : 0);
+  const locationCount = item.confirm ? item.confirm.length : (item.location ? 1 : 0);
 
     return (
       <Link 
