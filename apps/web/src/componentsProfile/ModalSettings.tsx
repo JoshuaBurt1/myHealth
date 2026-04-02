@@ -1,4 +1,4 @@
-//ModalPrivacy.tsx
+//ModalSettings.tsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,7 @@ const DEFAULT_SETTINGS: PrivacySettings = {
   allowPublic: false,
 };
 
-export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
+export const ModalSettings: React.FC<PrivacySettingsModalProps> = ({
   isOpen, 
   onClose, 
   userId 

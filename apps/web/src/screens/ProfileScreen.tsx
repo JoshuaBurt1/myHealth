@@ -16,7 +16,7 @@ import { User, Users, Camera, Stars, TrendingUp, Flag, Activity, Loader2, Refres
 import { useNotifications } from '../context/NotificationContext';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
-import { ModalPrivacy } from '../componentsProfile/ModalPrivacy';
+import { ModalSettings } from '../componentsProfile/ModalSettings';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
@@ -711,16 +711,18 @@ const ProfileScreen: React.FC = () => {
                     <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Vitals</span>
                   </button>
 
-                  {/* Schedule Button */}
-                <button 
-                  onClick={() => setShowPrivacyModal(true)}
-                  className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all group"
-                >
-                  <div className="bg-white p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 transition-transform">
-                    <Settings className="text-blue-500" size={20}/>
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">Settings</span>
-                </button>
+                  {/* Settings Button */}
+                  <button 
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="flex flex-col items-center justify-center p-3 sm:p-4 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-100 hover:border-slate-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="bg-slate-100 p-3 rounded-full mb-2 shadow-sm group-hover:scale-110 group-hover:bg-white transition-all">
+                      <Settings className="text-slate-600" size={20}/>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">
+                      Settings
+                    </span>
+                  </button>
                 </div>
               </div>
             )}
@@ -826,7 +828,7 @@ const ProfileScreen: React.FC = () => {
         isMe={isMe}
       />
 
-      <ModalPrivacy 
+      <ModalSettings 
         isOpen={showPrivacyModal} 
         onClose={() => setShowPrivacyModal(false)} 
         userId={userId!} 
