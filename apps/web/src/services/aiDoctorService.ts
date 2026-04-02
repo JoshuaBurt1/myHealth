@@ -45,12 +45,16 @@ export const getAiDoctorResponse = async (
   
   // --- PRIMARY: Google Gemini SDK ---
   const fetchGemini = async () => {
-    if (!GEMINI_API_KEY) return null;
+    if (!GEMINI_API_KEY) {
+      console.warn("Gemini API Key missing.");
+      return null;
+    }
 
     try {
-      // Using gemini-3-flash-preview as per your reference
+      // Switch to stable 'gemini-3-flash' to avoid 503 preview overloads
+      const modelId = "gemini-3-flash-preview"; 
       const geminiModel = genAI.getGenerativeModel({ 
-        model: "gemini-3-flash-preview",
+        model: modelId,
         systemInstruction: systemPrompt,
       });
 
@@ -59,18 +63,25 @@ export const getAiDoctorResponse = async (
       const text = response.text();
       
       if (!text) return null;
+
+      console.log(`Model responding: ${modelId}`);
       return text;
-    } catch (error) {
-      console.warn("Gemini SDK Error, falling back to OpenRouter:", error);
+    } catch (error: any) {
+      // Log the specific error for debugging
+      console.warn(`Gemini SDK Error (Status: ${error?.status || 'Unknown'}):`, error.message);
       return null;
     }
   };
 
   // --- FALLBACK: OpenRouter API ---
   const fetchOpenRouter = async () => {
-    if (!OPENROUTER_API_KEY) return null;
+    if (!OPENROUTER_API_KEY) {
+      console.warn("OpenRouter API Key missing.");
+      return null;
+    }
 
     try {
+      const modelId = "openrouter/free";
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -80,7 +91,7 @@ export const getAiDoctorResponse = async (
           "X-Title": "myHealth App",
         },
         body: JSON.stringify({
-          model: "openrouter/free", 
+          model: modelId, 
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage }
@@ -88,12 +99,21 @@ export const getAiDoctorResponse = async (
         })
       });
 
-      const data = await response.json();
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.error(`OpenRouter Error: ${response.status} ${response.statusText}`);
+        return null;
+      }
 
-      return data.choices?.[0]?.message?.content || null;
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || null;
+      
+      if (text) {
+        console.log(`Model responding: ${modelId} (OpenRouter)`);
+      }
+
+      return text;
     } catch (error) {
-      console.error("OpenRouter API Error:", error);
+      console.error("OpenRouter Network/API Error:", error);
       return null;
     }
   };
