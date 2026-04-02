@@ -200,7 +200,7 @@ const HomeScreen: React.FC = () => {
               </div>
 
               {/* FLOATING SIDEBARS (Desktop Only) */}
-              <div className="hidden md:block absolute inset-0 pointer-events-none z-[1000] overflow-hidden rounded-2xl">
+              <div className="hidden md:block absolute inset-0 pointer-events-none z-1000 overflow-hidden rounded-2xl">
                 
                 {/* --- LEFT SIDEBAR (Community Help) --- */}
                 <div className={`absolute top-4 bottom-4 left-5 flex transition-transform duration-500 ease-in-out ${showLeftSidebar ? 'translate-x-0' : '-translate-x-[calc(100%+2rem)]'}`}>

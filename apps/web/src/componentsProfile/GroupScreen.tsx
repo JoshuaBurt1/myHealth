@@ -100,6 +100,15 @@ export const GroupScreen: React.FC = () => {
     return member ? member.display_name : 'Unknown User';
   };
 
+  const processedAlertsRef = useRef<Set<string>>(new Set());
+
+  const formatFirestoreTimestamp = (ts: any) => {
+    if (!ts || !ts.seconds) return 'recently';
+    return new Date(ts.seconds * 1000).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
   useEffect(() => {
     if (activeTab === 'messages' && messages.length > 0) {
       scrollToBottom();
@@ -237,123 +246,122 @@ export const GroupScreen: React.FC = () => {
       handleSendMessage();
     }
   };
+const handleSendMessage = async (e?: React.FormEvent) => {
+  if (e) e.preventDefault();
+  const user = auth.currentUser;
+  if (!newMessage.trim() || !groupId || !user || !group) return;
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const user = auth.currentUser;
-    if (!newMessage.trim() || !groupId || !user || !group) return;
+  const messageText = newMessage.trim();
+  setIsSending(true);
 
-    const messageText = newMessage.trim();
-    setIsSending(true);
+  try {
+    const groupRef = doc(db, 'myHealth_groups', groupId);
+    const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
+    const userRef = doc(db, 'users', user.uid);
 
-    try {
-      const groupRef = doc(db, 'myHealth_groups', groupId);
-      const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
-      const userRef = doc(db, 'users', user.uid);
+    // 1. Write the user's message and update metadata
+    const messagePromise = addDoc(messagesRef, {
+      text: messageText,
+      authorId: user.uid,
+      authorName: getMemberDisplayName(user.uid),
+      createdAt: serverTimestamp()
+    });
 
-      // 1. Write the user's message and update metadata
-      const messagePromise = addDoc(messagesRef, {
-        text: messageText,
-        authorId: user.uid,
-        authorName: getMemberDisplayName(user.uid),
-        createdAt: serverTimestamp()
+    const groupUpdatePromise = updateDoc(groupRef, {
+      lastUpdated: serverTimestamp(),
+      lastUpdatedBy: user.uid
+    });
+
+    const userUpdatePromise = setDoc(userRef, {
+      last_login: serverTimestamp(),
+      [`last_read_group_${groupId}`]: serverTimestamp()
+    }, { merge: true });
+
+    await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
+    setNewMessage('');
+
+    // --- 2. Trigger AI Doctor (Background Process) ---
+    if (group.memberUids.includes(AI_DOCTOR_UID) && user.uid !== AI_DOCTOR_UID) {
+      
+      const rawProfile = memberProfilesMap[user.uid] || {};
+      
+      // --- FORMAT ALERTS FOR AI ---
+      // Convert single alert or array into a standard list
+      const alertList: any[] = rawProfile.activeAlerts || (rawProfile.activeAlert ? [rawProfile.activeAlert] : []);
+      
+      // Map alerts to a readable string using your formatFirestoreTimestamp function
+      const formattedAlerts = alertList.map(a => {
+        const timeStr = formatFirestoreTimestamp(a.onset);
+        return `${a.type} (detected ${timeStr})`;
+      }).join(', ');
+
+      const userCohortStats: any = {};
+      const extractStats = (data: CategoryComparison[] | null, category: string) => {
+        if (!data) return;
+        data.forEach(metric => {
+          const memberStat = metric.members.find(m => m.userId === user.uid);
+          if (memberStat) userCohortStats[`${category}_${metric.metricName}`] = memberStat;
+        });
+      };
+
+      extractStats(exerciseData, 'Exercise');
+      extractStats(vitalsData, 'Vitals');
+
+      const cleanHealthSummary: Record<string, any> = {
+        // This key tells the AI exactly what to state in the first sentence
+        'Active Alerts Summary': formattedAlerts || 'None',
+        'Active Alerts': alertList 
+      };
+
+      // Extract Vitals & History
+      Object.entries(VITAL_KEY_MAP).forEach(([readableName, dbKey]) => {
+        const extracted = extractDetailedValues(rawProfile, dbKey);
+        if (extracted?.length > 0) {
+          cleanHealthSummary[`[Vital] ${readableName}`] = extracted[extracted.length - 1].value;
+          const history = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
+          if (history.length > 0) cleanHealthSummary[`[Vital History] ${readableName}`] = history;
+        }
       });
 
-      const groupUpdatePromise = updateDoc(groupRef, {
-        lastUpdated: serverTimestamp(),
-        lastUpdatedBy: user.uid
+      // Extract Exercise & History
+      Object.entries(EXERCISE_KEY_MAP).forEach(([readableName, dbKey]) => {
+        const extracted = extractDetailedValues(rawProfile, dbKey);
+        if (extracted?.length > 0) {
+          cleanHealthSummary[`[Exercise] ${readableName}`] = extracted[extracted.length - 1].value;
+          const history = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
+          if (history.length > 0) cleanHealthSummary[`[Exercise History] ${readableName}`] = history;
+        }
       });
 
-      const userUpdatePromise = setDoc(userRef, {
-        last_login: serverTimestamp(),
-        [`last_read_group_${groupId}`]: serverTimestamp()
-      }, { merge: true });
+      setIsAiResponding(true);
 
-      await Promise.all([messagePromise, groupUpdatePromise, userUpdatePromise]);
-      setNewMessage('');
-
-      // --- 2. Trigger AI Doctor (Background Process) ---
-      if (group.memberUids.includes(AI_DOCTOR_UID) && user.uid !== AI_DOCTOR_UID) {
-        
-        // Extract available cohort stats for this specific user
-        const userCohortStats: any = {};
-        const extractStats = (data: CategoryComparison[] | null, category: string) => {
-          if (!data) return;
-          data.forEach(metric => {
-            const memberStat = metric.members.find(m => m.userId === user.uid);
-            if (memberStat) {
-              userCohortStats[`${category}_${metric.metricName}`] = memberStat;
-            }
-          });
-        };
-
-        extractStats(exerciseData, 'Exercise');
-        extractStats(vitalsData, 'Vitals');
-
-        // Build a clean summary of the user's RAW health data (vitals + exercise) for the LLM
-        const rawProfile = memberProfilesMap[user.uid] || {};
-        const cleanHealthSummary: Record<string, any> = {};
-
-        // Extract Vitals & Vital History
-        Object.entries(VITAL_KEY_MAP).forEach(([readableName, dbKey]) => {
-          const extracted = extractDetailedValues(rawProfile, dbKey);
-          if (extracted && extracted.length > 0) {
-            // Grab the most recent reading (last index)
-            cleanHealthSummary[`[Vital] ${readableName}`] = extracted[extracted.length - 1].value;
-            
-            // Grab a sample of up to 5 previous readings for trend analysis
-            const previousValues = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
-            if (previousValues.length > 0) {
-              cleanHealthSummary[`[Vital History] ${readableName}`] = previousValues;
-            }
+      getAiDoctorResponse(
+        messageText,
+        getMemberDisplayName(user.uid),
+        cleanHealthSummary,
+        userCohortStats
+      )
+        .then(async (aiReply) => {
+          if (aiReply) {
+            await addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
+              text: aiReply,
+              authorId: AI_DOCTOR_UID,
+              authorName: 'AI Doctor',
+              createdAt: serverTimestamp(),
+              // Metadata helps track which alerts this specific message addressed
+              alertMetadata: alertList.map(a => `${a.type}_${a.onset?.seconds}`)
+            });
           }
-        });
-
-        // Extract Exercise Data & Exercise History
-        Object.entries(EXERCISE_KEY_MAP).forEach(([readableName, dbKey]) => {
-          const extracted = extractDetailedValues(rawProfile, dbKey);
-          if (extracted && extracted.length > 0) {
-            // Grab the most recent reading (last index)
-            cleanHealthSummary[`[Exercise] ${readableName}`] = extracted[extracted.length - 1].value;
-
-            // Grab a sample of up to 5 previous readings for trend analysis
-            const previousValues = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
-            if (previousValues.length > 0) {
-              cleanHealthSummary[`[Exercise History] ${readableName}`] = previousValues;
-            }
-          }
-        });
-
-        cleanHealthSummary['Active Alerts'] = rawProfile.activeAlerts || rawProfile.activeAlert || 'None';
-
-        // Start the UI indicator
-        setIsAiResponding(true);
-
-        getAiDoctorResponse(
-          messageText,
-          getMemberDisplayName(user.uid),
-          cleanHealthSummary,
-          userCohortStats
-        )
-          .then(async (aiReply) => {
-            if (aiReply) {
-              await addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
-                text: aiReply,
-                authorId: AI_DOCTOR_UID,
-                authorName: 'AI Doctor',
-                createdAt: serverTimestamp()
-              });
-            }
-          })
-          .catch(err => console.error("Error getting AI response:", err))
-          .finally(() => setIsAiResponding(false)); // Hide indicator regardless of outcome
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-    } finally {
-      setIsSending(false);
+        })
+        .catch(err => console.error("Error getting AI response:", err))
+        .finally(() => setIsAiResponding(false)); 
     }
-  };
+  } catch (error) {
+    console.error("Error sending message:", error);
+  } finally {
+    setIsSending(false);
+  }
+};
 
   // --- Z-Score & Percentile Engine ---
   useEffect(() => {
@@ -502,35 +510,52 @@ export const GroupScreen: React.FC = () => {
     const hasAiDoctor = group.memberUids.includes(AI_DOCTOR_UID);
     if (!hasAiDoctor) return;
 
-    Object.entries(memberProfilesMap).forEach(([_, profile]) => {
-      // Check for plural 'activeAlerts' or singular 'activeAlert'
-      const alertList = profile.activeAlerts || (profile.activeAlert ? [profile.activeAlert] : []);
-      
-      alertList.forEach((alert: any) => {
-        if (alert && alert.type && alert.onset) {
-          const userName = profile.name || profile.display_name || 'Member';
-          const alertType = alert.type;
-          const onset = alert.onset;
+    Object.entries(memberProfilesMap).forEach(([_uid, profile]) => {
+      const alertList: any[] = profile.activeAlerts || (profile.activeAlert ? [profile.activeAlert] : []);
+      if (alertList.length === 0) return;
 
-          // PREVENT DUPLICATE WRITES
-          const alreadyNotified = messages.some(msg => 
-            msg.authorId === AI_DOCTOR_UID && 
-            msg.text.includes(alertType) && 
-            msg.text.includes(onset)
-          );
+      // Filter for truly NEW alerts
+      const newAlerts = alertList.filter(alert => {
+        const alertId = `${alert.type}_${alert.onset?.seconds}`;
+        
+        // Check A: Has this component already handled this alert in this session?
+        if (processedAlertsRef.current.has(alertId)) return false;
 
-          if (!alreadyNotified) {
-            const initialAiMessage = `Hi ${userName}, I see that you have an active ${alertType} alert starting from ${onset}. How are you feeling right now? Do you want to discuss your recent vitals?`;
-            
-            addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
-              text: initialAiMessage,
-              authorId: AI_DOCTOR_UID,
-              authorName: 'AI Doctor',
-              createdAt: serverTimestamp()
-            }).catch(err => console.error("Error sending AI alert message:", err));
-          }
-        }
+        // Check B: Does the Firestore message history already contain this specific Alert ID?
+        const isAlreadyInChat = messages.some(msg => 
+          msg.authorId === AI_DOCTOR_UID && 
+          msg.alertMetadata?.includes(alertId) // We will add this field below
+        );
+
+        return !isAlreadyInChat;
       });
+
+      if (newAlerts.length > 0) {
+        const userName = profile.name || profile.display_name || 'Member';
+        
+        // Track them locally immediately to prevent the loop during the write-delay
+        newAlerts.forEach(a => processedAlertsRef.current.add(`${a.type}_${a.onset?.seconds}`));
+
+        const alertDescriptions = newAlerts.map(a => 
+          `${a.type} starting from ${formatFirestoreTimestamp(a.onset)}`
+        ).join(' and ');
+
+        const consolidatedMessage = `Hi ${userName}, I notice active alerts for: ${alertDescriptions}. How are you feeling?`;
+
+        // 3. Add the document with the METADATA field
+        addDoc(collection(db, 'myHealth_groups', group.id, 'messages'), {
+          text: consolidatedMessage,
+          authorId: AI_DOCTOR_UID,
+          authorName: 'AI Doctor',
+          createdAt: serverTimestamp(),
+          // This field prevents the loop
+          alertMetadata: newAlerts.map(a => `${a.type}_${a.onset?.seconds}`) 
+        }).catch(err => {
+          console.error("Error sending AI alert:", err);
+          // Remove from ref if write fails so it can retry
+          newAlerts.forEach(a => processedAlertsRef.current.delete(`${a.type}_${a.onset?.seconds}`));
+        });
+      }
     });
   }, [group, memberProfilesMap, messages]);
 

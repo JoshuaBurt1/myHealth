@@ -13,6 +13,7 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@paypal/react-paypal-js": "^9.0.1",
     "@tailwindcss/vite": "^4.2.1",
     "expo": "~54.0.33",

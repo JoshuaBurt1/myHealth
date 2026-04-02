@@ -51,6 +51,7 @@ export interface GroupMessage {
   authorId: string;
   authorName: string;
   createdAt: Timestamp | any;
+  alertMetadata?: string[];
 }
 
 /**
