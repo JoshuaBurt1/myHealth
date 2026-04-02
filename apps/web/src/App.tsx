@@ -13,6 +13,7 @@ import StoreScreen from './screens/StoreScreen';
 import ForumScreen from './screens/ForumScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import TutorialScreen from './screens/TutorialScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { GroupMngScreen } from './componentsProfile/GroupMngScreen';
 import { GroupScreen } from './componentsProfile/GroupScreen';
@@ -35,6 +36,10 @@ function AppContent({ user }: { user: User | null }) {
           <Route path="forum/:postId" element={<ForumScreen />} />
           <Route path="login" element={<LoginScreen />} />
           <Route path="register" element={<RegisterScreen />} />
+          <Route 
+            path="tutorial/:uid" 
+            element={user ? <TutorialScreen /> : <Navigate to="/login" replace />} 
+          />
           <Route
             path="profile/:userId"
             element={user ? <ProfileScreen /> : <Navigate to="/login" replace />}

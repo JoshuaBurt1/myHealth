@@ -6,6 +6,7 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 // Initialize Gemini SDK once
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
+// Headers required for OpenRouter
 const referer = window.location.hostname === 'localhost' 
   ? 'http://localhost:5173' 
   : 'https://myhealth79.web.app/';
@@ -26,33 +27,35 @@ export const getAiDoctorResponse = async (
     ALERTS: ${activeAlertsStr}
 
     CRITICAL ANALYSIS: 
-    1. Analyze the "Recent Health Data" below to explain WHY these alerts triggered (e.g., if there's a tachycardia alert, point to the HR of 110).
-    2. Use historical arrays (e.g., "[Vital History]") to determine if this is a new spike or a persistent trend.
-    3. Use Z-Scores to prioritize the most abnormal metrics.
+    1. Analyze the "Recent Health & Exercise Data" and "Cohort Comparison" BEFORE responding. 
+    2. The standard metrics (e.g., "[Vital] Heart Rate": 110) represent their MOST CURRENT reading.
+    3. Use historical arrays (e.g., "[Vital History]") to determine if this is a new spike or a persistent trend.
+    4. Use Z-Scores to prioritize the most abnormal metrics (Z > 2 or < -2 is significant).
+    5. If a current value or trend is present in the data, do NOT ask the user to "check" it. Comment on it directly.
     
     PATIENT CONTEXT:
+    Active Alerts Detail: ${JSON.stringify(cleanHealthSummary['Active Alerts'] || 'None')}
     Recent Health, Exercise, and History Data: ${JSON.stringify(cleanHealthSummary || 'No data')}
     
-    COHORT STATS:
+    COHORT STATS (Z-Scores & Percentiles):
     ${JSON.stringify(cohortStats, null, 2)}
     
     RESPONSE RULES:
     - Your first sentence MUST state the active alerts and their onset times.
+    - If you see a SIRS or critical alert, reference the specific vitals (HR, Temp, RR) that triggered it.
+    - Incorporate fitness/exercise recommendations appropriately based on recent data and trends.
     - Keep the total response under 60 words.
     - Be empathetic but clinical.
-    - After stating the alerts, ask how the user is feeling or provide one immediate health/fitness insight based on the data.
   `;
   
   // --- PRIMARY: Google Gemini SDK ---
   const fetchGemini = async () => {
-    if (!GEMINI_API_KEY) {
-      console.warn("Gemini API Key missing.");
-      return null;
-    }
+    if (!GEMINI_API_KEY) return null;
 
     try {
-      // Switch to stable 'gemini-3-flash' to avoid 503 preview overloads
       const modelId = "gemini-3-flash-preview"; 
+      console.log(`Attempting response from Primary: ${modelId}...`);
+
       const geminiModel = genAI.getGenerativeModel({ 
         model: modelId,
         systemInstruction: systemPrompt,
@@ -67,21 +70,22 @@ export const getAiDoctorResponse = async (
       console.log(`Model responding: ${modelId}`);
       return text;
     } catch (error: any) {
-      // Log the specific error for debugging
       console.warn(`Gemini SDK Error (Status: ${error?.status || 'Unknown'}):`, error.message);
       return null;
     }
   };
 
-  // --- FALLBACK: OpenRouter API ---
+  // --- SECONDARY/FALLBACK: OpenRouter API ---
   const fetchOpenRouter = async () => {
     if (!OPENROUTER_API_KEY) {
       console.warn("OpenRouter API Key missing.");
       return null;
     }
 
+    const modelId = "openrouter/free";
+    console.log(`Attempting response from Secondary: ${modelId}...`);
+
     try {
-      const modelId = "openrouter/free";
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -99,32 +103,40 @@ export const getAiDoctorResponse = async (
         })
       });
 
-      if (!response.ok) {
-        console.error(`OpenRouter Error: ${response.status} ${response.statusText}`);
+      const data = await response.json();
+
+      // Safety Check: Ensure the response is OK and choices exist
+      if (!response.ok || !data.choices || data.choices.length === 0) {
+        console.error("OpenRouter API Error:", data.error || "No choices returned");
         return null;
       }
 
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || null;
-      
-      if (text) {
-        console.log(`Model responding: ${modelId} (OpenRouter)`);
-      }
-
+      const text = data.choices[0].message.content;
+      console.log(`Model responding: ${modelId} (OpenRouter)`);
       return text;
+
     } catch (error) {
-      console.error("OpenRouter Network/API Error:", error);
+      console.error("Error fetching OpenRouter response:", error);
       return null;
     }
   };
 
   // --- Execution Strategy ---
+  /*
   let aiResponse = await fetchGemini();
 
   if (!aiResponse) {
     console.log("Gemini failed. Switching to OpenRouter...");
     aiResponse = await fetchOpenRouter();
-  }
+  }*/
 
+  // --- Execution Strategy ---
+  let aiResponse = await fetchOpenRouter();
+
+  if (!aiResponse) {
+    console.log("OpenRouter failed. Switching to Gemini...");
+    aiResponse = await fetchGemini();
+  }
+ 
   return aiResponse || "The medical systems are currently offline. Please try again later.";
 };

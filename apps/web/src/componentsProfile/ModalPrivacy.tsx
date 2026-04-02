@@ -1,5 +1,8 @@
+//ModalPrivacy.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Globe, Lock, X, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Shield, Users, Globe, Lock, X, Check, BookOpen } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
@@ -26,12 +29,13 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
   onClose, 
   userId 
 }) => {
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<PrivacySettings>(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
+  
 
   useEffect(() => {
     const fetchSettings = async () => {
-      // IMPROVEMENT: Verify userId exists and matches the authenticated user
       const currentUser = auth.currentUser;
       if (!userId || !currentUser || userId !== currentUser.uid) {
         console.warn("Unauthorized or invalid privacy fetch attempt blocked.");
@@ -45,8 +49,6 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
         if (docSnap.exists()) {
           setSettings(docSnap.data() as PrivacySettings);
         } else {
-          // Logic removed: We no longer initialize defaults here.
-          // We assume settings were created during registration.
           console.warn("Privacy settings document not found. Ensure it was created at registration.");
         }
       } catch (error) {
@@ -60,27 +62,29 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
   const handleToggle = async (key: keyof PrivacySettings) => {
     const newValue = !settings[key];
     
-    // Optimistic Update
     setSettings(prev => ({ ...prev, [key]: newValue }));
     
     setIsSaving(true);
     try {
       const privacyDocRef = doc(db, 'users', userId, 'myHealth_privacy', 'settings');
-      // Update only: using merge: true to avoid overwriting unrelated fields
       await setDoc(privacyDocRef, { [key]: newValue }, { merge: true });
     } catch (error) {
       console.error("Error updating privacy settings:", error);
-      // Revert local state on failure
       setSettings(prev => ({ ...prev, [key]: !newValue }));
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleRevisitTutorial = () => {
+    onClose();
+    navigate(`/tutorial/${userId}`, { state: { revisited: true } });
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="absolute inset-0 z-100 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
@@ -91,7 +95,7 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-black text-slate-800 leading-tight">Privacy Settings</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Control who sees your health data</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Control who sees your data</p>
             </div>
           </div>
           <button 
@@ -127,9 +131,18 @@ export const ModalPrivacy: React.FC<PrivacySettingsModalProps> = ({
           />
         </div>
 
-        {/* Footer Info */}
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <div className="flex items-center gap-2 text-emerald-600">
+        {/* Footer Info & Tutorial Button */}
+        <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
+          
+          <button 
+            onClick={handleRevisitTutorial}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-bold text-sm"
+          >
+            <BookOpen size={16} />
+            Revisit myHealth Tutorial
+          </button>
+
+          <div className="flex items-center justify-center gap-2 text-emerald-600">
             {isSaving ? (
               <span className="text-[10px] font-black uppercase animate-pulse">Syncing to Cloud...</span>
             ) : (

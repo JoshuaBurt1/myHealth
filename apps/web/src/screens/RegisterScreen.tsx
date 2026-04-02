@@ -1,8 +1,10 @@
+// RegisterScreen.tsx
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../firebase'; // Using your firebase config
+import { auth, db } from '../firebase'; 
 import { UserPlus, User, Mail, Lock } from 'lucide-react';
 
 const RegisterScreen: React.FC = () => {
@@ -14,7 +16,6 @@ const RegisterScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const notifyMobileApp = (uid: string) => {
-    // Check if the native bridge exists
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'AUTH_SUCCESS',
@@ -37,7 +38,6 @@ const RegisterScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1. Create the user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
         email.trim(), 
@@ -47,21 +47,17 @@ const RegisterScreen: React.FC = () => {
       const uid = userCredential.user.uid;
       const sanitizedName = name.trim();
 
-      // 2. Create the document in the root 'users' collection
       await setDoc(doc(db, 'users', uid), {
         display_name: sanitizedName,
         gems: 1, 
         last_login: serverTimestamp(), 
       });
 
-      // 3. Initialize the 'profile/user_data' subcollection
       await setDoc(doc(db, 'users', uid, 'profile', 'user_data'), {
         name: sanitizedName,
         goal: ""
       });
 
-      // 4. Initialize 'myHealth_privacy/settings' (NEW)
-      // This ensures ModalPrivacy.tsx always finds a document to read
       await setDoc(doc(db, 'users', uid, 'myHealth_privacy', 'settings'), {
         allowFollowers: true,
         allowGroupMembers: true,
@@ -70,8 +66,8 @@ const RegisterScreen: React.FC = () => {
 
       notifyMobileApp(uid);
 
-      // Navigate to profile using the new UID
-      navigate(`/profile/${uid}`);
+      // CHANGED: Navigate to the tutorial screen first
+      navigate(`/tutorial/${uid}`);
       
     } catch (err: any) {
       setError(err.message || 'Registration failed');

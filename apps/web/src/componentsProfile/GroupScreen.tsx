@@ -860,7 +860,8 @@ const handleSendMessage = async (e?: React.FormEvent) => {
                                 }`}>
                                   {msg.text}
                                 </div>
-                                <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap mb-1">
+                                
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap mb-1 flex-shrink-0">
                                   {msg.createdAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
