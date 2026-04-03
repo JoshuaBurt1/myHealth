@@ -59,8 +59,9 @@ const RegisterScreen: React.FC = () => {
       });
 
       await setDoc(doc(db, 'users', uid, 'myHealth_privacy', 'settings'), {
-        allowFollowers: true,
         allowGroupMembers: true,
+        allowFollowers: false,
+        allowFollowing: false,
         allowPublic: false,
       });
 

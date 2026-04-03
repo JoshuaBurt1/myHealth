@@ -87,26 +87,20 @@ const TutorialScreen: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Privacy settings (mobile only) */}
-                <div className="flex gap-3 md:gap-4 items-start md:hidden">
-                    <div className="p-1.5 bg-slate-100 text-slate-600 rounded-lg shrink-0">
-                    <Settings className="w-4 h-4" />
-                    </div>
-                    <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] mb-0.5">4. Privacy Settings</h3>
-                    <p className="text-slate-500 text-[11px] leading-tight">Modify what information is available to public and group view at any time.</p>
-                    </div>
-                </div>
-
-                <div className="hidden md:flex gap-4 items-start">
-                    <div className="p-2.5 bg-slate-100 text-slate-600 rounded-xl shrink-0">
-                    <Settings size={22} />
-                    </div>
-                    <div>
-                    <h3 className="font-bold text-slate-800 text-lg mb-1">4. Privacy Settings</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed">Modify what information is available to public and group view at any time.</p>
-                    </div>
-                </div>
+                <div className="flex gap-3 md:gap-4 items-start">
+                  <div className="p-1.5 md:p-2.5 bg-slate-100 text-slate-600 rounded-lg md:rounded-xl shrink-0">
+                    {/* Use className for size to make it responsive easily */}
+                    <Settings className="w-4 h-4 md:w-5.5 md:h-5.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">
+                      4. Privacy Settings
+                    </h3>
+                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">
+                      Modify what information is available to public and group view at any time.
+                    </p>
+                  </div>
+              </div>
                 </div>
 
                 {/* Right Column: Items 4 (desktop), 5, 6 + Image */}
@@ -165,7 +159,7 @@ const TutorialScreen: React.FC = () => {
                 : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl transform hover:-translate-y-0.5'
             }`}
         >
-            {countdown > 0 ? `Please Wait (${countdown}s)` : 'I Understand, Continue'}
+            {countdown > 0 ? `Please Wait (${countdown}s)` : 'I Understand'}
         </button>
         </div>
 

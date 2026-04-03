@@ -12,11 +12,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, query, arrayUnion, onSnapshot, deleteField } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { User, Users, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, LineChart, Settings, Bell } from 'lucide-react';
+import { User, Users, Camera, Stars, TrendingUp, Flag, Activity, Loader2, RefreshCw, Dumbbell, LineChart, Settings, Bell, Shield } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { Badge, InputField, SexInputField, AgeInputField } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
-import { ModalSettings } from '../componentsProfile/ModalSettings';
+import { ModalSettings, type PrivacySettings } from '../componentsProfile/ModalSettings';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
 import { useImageUpload } from '../componentsProfile/useImageUpload';
@@ -53,6 +53,8 @@ const ProfileScreen: React.FC = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
 
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings | null>(null);
+
   const [followersList, setFollowersList] = useState<{uid: string, name: string}[]>([]);
   const [followingList, setFollowingList] = useState<{uid: string, name: string}[]>([]);
   const [modalConfig, setModalConfig] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
@@ -88,9 +90,7 @@ const ProfileScreen: React.FC = () => {
   const [hiddenOther, setHiddenOther] = useState<string[]>([]);
 
   const navigate = useNavigate();
-  const handleOpenGroupManagement = () => {
-    navigate('/group/manage');
-  };
+  const handleOpenGroupManagement = () => navigate('/group/manage');
 
   const calculateAge = (dobString: string): string => {
     if (!dobString) return '';
@@ -103,7 +103,7 @@ const ProfileScreen: React.FC = () => {
   };
 
   const [formData, setFormData] = useState({
-    name: '', goal: '', sex: '', dob: '', age: '', height: '', weight: '', bmi: '', gems: ''
+    name: '', goal: '', sex: '', dob: '', age: '', height: '', weight: '', gems: ''
   });
 
   // Load user data 
@@ -117,6 +117,7 @@ const ProfileScreen: React.FC = () => {
     const imageRef = doc(db, 'users', userId, 'profile', 'image_data');
     const followersRef = query(collection(db, 'users', userId, 'followers'));
     const followingRef = query(collection(db, 'users', userId, 'following'));
+    const privacyDocRef = doc(db, 'users', userId, 'myHealth_privacy', 'settings');
 
     // 1. Listen to Root User Doc (Steps, Gems, Display Name, Groups Meta)
     const unsubRoot = onSnapshot(userRootRef, (docSnap) => {
@@ -173,12 +174,7 @@ const ProfileScreen: React.FC = () => {
         // 2. Standard Vitals (Replaces the VITAL_LIST.forEach loop)
         Object.entries(VITAL_KEY_MAP).forEach(([label, key]) => {
           if (profData[key] !== undefined && !seenVitals.has(key)) {
-            loadedDynamicVitals.push({ 
-              key, 
-              label, 
-              isCustom: false, 
-              unit: getStandardUnit(key) 
-            });
+            loadedDynamicVitals.push({ key, label, isCustom: false, unit: getStandardUnit(key) });
             newDynamicVitalsInputs[key] = '';
             seenVitals.add(key);
           }
@@ -198,12 +194,7 @@ const ProfileScreen: React.FC = () => {
             if (!seenExercises.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
-              loadedExercises.push({ 
-                name: def.key, 
-                label: def.name, 
-                type: def.type, 
-                unit: correctUnit 
-              });
+              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit });
               newExerciseInputs[def.key] = '';
               seenExercises.add(def.key);
             }
@@ -223,12 +214,7 @@ const ProfileScreen: React.FC = () => {
           Object.entries(map).forEach(([label, key]) => {
             // If the user has data for this key in Firestore and we haven't added it yet
             if (profData[key] !== undefined && !seenExercises.has(key)) {
-              loadedExercises.push({ 
-                name: key, 
-                label: label, 
-                type: type, 
-                unit: getStandardUnit(key) 
-              });
+              loadedExercises.push({ name: key, label: label, type: type, unit: getStandardUnit(key) });
               newExerciseInputs[key] = '';
               seenExercises.add(key);
             }
@@ -257,6 +243,14 @@ const ProfileScreen: React.FC = () => {
       setFollowingCount(snap.size);
     });
 
+    const unsubPrivacy = onSnapshot(privacyDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setPrivacySettings(docSnap.data() as PrivacySettings);
+      } else {
+        setPrivacySettings({ allowFollowers: true, allowFollowing: true, allowPublic: false });
+      }
+    });
+
     // 5. Follow Status
     let unsubStatus = () => {};
     if (!isMe && currentUserId) {
@@ -272,6 +266,7 @@ const ProfileScreen: React.FC = () => {
       unsubImage();
       unsubFollowers();
       unsubFollowing();
+      unsubPrivacy();
       unsubStatus();
     };
   }, [userId, isMe, currentUserId, refreshTrigger]);
@@ -291,9 +286,23 @@ const ProfileScreen: React.FC = () => {
     });
   }, [myUserData, myGroups, currentUserId]);
 
-  const handleFollowUpdate = () => {
-    setRefreshTrigger(p => p + 1); 
-  };
+  const hasAccess = useMemo(() => {
+    if (loading || isMe) return true;
+    if (!privacySettings) return false;
+
+    const isFollower = followersList.some(f => f.uid === currentUserId);
+    const isFollowingThem = followingList.some(f => f.uid === currentUserId);
+
+    if (isFollower || isFollowingThem) {
+      if (isFollower && privacySettings.allowFollowers) return true;
+      if (isFollowingThem && privacySettings.allowFollowing) return true;
+      return false;
+    }
+
+    return privacySettings.allowPublic;
+  }, [loading, isMe, privacySettings, currentUserId, followersList, followingList]);
+
+  const handleFollowUpdate = () => setRefreshTrigger(p => p + 1);
 
   const toggleVisibilityOther = async (fieldName: string) => {
     const isHidden = hiddenOther.includes(fieldName);
@@ -355,14 +364,6 @@ const ProfileScreen: React.FC = () => {
       if (historicalFields.includes(field)) {
         updates[field] = arrayUnion({ value: value, dateTime: timestamp });
         
-        // Calculate and sync BMI immediately when height or weight is blurred
-        const h = parseFloat(field === 'height' ? value : formData.height);
-        const w = parseFloat(field === 'weight' ? value : formData.weight);
-        
-        if (h > 0 && w > 0) {
-          const bmiVal = (w / ((h / 100) ** 2)).toFixed(1);
-          updates['bmi'] = arrayUnion({ value: bmiVal, dateTime: timestamp });
-        }
       } else {
         updates[field] = value;
         if (field === 'name') {
@@ -459,6 +460,25 @@ const ProfileScreen: React.FC = () => {
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
         <RefreshCw className="animate-spin text-indigo-600 mb-2" size={32} />
         <p className="text-slate-500 font-medium text-sm">Loading Profile...</p>
+      </div>
+    );
+  }
+
+  // --- PRIVACY RENDER BLOCK ---
+  if (!loading && !hasAccess) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+        <Shield size={64} className="text-slate-300 mb-4" />
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Content Blocked</h2>
+        <p className="text-slate-500 mt-2 font-medium max-w-sm">
+          This user has restricted who can view their profile and activity data based on their privacy settings.
+        </p>
+        <button 
+          onClick={() => navigate(-1)} 
+          className="mt-6 px-6 py-3 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-xl font-bold transition-colors"
+        >
+          Go Back
+        </button>
       </div>
     );
   }

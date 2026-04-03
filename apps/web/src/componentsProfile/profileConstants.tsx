@@ -122,7 +122,6 @@ export const SINGLE_GRAPHS = [
   { key: 'age', title: 'AGE', unit: 'Years', icon: <User className="text-slate-500" />, color: '#64748b' },
   { key: 'height', title: 'HEIGHT', unit: 'cm', icon: <Ruler className="text-blue-400" />, color: '#60a5fa' },
   { key: 'weight', title: 'WEIGHT', unit: 'kg', icon: <Scale className="text-emerald-400" />, color: '#34d399' },
-  { key: 'bmi', title: 'BMI', unit: 'kg/m²', icon: <Activity className="text-indigo-400" />, color: '#818cf8' },
   
   // Strength
   { key: 'benchPress', title: 'BENCH PRESS', unit: 'kg', icon: <Dumbbell className="text-indigo-600" />, color: '#4f46e5' },
