@@ -1,0 +1,59 @@
+{
+  "project_info": {
+    "project_number": "702841156351",
+    "project_id": "squarehexagon-holdings",
+    "storage_bucket": "squarehexagon-holdings.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702841156351:android:17d3659a7879f0b56d52ca",
+        "android_client_info": {
+          "package_name": "com.squarehexagon.myhealth"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "702841156351-ekhjm05hkv3c5seqckr1uqd8v8nlaoej.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.squarehexagon.myhealth",
+            "certificate_hash": "10af91d6129d15bad22d400cbc29706acdc282d2"
+          }
+        },
+        {
+          "client_id": "702841156351-svjtclb59ou96kbi35gu84htcinv53t0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.squarehexagon.myhealth",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "702841156351-7ung6bv6kd2c7u66te8ac67mog4graq5.apps.googleusercontent.com",
+          "client_type": 2
+        },
+        {
+          "client_id": "702841156351-28u6bar82g96trp3nje8ro14m7nrn885.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIoPm-MUXFF4SCqvxpXrCcRpuTflX3rT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "702841156351-28u6bar82g96trp3nje8ro14m7nrn885.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
