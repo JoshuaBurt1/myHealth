@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { collection, query, limit, onSnapshot, orderBy } from 'firebase/firestore';
 import { Vote, FileSignature, ArrowRight, Globe, AlertTriangle, HeartHandshake, MapPin, Navigation, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -48,6 +48,15 @@ const HomeScreen: React.FC = () => {
   const { userLocation, locationError } = useLocation();
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!auth.currentUser);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsLoggedIn(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [radius, setRadius] = useState(1000); 
   const [overrideLocation, setOverrideLocation] = useState<[number, number] | null>(null);
   const [latInput, setLatInput] = useState('');
@@ -132,51 +141,100 @@ const HomeScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    // forces Leaflet to recalculate the container dimensions
     window.dispatchEvent(new Event('resize'));
   }, []);
+
+  // Shared Profile Ribbon Component
+  const ProfileRibbon = () => (
+    <div className="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl flex flex-col gap-3 w-full shadow-sm">
+      <div>
+        <h3 className="text-sm font-bold text-indigo-900 leading-tight">
+          Have you created your profile?
+        </h3>
+        <p className="text-xs text-indigo-700 mt-1">
+          Get started to begin tracking your health.
+        </p>
+      </div>
+      <div className="flex items-center">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Link 
+            key={i} 
+            to="/register" 
+            className="relative -ml-2 first:ml-0 hover:scale-110 hover:z-10 transition-all duration-200"
+          >
+            <img 
+              src={`https://i.pravatar.cc/100?img=${i + 15}`} 
+              alt="User profile placeholder" 
+              className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover bg-slate-200"
+            />
+          </Link>
+        ))}
+        <Link to="/register" className="ml-3 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors">
+          Create Profile <ArrowRight size={12} />
+        </Link>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col p-4 bg-slate-50 min-h-screen pb-24 max-w-full mx-auto">
       <style>{tickerStyles}</style>
       <div className="w-full space-y-8"> 
         
-        {/* HEADER & TICKER RIBBON */}
-        <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 overflow-hidden">
-          <div className="shrink-0">
-            <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">Health Home</h1>
-            <p className="text-slate-500 mt-1 text-sm lg:text-base">
-              Showing {filteredNews.length} updates based on your active map radius.
-            </p>
-          </div>
+        {/* TICKER & RIBBON */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
           
-          {newsLinks.length > 0 && (
-            <div className="flex-1 relative overflow-hidden h-14 bg-white/50 rounded-2xl border border-slate-200 backdrop-blur-sm mt-2">
-              <div className="animate-ticker py-2 px-4">
-                {newsLinks.map((link, idx) => (
-                  <Link 
-                    key={`${link.id}-${idx}`}
-                    to={`/forum/${link.id}`}
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-white rounded-xl transition-colors group border border-transparent hover:border-slate-100"
-                  >
-                    <div className={`p-1.5 rounded-md ${link.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                      {link.icon}
-                    </div>
-                    <div className="whitespace-nowrap">
-                      <span className={`text-[9px] font-black uppercase tracking-widest mr-2 ${link.color === 'indigo' ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                        {link.label}
-                      </span>
-                      <span className="text-sm font-bold text-slate-800">{link.title}</span>
-                    </div>
-                    <ArrowRight size={12} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-                  </Link>
-                ))}
+          <div className="flex-1 min-w-0 flex flex-col w-full">
+            <div>
+              <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">Health Home</h1>
+              <p className="text-slate-500 mt-1 text-sm lg:text-base">
+                Showing {filteredNews.length} updates based on your active map radius.
+              </p>
+            </div>
+
+            {/* Mobile profile ribbon */}
+            {!isLoggedIn && (
+              <div className="md:hidden mt-6 w-full">
+                <ProfileRibbon />
               </div>
+            )}
+            
+            {/* Ticker */}
+            {newsLinks.length > 0 && (
+              <div className={`relative overflow-hidden h-14 bg-white/50 rounded-2xl border border-slate-200 backdrop-blur-sm mt-6 w-full ${isLoggedIn ? 'max-w-full' : 'max-w-3xl'}`}>
+                <div className="animate-ticker py-2 px-4">
+                  {newsLinks.map((link, idx) => (
+                    <Link 
+                      key={`${link.id}-${idx}`}
+                      to={`/forum/${link.id}`}
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-white rounded-xl transition-colors group border border-transparent hover:border-slate-100"
+                    >
+                      <div className={`p-1.5 rounded-md ${link.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {link.icon}
+                      </div>
+                      <div className="whitespace-nowrap">
+                        <span className={`text-[9px] font-black uppercase tracking-widest mr-2 ${link.color === 'indigo' ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                          {link.label}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800">{link.title}</span>
+                      </div>
+                      <ArrowRight size={12} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop profile ribbon */}
+          {!isLoggedIn && (
+            <div className="hidden md:block shrink-0 w-72 lg:w-80">
+              <ProfileRibbon />
             </div>
           )}
         </header>
 
-        {/* MAP SECTION */}
+        {/* MAP */}
         <div className="w-full">
           <div className="bg-white p-2 md:p-3 rounded-3xl border border-slate-200 shadow-sm flex flex-col min-h-125 md:min-h-150">
 
@@ -232,7 +290,6 @@ const HomeScreen: React.FC = () => {
                 <div className={`absolute top-4 bottom-4 right-4 flex transition-transform duration-500 ease-in-out ${showRightSidebar ? 'translate-x-0' : 'translate-x-[calc(100%+2rem)]'}`}>
                   <aside className="pointer-events-auto w-72 lg:w-80 flex flex-col gap-4 bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/5 shadow-2xl overflow-y-auto max-h-full transition-all hover:bg-white/10 hover:backdrop-blur-md">
                     <div className="flex items-center border-b border-white/10 pb-2">
-                      {/* Centered Title */}
                       <div className="flex-1 flex items-center justify-center gap-2 pl-7">
                         <AlertTriangle size={18} className="text-orange-500" />
                         <h2 className="text-xs font-black text-slate-800 uppercase tracking-tight">Active Hazards</h2>
