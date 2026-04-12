@@ -186,7 +186,7 @@ const HomeScreen: React.FC = () => {
           
           <div className="flex-1 min-w-0 flex flex-col w-full">
             <div>
-              <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">Health Home</h1>
+              <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">MyHealth Home</h1>
               <p className="text-slate-500 mt-1 text-sm lg:text-base">
                 Showing {filteredNews.length} updates based on your active map radius.
               </p>

@@ -47,7 +47,7 @@ const ForumScreen: React.FC = () => {
   const user = auth.currentUser;
   
   // App State
-  const [activeSection, setActiveSection] = useState<string>('Personal Health');
+  const [activeSection, setActiveSection] = useState<string>('Population Health');
   
   // Modal & UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -485,7 +485,7 @@ const ForumScreen: React.FC = () => {
       }`}>
         <header className="mb-6 flex flex-row items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">Health Forum</h1>
+            <h1 className="text-4xl lg:text-4xl font-bold text-slate-900 tracking-tight">MyHealth Forum</h1>
             <p className="text-slate-500 mt-1 text-sm lg:text-base">Engage with local health initiatives.</p>
           </div>
           

@@ -112,7 +112,7 @@ const StoreScreen: React.FC = () => {
       <div className={`flex-1 ${!user ? 'max-w-4xl w-full' : ''}`}>      
         <header className="mb-8 flex justify-between items-start">
           <div>
-            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Health Store</h1>
+            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">MyHealth Store</h1>
             <p className="text-slate-500 mt-1">Select quantities and equip your infrastructure.</p>
           </div>
             

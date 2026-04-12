@@ -44,7 +44,7 @@ const TutorialScreen: React.FC = () => {
         <div className="w-full max-w-5xl h-full md:h-auto max-h-dvh bg-white md:rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden">
           
           <div className="bg-slate-900 p-3 md:p-6 text-center shrink-0">
-            <h1 className="text-xl md:text-3xl font-black text-white leading-tight">Welcome to myHealth</h1>
+            <h1 className="text-xl md:text-3xl font-black text-white leading-tight">Welcome to MyHealth</h1>
             <p className="text-slate-400 text-xs md:text-sm font-medium">Quick guide to your health dashboard</p>
           </div>
 
