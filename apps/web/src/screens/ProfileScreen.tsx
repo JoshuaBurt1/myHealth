@@ -388,31 +388,50 @@ const ProfileScreen: React.FC = () => {
   const handleDeleteField = async (
     fieldLabel: string, 
     fieldKey: string, 
-    category: 'vital' | 'workout' | 'diet'
+    category: 'vital' | 'diet' | 'exercise'
   ) => {
     if (!window.confirm(`Delete ${fieldLabel}?`)) return;
 
     const profileRef = doc(db, 'users', userId!, 'profile', 'user_data');
     
     const definitionKey = 
-      category === 'workout' ? 'customWorkoutsDefinitions' : 
+      category === 'exercise' ? 'customWorkoutsDefinitions' : 
       category === 'diet' ? 'customDietDefinitions' : 
       'customVitalsDefinitions';
 
     const sourceArray = 
-      category === 'workout' ? trackedExercises : 
+      category === 'exercise' ? trackedExercises : 
       category === 'diet' ? dietMetrics : 
       dynamicVitals;
 
-    const definitionObj = sourceArray.find(item => 
-      (item.name === fieldKey || item.key === fieldKey)
-    );
+    const item = sourceArray.find(i => (i.name === fieldKey || i.key === fieldKey));
 
     try {
-      await updateDoc(profileRef, {
-        [fieldKey]: deleteField(),        
-        ...(definitionObj && { [definitionKey]: arrayRemove(definitionObj) })
-      });
+      const updates: any = {
+        [fieldKey]: deleteField()
+      };
+
+      if (item) {
+        let objectToRemove: any = {
+          name: item.label || item.name,
+          key: item.name || item.key,
+          unit: item.unit || (category === 'diet' ? 'g' : '')
+        };
+
+        if (category === 'exercise') {
+          objectToRemove.type = item.type;
+        } else if (category === 'diet') {
+          objectToRemove.type = 'diet';
+          objectToRemove.isCustom = !!item.isCustom;
+        } else if (category === 'vital') {
+          objectToRemove.type = 'custom';
+        }
+
+        updates[definitionKey] = arrayRemove(objectToRemove);
+      }
+
+      await updateDoc(profileRef, updates);
+      console.log(`Successfully removed ${fieldKey} and its definition.`);
     } catch (err) {
       console.error("Delete failed:", err);
     }

@@ -40,7 +40,7 @@ interface ModalExercisesProps {
   setExerciseInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   hiddenOther: string[];
   toggleVisibilityOther: (field: string) => void;
-  handleDeleteField: (fieldLabel: string, fieldKey: string, category: 'vital' | 'workout') => Promise<void>;
+  handleDeleteField: (fieldLabel: string, fieldKey: string, category: 'vital' | 'diet' | 'exercise') => Promise<void>;
   isMe: boolean;
 }
 
@@ -431,7 +431,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                       hiddenOther={hiddenOther} 
                       toggleVisibilityOther={toggleVisibilityOther} 
                       onDelete={async () => {
-                        await handleDeleteField(ex.label, ex.name, 'workout');
+                        await handleDeleteField(ex.label, ex.name, 'exercise');
                         try {
                           const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
                           await updateDoc(profileRef, { [`change_${ex.name}`]: deleteField() });

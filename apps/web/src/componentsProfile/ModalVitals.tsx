@@ -17,7 +17,7 @@ interface ModalVitalsProps {
   setDynamicVitalsInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   hiddenOther: string[];
   toggleVisibilityOther: (field: string) => void;
-  handleDeleteField: (fieldLabel: string, fieldKey: string, category: 'vital' | 'workout') => Promise<void>;
+  handleDeleteField: (fieldLabel: string, fieldKey: string, category: 'vital' | 'diet' | 'exercise' ) => Promise<void>;
   isMe: boolean;
 }
 
