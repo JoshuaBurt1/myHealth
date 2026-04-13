@@ -43,6 +43,7 @@ interface DietEntry {
   unit: string;
   value: string;
   isCustom: boolean;
+  type: string;
 }
 
 interface FoodItem {
@@ -61,7 +62,7 @@ interface ModalDietProps {
   onClose: () => void;
   userId: string;
   onSuccess: () => void;
-  trackedDiet: { name: string; label: string; unit?: string; isCustom?: boolean }[];
+  trackedDiet: { name: string; label: string; unit?: string; type: string; isCustom?: boolean }[];
   dietInputs: Record<string, string>;
   setDietInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   hiddenOther: string[];
@@ -134,7 +135,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     let count = 0;
 
     for (const [key, value] of Object.entries(usdaData)) {
-      if (count >= 30) break; // Limit to 30 results for performance
+      if (count >= 30) break; // Limited for performance
 
       if (key.includes(query) || value.description.toLowerCase().includes(query)) {
         results.push(value);
@@ -345,6 +346,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
       name: key,
       label: selectedMetric,
       unit: getStandardUnit(key),
+      type: selectedCategory.toLowerCase(),
       value: '',
       isCustom: false
     }]);
@@ -357,6 +359,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
         name: sanitizedKey,
         label: customName.trim(),
         unit: customUnit.trim() || 'g',
+        type: 'custom',
         value: '',
         isCustom: true
       }]);
@@ -458,8 +461,14 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
             context: generatedMealName,
             unit: e.unit 
         });
-        mealLogEntry.macros[e.name] = e.finalValue;
-        newDefs.push({ name: e.label, key: e.name, unit: e.unit, type: 'diet', isCustom: e.isCustom });
+        mealLogEntry.macros[e.name] = e.finalValue;  
+        newDefs.push({ 
+          name: e.label, 
+          key: e.name, 
+          unit: e.unit, 
+          type: e.type,
+          isCustom: e.isCustom 
+        });
       });
 
       preparedExist.forEach(d => {
@@ -806,78 +815,96 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                   <p className="text-xs sm:text-sm font-medium">No diet metrics tracked yet. Add one above.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
-                  
-                  {/* Existing diet metrics (DATABASE FIELDS) */}
-                    {trackedDiet.map((dt, idx) => (
-                      <PrivacyWrapper
-                        key={`exist-${dt.name}-${idx}`}
-                        fieldKey={dt.name}
-                        isMe={isMe}
-                        hiddenOther={hiddenOther}
-                        toggleVisibilityOther={toggleVisibilityOther}
-                        onDelete={async () => {
-                          await handleDeleteField(dt.label, dt.name, 'diet');
-                        }}
-                      >
-                        <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
-                          <span className="text-[10px] sm:text-xs font-bold text-slate-500 mb-1 sm:mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                            {dt.label}
-                          </span>
-                          <div className="cursor-default select-none pointer-events-none">
-                            <InputField
-                              label={`Total ${dt.unit ? `(${dt.unit})` : ''}`.trim()}
-                              type="text"
-                              value={dietInputs[dt.name] || ''} 
-                              onChange={() => {}}
-                              disabled={false} 
-                              icon={<div className="w-4" />} 
-                            />
-                          </div>
-                        </div>
-                      </PrivacyWrapper>
-                    ))}
+                <div className="space-y-8">
+                  {CATEGORIES.map(category => {
+                    const categoryType = category.toLowerCase();
+                    
+                    const existingInCat = trackedDiet.filter(dt => dt.type === categoryType || (category === 'Custom' && dt.isCustom));
+                    const newInCat = entries.filter(e => (e.type === categoryType || (category === 'Custom' && e.isCustom)) && !trackedDiet.some(dt => dt.name === e.name));
 
-                    {/* New diet metric fields */}
-                    {entries.map((entry) => (
-                      <PrivacyWrapper
-                        key={`new-${entry.name}`}
-                        fieldKey={entry.name}
-                        isMe={isMe}
-                        hiddenOther={hiddenOther}
-                        toggleVisibilityOther={toggleVisibilityOther}
-                        onDelete={() => {
-                          setEntries(prev => prev.filter(e => e.name !== entry.name));
-                        }}
-                      >
-                        <div className="h-full w-full bg-emerald-50/30 rounded-2xl border-2 border-emerald-100 p-2 relative shadow-sm flex flex-col justify-center">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation(); 
-                              setEntries(prev => prev.filter(e => e.name !== entry.name));
-                            }}
-                            className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 text-emerald-400 hover:text-red-500 bg-white border border-emerald-100 rounded-full z-30 p-1 sm:p-1.5 shadow-sm transition-colors"
-                          >
-                            <X size={12} className="sm:w-3.5 sm:h-3.5" strokeWidth={3}/>
-                          </button>
+                    if (existingInCat.length === 0 && newInCat.length === 0) return null;
+
+                    return (
+                      <div key={category} className="w-full">
+                        <h4 className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest border-b border-slate-100 pb-1">
+                          {category}
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
                           
-                          <span className="text-[10px] sm:text-xs font-bold text-emerald-600 mb-1 sm:mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                            {entry.label}
-                          </span>
-                          <div className="cursor-default select-none pointer-events-none">
-                            <InputField
-                              label={`Total ${entry.unit ? `(${entry.unit})` : ''}`.trim()}
-                              type="text"
-                              value={entry.value || ''}
-                              onChange={() => {}}
-                              disabled={false}
-                              icon={<div className="w-4" />} 
-                            />
-                          </div>
+                          {/* Existing metrics for this category */}
+                          {existingInCat.map((dt, idx) => (
+                            <PrivacyWrapper
+                              key={`exist-${dt.name}-${idx}`}
+                              fieldKey={dt.name}
+                              isMe={isMe}
+                              hiddenOther={hiddenOther}
+                              toggleVisibilityOther={toggleVisibilityOther}
+                              onDelete={async () => {
+                                await handleDeleteField(dt.label, dt.name, 'diet');
+                              }}
+                            >
+                              <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
+                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 mb-1 sm:mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                                  {dt.label}
+                                </span>
+                                <div className="cursor-default select-none pointer-events-none">
+                                  <InputField
+                                    label={`Total ${dt.unit ? `(${dt.unit})` : ''}`.trim()}
+                                    type="text"
+                                    value={dietInputs[dt.name] || ''} 
+                                    onChange={() => {}}
+                                    disabled={false} 
+                                    icon={<div className="w-4" />} 
+                                  />
+                                </div>
+                              </div>
+                            </PrivacyWrapper>
+                          ))}
+
+                          {/* New metrics for this category */}
+                          {newInCat.map((entry) => (
+                            <PrivacyWrapper
+                              key={`new-${entry.name}`}
+                              fieldKey={entry.name}
+                              isMe={isMe}
+                              hiddenOther={hiddenOther}
+                              toggleVisibilityOther={toggleVisibilityOther}
+                              onDelete={() => {
+                                setEntries(prev => prev.filter(e => e.name !== entry.name));
+                              }}
+                            >
+                              <div className="h-full w-full bg-emerald-50/30 rounded-2xl border-2 border-emerald-100 p-2 relative shadow-sm flex flex-col justify-center">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); 
+                                    setEntries(prev => prev.filter(e => e.name !== entry.name));
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 text-emerald-400 hover:text-red-500 bg-white border border-emerald-100 rounded-full z-30 p-1 sm:p-1.5 shadow-sm transition-colors"
+                                >
+                                  <X size={12} className="sm:w-3.5 sm:h-3.5" strokeWidth={3}/>
+                                </button>
+                                
+                                <span className="text-[10px] sm:text-xs font-bold text-emerald-600 mb-1 sm:mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                                  {entry.label}
+                                </span>
+                                <div className="cursor-default select-none pointer-events-none">
+                                  <InputField
+                                    label={`Total ${entry.unit ? `(${entry.unit})` : ''}`.trim()}
+                                    type="text"
+                                    value={entry.value || ''}
+                                    onChange={() => {}}
+                                    disabled={false}
+                                    icon={<div className="w-4" />} 
+                                  />
+                                </div>
+                              </div>
+                            </PrivacyWrapper>
+                          ))}
                         </div>
-                      </PrivacyWrapper>
-                    ))}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

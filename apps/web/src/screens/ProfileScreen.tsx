@@ -79,8 +79,8 @@ const ProfileScreen: React.FC = () => {
   const [trackedVitals, setTrackedVitals] = useState<{key: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
   const [trackedVitalsInputs, setTrackedVitalsInputs] = useState<Record<string, string>>({});
 
+  const [trackedDiet, setTrackedDiet] = useState<{name: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
   const [dietInputs, setDietInputs] = useState<Record<string, string>>({});
-  const [dietMetrics, setDietMetrics] = useState<any[]>([]);
   const [dietStreak, setDietStreak] = useState(0);
 
   const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
@@ -222,7 +222,7 @@ const ProfileScreen: React.FC = () => {
           });
         }
 
-        const allStandardMaps = [
+        const allStandardExerciseMaps = [
           { map: STRENGTH_KEY_MAP, type: 'strength' },
           { map: SPEED_KEY_MAP, type: 'speed' },
           { map: PLYO_KEY_MAP, type: 'plyometrics' },
@@ -232,7 +232,7 @@ const ProfileScreen: React.FC = () => {
           { map: MOBILITY_KEY_MAP, type: 'mobility' }
         ];
 
-        allStandardMaps.forEach(({ map, type }) => {
+        allStandardExerciseMaps.forEach(({ map, type }) => {
           Object.entries(map).forEach(([label, key]) => {
             if (profData[key] !== undefined && !seenExercises.has(key)) {
               loadedExercises.push({ name: key, label: label, type: type, unit: getStandardUnit(key), isCustom: false });
@@ -254,7 +254,7 @@ const ProfileScreen: React.FC = () => {
         });
 
         // 3. Diet Metrics Parsing
-        const loadedDiet: typeof dietMetrics = [];
+        const loadedDiet: typeof trackedDiet = [];
         const newDietInputs: Record<string, string> = {};
         const seenDiet = new Set<string>();
 
@@ -263,26 +263,29 @@ const ProfileScreen: React.FC = () => {
             if (!seenDiet.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
-              loadedDiet.push({ name: def.key, label: def.name, unit: correctUnit, isCustom });
+              loadedDiet.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit, isCustom });
               newDietInputs[def.key] = '';
               seenDiet.add(def.key);
             }
           });
         }
 
-        const nutritionMaps = [DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP];
+        const nutritionMaps = [
+          { map: DIET_KEY_MAP, type: 'diet' },
+          { map: MICRONUTRIENT_KEY_MAP, type: 'micronutrients' }
+        ];
 
-        nutritionMaps.forEach((map) => {
+        nutritionMaps.forEach(({ map, type }) => {
           Object.entries(map).forEach(([label, key]) => {
             if (profData[key] !== undefined && !seenDiet.has(key)) {
-              loadedDiet.push({ name: key, label: label, unit: getStandardUnit(key), isCustom: false });
+              loadedDiet.push({ name: key, label: label, type: type, unit: getStandardUnit(key), isCustom: false });
               newDietInputs[key] = '';
               seenDiet.add(key);
             }
           });
         });
 
-        setDietMetrics(loadedDiet);
+        setTrackedDiet(loadedDiet);
         setDietInputs(prev => {
           const updated = { ...newDietInputs };
           let isDifferent = Object.keys(updated).length !== Object.keys(prev).length;
@@ -400,10 +403,11 @@ const ProfileScreen: React.FC = () => {
 
     const sourceArray = 
       category === 'exercise' ? trackedExercises : 
-      category === 'diet' ? dietMetrics : 
+      category === 'diet' ? trackedDiet : 
       trackedVitals;
 
-    const item = sourceArray.find(i => (i.name === fieldKey || i.key === fieldKey));
+    // Use a type cast to any to find the item regardless of 'name' vs 'key' property
+    const item = (sourceArray as any[]).find(i => (i.name === fieldKey || i.key === fieldKey));
 
     try {
       const updates: any = {
@@ -411,28 +415,25 @@ const ProfileScreen: React.FC = () => {
       };
 
       if (item) {
-        let objectToRemove: any = {
-          name: item.label || item.name,
-          key: item.name || item.key,
-          unit: item.unit || (category === 'diet' ? 'g' : '')
+        // Construct the exact object as it exists in your Firestore arrays
+        // Note: Vital uses 'key' as the identifier, others use 'name'
+        const objectToRemove: any = {
+          name: item.label || item.name || item.key, // UI Label
+          key: item.name || item.key,                // Database Key
+          unit: item.unit ?? (category === 'diet' ? 'g' : ''),
+          type: item.type,
+          isCustom: !!item.isCustom
         };
-
-        if (category === 'exercise') {
-          objectToRemove.type = item.type;
-        } else if (category === 'diet') {
-          objectToRemove.type = 'diet';
-          objectToRemove.isCustom = !!item.isCustom;
-        } else if (category === 'vital') {
-          objectToRemove.type = item.type;
-        }
 
         updates[definitionKey] = arrayRemove(objectToRemove);
       }
 
       await updateDoc(profileRef, updates);
       console.log(`Successfully removed ${fieldKey} and its definition.`);
+
     } catch (err) {
       console.error("Delete failed:", err);
+      alert("Failed to delete the field. Please try again.");
     }
   };
 
@@ -886,7 +887,7 @@ const ProfileScreen: React.FC = () => {
         onClose={() => setShowDietModal(false)}
         userId={userId!}
         onSuccess={() => {}}
-        trackedDiet={dietMetrics}
+        trackedDiet={trackedDiet}
         dietInputs={dietInputs}
         setDietInputs={setDietInputs}
         hiddenOther={hiddenOther}

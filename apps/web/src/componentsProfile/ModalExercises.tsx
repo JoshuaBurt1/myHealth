@@ -97,6 +97,10 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }
   }, [availableExercises, selectedExercise, selectedCategory]);
 
+  const currentCustomCount = useMemo(() => {
+    return trackedExercises.filter(v => v.isCustom).length + entries.filter(e => e.isCustom).length;
+  }, [trackedExercises, entries]);
+
   if (!isOpen) return null;
 
   const handleAddEntry = () => {
@@ -118,8 +122,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     } else {
       if (!customName.trim()) return alert('Please enter a custom exercise name.');
 
-      const currentCustomCount = trackedExercises.filter(v => v.isCustom).length + entries.filter(e => e.isCustom).length;
-      if (currentCustomCount > 10) return alert('Maximum of 10 custom exercises allowed.');
+      if (currentCustomCount >= 10) return alert('Maximum of 10 custom exercises allowed.');
 
       const sanitizedKey = `custom_ex_${customName.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
       if (existingKeys.has(sanitizedKey)) return alert('Already exists.');
@@ -392,17 +395,19 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 <>
                   <input 
                     type="text" 
-                    placeholder="Exercise Name" 
-                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500" 
+                    placeholder={currentCustomCount >= 10 ? "Custom exercise limit (10) reached" : "Exercise Name"} 
+                    className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:opacity-75" 
                     value={customName} 
                     onChange={(e) => setCustomName(e.target.value)}
+                    disabled={currentCustomCount >= 10}
                   />
                   <input 
                     type="text" 
                     placeholder="Unit" 
-                    className="w-32 p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500" 
+                    className="w-32 p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 disabled:bg-slate-100 disabled:opacity-75" 
                     value={customUnit} 
                     onChange={(e) => setCustomUnit(e.target.value)}
+                    disabled={currentCustomCount >= 10}
                   />
                 </>
               )}
@@ -411,7 +416,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 onClick={handleAddEntry} 
                 disabled={
                   (selectedCategory !== 'Custom' && availableExercises.length === 0) ||
-                  (selectedCategory === 'Custom' && (trackedExercises.filter(v => v.isCustom).length + entries.filter(e => e.isCustom).length >= 10))
+                  (selectedCategory === 'Custom' && currentCustomCount >= 10)
                 }
                 className="px-6 py-3 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 transition-colors whitespace-nowrap"
               >
@@ -431,110 +436,125 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 <p className="font-medium">No exercises tracked yet. Add one above to get started.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                
-                {/* Existing exercises */}
-                {trackedExercises.map((ex, idx) => {
-                  const isStrength = isStrengthExercise(ex.name);
+              <div className="space-y-6">
+                {CATEGORIES.map(category => {
+                  const categoryType = category.toLowerCase();
+                  
+                  const existingInCat = trackedExercises.filter(ex => ex.type === categoryType || (category === 'Custom' && ex.isCustom));
+                  const newInCat = entries.filter(e => (e.type === categoryType || (category === 'Custom' && e.isCustom)) && !trackedExercises.some(ex => ex.name === e.name));
+
+                  if (existingInCat.length === 0 && newInCat.length === 0) return null;
+
                   return (
-                    <PrivacyWrapper 
-                      key={`exist-${ex.name}-${idx}`} 
-                      fieldKey={ex.name} 
-                      isMe={isMe} 
-                      hiddenOther={hiddenOther} 
-                      toggleVisibilityOther={toggleVisibilityOther} 
-                      onDelete={async () => {
-                        await handleDeleteField(ex.label, ex.name, 'exercise');
-                        try {
-                          const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-                          await updateDoc(profileRef, { [`change_${ex.name}`]: deleteField() });
-                        } catch (err) {
-                          console.error("Failed to delete matching change field", err);
-                        }
-                      }}
-                    >
-                      <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
-                        <span className="text-xs font-bold text-slate-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                          {ex.label}
-                        </span>
-                        {isStrength ? (
-                          <div className="flex gap-2 w-full">
-                            <InputField 
-                              label="Weight" type="number" 
-                              value={exerciseInputs[`${ex.name}_weight`] || ''} 
-                              onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_weight`]: v }))}
-                              disabled={!isMe} icon={<Dumbbell size={14} className="text-indigo-400"/>} 
-                            />
-                            <InputField 
-                              label="Reps" type="number" 
-                              value={exerciseInputs[`${ex.name}_reps`] || ''} 
-                              onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_reps`]: v }))}
-                              disabled={!isMe} icon={<RefreshCw size={14} className="text-indigo-400"/>} 
-                            />
-                          </div>
-                        ) : (
-                          <InputField 
-                            label={`Value ${ex.unit ? `(${ex.unit})` : ''}`.trim()} 
-                            type="number" 
-                            value={exerciseInputs[ex.name] || ''} 
-                            onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
-                            disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
-                          />
-                        )}
+                    <div key={category} className="w-full">
+                      <h4 className="text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">{category}</h4>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                        
+                        {/* Existing exercises for this category */}
+                        {existingInCat.map((ex, idx) => {
+                          const isStrength = isStrengthExercise(ex.name);
+                          return (
+                            <PrivacyWrapper 
+                              key={`exist-${ex.name}-${idx}`} 
+                              fieldKey={ex.name} 
+                              isMe={isMe} 
+                              hiddenOther={hiddenOther} 
+                              toggleVisibilityOther={toggleVisibilityOther} 
+                              onDelete={async () => {
+                                await handleDeleteField(ex.label, ex.name, 'exercise');
+                                try {
+                                  const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+                                  await updateDoc(profileRef, { [`change_${ex.name}`]: deleteField() });
+                                } catch (err) {
+                                  console.error("Failed to delete matching change field", err);
+                                }
+                              }}
+                            >
+                              <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
+                                <span className="text-xs font-bold text-slate-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                                  {ex.label}
+                                </span>
+                                {isStrength ? (
+                                  <div className="flex gap-2 w-full">
+                                    <InputField 
+                                      label="Weight" type="number" 
+                                      value={exerciseInputs[`${ex.name}_weight`] || ''} 
+                                      onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_weight`]: v }))}
+                                      disabled={!isMe} icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                    />
+                                    <InputField 
+                                      label="Reps" type="number" 
+                                      value={exerciseInputs[`${ex.name}_reps`] || ''} 
+                                      onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_reps`]: v }))}
+                                      disabled={!isMe} icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                    />
+                                  </div>
+                                ) : (
+                                  <InputField 
+                                    label={`Value ${ex.unit ? `(${ex.unit})` : ''}`.trim()} 
+                                    type="number" 
+                                    value={exerciseInputs[ex.name] || ''} 
+                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
+                                    disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
+                                  />
+                                )}
+                              </div>
+                            </PrivacyWrapper>
+                          );
+                        })}
+
+                        {/* New exercises for this category */}
+                        {newInCat.map((entry) => {
+                          const isStrength = isStrengthExercise(entry.name);
+                          return (
+                            <PrivacyWrapper 
+                              key={`new-${entry.name}`} 
+                              fieldKey={entry.name} 
+                              isMe={isMe} 
+                              hiddenOther={hiddenOther} 
+                              toggleVisibilityOther={toggleVisibilityOther} 
+                              onDelete={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
+                            >
+                              <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-2 relative shadow-sm flex flex-col justify-center">
+                                <button 
+                                  onClick={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
+                                  className="absolute -top-2 -right-2 text-indigo-400 hover:text-indigo-600 bg-white border border-indigo-100 rounded-full z-20 p-1.5 shadow-sm transition-colors"
+                                >
+                                  <X size={14} strokeWidth={3}/>
+                                </button>
+                                <span className="text-xs font-bold text-indigo-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                                  {entry.label} (NEW)
+                                </span>
+                                {isStrength ? (
+                                  <div className="flex gap-2 w-full">
+                                    <InputField 
+                                      label="Weight" type="number" value={entry.weight || ''} 
+                                      onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, weight: v } : e))} 
+                                      icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                    />
+                                    <InputField 
+                                      label="Reps" type="number" value={entry.reps || ''} 
+                                      onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, reps: v } : e))} 
+                                      icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                    />
+                                  </div>
+                                ) : (
+                                  <InputField 
+                                    label={`Value ${entry.unit ? `(${entry.unit})` : ''}`} 
+                                    type="number" value={entry.value} 
+                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
+                                    icon={<PlusCircle size={16} className="text-indigo-500"/>} 
+                                  />
+                                )}
+                              </div>
+                            </PrivacyWrapper>
+                          );
+                        })}
+
                       </div>
-                    </PrivacyWrapper>
+                    </div>
                   );
                 })}
-
-                {/* New exercises */}
-                {entries
-                  .filter(entry => !trackedExercises.some(ex => ex.name === entry.name))
-                  .map((entry) => {
-                    const isStrength = isStrengthExercise(entry.name);
-                    return (
-                      <PrivacyWrapper 
-                        key={`new-${entry.name}`} 
-                        fieldKey={entry.name} 
-                        isMe={isMe} 
-                        hiddenOther={hiddenOther} 
-                        toggleVisibilityOther={toggleVisibilityOther} 
-                        onDelete={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
-                      >
-                        <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-2 relative shadow-sm flex flex-col justify-center">
-                          <button 
-                            onClick={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
-                            className="absolute -top-2 -right-2 text-indigo-400 hover:text-indigo-600 bg-white border border-indigo-100 rounded-full z-20 p-1.5 shadow-sm transition-colors"
-                          >
-                            <X size={14} strokeWidth={3}/>
-                          </button>
-                          <span className="text-xs font-bold text-indigo-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                            {entry.label} (NEW)
-                          </span>
-                          {isStrength ? (
-                            <div className="flex gap-2 w-full">
-                              <InputField 
-                                label="Weight" type="number" value={entry.weight || ''} 
-                                onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, weight: v } : e))} 
-                                icon={<Dumbbell size={14} className="text-indigo-500"/>} 
-                              />
-                              <InputField 
-                                label="Reps" type="number" value={entry.reps || ''} 
-                                onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, reps: v } : e))} 
-                                icon={<RefreshCw size={14} className="text-indigo-500"/>} 
-                              />
-                            </div>
-                          ) : (
-                            <InputField 
-                              label={`Value ${entry.unit ? `(${entry.unit})` : ''}`} 
-                              type="number" value={entry.value} 
-                              onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
-                              icon={<PlusCircle size={16} className="text-indigo-500"/>} 
-                            />
-                          )}
-                        </div>
-                      </PrivacyWrapper>
-                    );
-                  })}
               </div>
             )}
           </div>

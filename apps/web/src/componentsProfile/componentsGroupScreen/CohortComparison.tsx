@@ -6,6 +6,7 @@ import { Users, RefreshCw, Info } from 'lucide-react';
 
 import { 
   VITAL_KEY_MAP, 
+  BLOODTEST_KEY_MAP,
   DIET_KEY_MAP,
   MICRONUTRIENT_KEY_MAP, 
   STRENGTH_KEY_MAP,
@@ -20,6 +21,7 @@ import {
 } from '../profileConstants'; 
 
 const VITAL_KEYS = new Set(Object.values(VITAL_KEY_MAP));
+const BLOODTEST_KEYS = new Set(Object.values(BLOODTEST_KEY_MAP));
 const DIET_KEYS = new Set(Object.values(DIET_KEY_MAP));
 const MICRONUTRIENT_KEYS = new Set(Object.values(MICRONUTRIENT_KEY_MAP));
 const STRENGTH_KEYS = new Set(Object.values(STRENGTH_KEY_MAP));
@@ -31,7 +33,7 @@ const MOBILITY_KEYS = new Set(Object.values(MOBILITY_KEY_MAP));
 const PHYSIO_KEYS = new Set(Object.values(PHYSIO_KEY_MAP));
 
 const ALL_ALLOWED_KEYS = new Set([
-  ...VITAL_KEYS, ...DIET_KEYS, ...MICRONUTRIENT_KEYS, 
+  ...VITAL_KEYS, ...BLOODTEST_KEYS, ...DIET_KEYS, ...MICRONUTRIENT_KEYS, 
   ...STRENGTH_KEYS, ...SPEED_KEYS, ...PLYO_KEYS, ...ENDURANCE_KEYS, ...PHYSIO_KEYS, ...YOGA_KEYS, ...MOBILITY_KEYS
 ]);
 
@@ -39,6 +41,7 @@ const LOWER_IS_BETTER_METRICS = new Set([...SPEED_KEYS]);
 
 const CATEGORIES_VITALS = [
   { title: 'Standard Vitals', keys: VITAL_KEYS },
+  { title: 'Blood test Values', keys: BLOODTEST_KEYS },
 ];
 
 const CATEGORIES_DIETS = [
@@ -58,6 +61,7 @@ const CATEGORIES_EXERCISES = [
 const getDisplayName = (key: string): string => {
   const ALL_MAPS = {
     ...VITAL_KEY_MAP,
+    ...BLOODTEST_KEY_MAP,
     ...DIET_KEY_MAP,
     ...MICRONUTRIENT_KEY_MAP,
     ...STRENGTH_KEY_MAP,

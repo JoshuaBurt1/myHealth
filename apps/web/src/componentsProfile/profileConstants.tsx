@@ -200,7 +200,7 @@ export const SINGLE_GRAPHS = [
   { key: 'temp', title: 'BODY TEMPERATURE', unit: '°C', icon: <Thermometer className="text-amber-500" />, color: '#f59e0b', domain: [30, 43] as [number, number], thresholds: { warningHigh: 38.5, warningLow: 35.0, criticalHigh: 40, criticalLow: 34.0 } as MetricThresholds },
   
   // Blood & Metabolic
-  { key: 'glucose', title: 'GLUCOSE', unit: 'mmol/L', icon: <TestTube className="text-rose-500" />, color: '#f43f5e', thresholds: { warningHigh: 7, warningLow: 5, criticalHigh: 10, criticalLow: 4 } as MetricThresholds },
+  { key: 'glucose', title: 'GLUCOSE', unit: 'mmol/L', icon: <TestTube className="text-rose-500" />, color: '#f43f5e', thresholds: { warningHigh: 7.2, warningLow: 3.9, criticalHigh: 10, criticalLow: 3.5 } as MetricThresholds },
   { key: 'cholesterol', title: 'CHOLESTEROL', unit: 'mg/dL', icon: <Activity className="text-yellow-500" />, color: '#eab308' },
   { key: 'ketones', title: 'KETONES', unit: 'mmol/L', icon: <TestTube className="text-purple-500" />, color: '#a855f7', thresholds: { warningHigh: 0.6, criticalHigh: 1.6 } as MetricThresholds },
   { key: 'uricAcid', title: 'URIC ACID', unit: 'mg/dL', icon: <Droplets className="text-cyan-500" />, color: '#06b6d4', thresholds: { warningHigh: 6.8, criticalHigh: 7.0 } as MetricThresholds },
