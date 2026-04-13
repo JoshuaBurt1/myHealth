@@ -3,7 +3,7 @@ import {
   Heart, Wind, Droplets, Thermometer, TestTube, Activity,
   User, Ruler, Scale, Dumbbell, Timer, Footprints,
   ChevronUp, Shield, Accessibility, Anchor, Fingerprint, Target, ArrowLeftRight, Zap, Move,
-  Sun, Sword, Moon, TreePine, Bird, Triangle, Bed,
+  Sun, Sword, Moon, TreePine, Bird, Triangle, Bed, Clock, MessageSquare, BatteryLow,
   Globe, RefreshCw, RotateCcw, ArrowDown, MoveDown, Split, Bug, Repeat,
   Pizza, Drumstick, Salad, Waves, GlassWater, Stars, Eye
 } from 'lucide-react';
@@ -26,7 +26,10 @@ export const VITAL_KEY_MAP: Record<string, string> = {
   'Heart Rate': 'hr',
   'O2 Saturation': 'spo2',
   'Resp. Rate': 'rr',
-  'Temp': 'temp',
+  'Temp': 'temp'
+};
+
+export const BLOODTEST_KEY_MAP: Record<string, string> = {
   'Glucose': 'glucose',
   'Cholesterol': 'cholesterol',
   'Ketones': 'ketones',
@@ -34,6 +37,16 @@ export const VITAL_KEY_MAP: Record<string, string> = {
   'Lactate': 'lactate',
   'Hemoglobin': 'hemoglobin',
   'Hematocrit': 'hematocrit'
+};
+
+export const SYMPTOM_KEY_MAP: Record<string, string> = {
+  'Nausea': 'nausea',
+  'Pain': 'pain',
+  'Last bowel movement': 'lastBm',
+  'Cough': 'cough',
+  'Fatigue': 'fatigue',
+  'Dizziness': 'dizziness',
+  'Shortness of Breath': 'dyspnea'
 };
 
 export const DIET_KEY_MAP: Record<string, string> = {
@@ -194,6 +207,68 @@ export const SINGLE_GRAPHS = [
   { key: 'lactate', title: 'LACTATE', unit: 'mmol/L', icon: <Activity className="text-teal-500" />, color: '#14b8a6' },
   { key: 'hemoglobin', title: 'HEMOGLOBIN', unit: 'g/dL', icon: <Droplets className="text-red-600" />, color: '#dc2626', thresholds: { warningLow: 12.0, criticalLow: 7.0 } as MetricThresholds },
   { key: 'hematocrit', title: 'HEMATOCRIT', unit: '%', icon: <Activity className="text-red-700" />, color: '#b91c1c' },
+
+  // Symptoms & GI
+  { key: 'nausea', 
+    title: 'NAUSEA', 
+    unit: '/10', 
+    icon: <Droplets className="text-lime-500" />, 
+    color: '#84cc16', 
+    domain: [0, 10] as [number, number], 
+    thresholds: { warningHigh: 4, criticalHigh: 7 } as MetricThresholds 
+  },
+  { 
+    key: 'pain', 
+    title: 'PAIN LEVEL', 
+    unit: '/10', 
+    icon: <Zap className="text-orange-500" />, 
+    color: '#f97316', 
+    domain: [0, 10] as [number, number], 
+    thresholds: { warningHigh: 5, criticalHigh: 8 } as MetricThresholds 
+  },
+  { 
+    key: 'lastBm', 
+    title: 'LAST BOWEL MOVEMENT', 
+    unit: 'Time', 
+    icon: <Clock className="text-slate-500" />, 
+    color: '#64748b' 
+  },
+  { 
+    key: 'cough', 
+    title: 'COUGH INTENSITY', 
+    unit: '/10', 
+    icon: <MessageSquare className="text-slate-400" />, 
+    color: '#94a3b8', 
+    domain: [0, 10] as [number, number],
+    thresholds: { warningHigh: 4, criticalHigh: 7 } as MetricThresholds 
+  },
+  { 
+    key: 'fatigue', 
+    title: 'FATIGUE', 
+    unit: '/10', 
+    icon: <BatteryLow className="text-indigo-500" />, 
+    color: '#6366f1', 
+    domain: [0, 10] as [number, number],
+    thresholds: { warningHigh: 6, criticalHigh: 8 } as MetricThresholds 
+  },
+  { 
+    key: 'dizziness', 
+    title: 'DIZZINESS', 
+    unit: '/10', 
+    icon: <RefreshCw className="text-violet-500" />, 
+    color: '#8b5cf6', 
+    domain: [0, 10] as [number, number],
+    thresholds: { warningHigh: 4, criticalHigh: 7 } as MetricThresholds 
+  },
+  { 
+    key: 'dyspnea', 
+    title: 'SHORTNESS OF BREATH', 
+    unit: '/10', 
+    icon: <Wind className="text-sky-500" />, 
+    color: '#0ea5e9', 
+    domain: [0, 10] as [number, number],
+    thresholds: { warningHigh: 4, criticalHigh: 6 } as MetricThresholds 
+  },
   
   // Diet & Nutrition
   { key: 'calories', title: 'CALORIES', unit: 'kcal', icon: <Scale className="text-orange-500" />, color: '#f97316' },

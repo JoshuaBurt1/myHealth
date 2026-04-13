@@ -35,7 +35,7 @@ interface ModalExercisesProps {
   onClose: () => void;
   userId: string;
   onSuccess: () => void;
-  trackedExercises: { name: string; label: string; type: string; unit?: string }[];
+  trackedExercises: { name: string; label: string; type: string; unit?: string; isCustom: boolean }[];
   exerciseInputs: Record<string, string>;
   setExerciseInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   hiddenOther: string[];
@@ -116,7 +116,11 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         isCustom: false
       }]);
     } else {
-      if (!customName.trim()) return alert('Please enter a name.');
+      if (!customName.trim()) return alert('Please enter a custom exercise name.');
+
+      const currentCustomCount = trackedExercises.filter(v => v.isCustom).length + entries.filter(e => e.isCustom).length;
+      if (currentCustomCount > 10) return alert('Maximum of 10 custom exercises allowed.');
+
       const sanitizedKey = `custom_ex_${customName.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
       if (existingKeys.has(sanitizedKey)) return alert('Already exists.');
 
@@ -253,7 +257,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
       preparedNew.forEach(e => {
         updateData[e.name] = arrayUnion({ value: e.finalValue, dateTime: nowISO, unit: e.unit });
-        newDefs.push({ name: e.label, key: e.name, unit: e.unit, type: e.type });
+        newDefs.push({ name: e.label, key: e.name, unit: e.unit, type: e.type, isCustom: e.isCustom });
         processEntryChanges(e.name, e.finalValue);
       });
 
@@ -351,10 +355,15 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 <div className="relative flex-1" ref={dropdownRef}>
                   <button
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="w-full flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-indigo-500 transition-all"
+                    disabled={availableExercises.length === 0}
+                    className={`w-full flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-indigo-500 transition-all ${
+                      availableExercises.length === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''
+                    }`}
                   >
                     <span className="truncate">
-                      {selectedExercise || (availableExercises.length === 0 ? `All ${selectedCategory} tracked` : 'Select Exercise')}
+                      {availableExercises.length === 0 
+                        ? `All ${selectedCategory.toLowerCase()} tracked` 
+                        : (selectedExercise || 'Select Exercise')}
                     </span>
                     <ChevronDown size={18} className={`text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -400,16 +409,20 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               
               <button 
                 onClick={handleAddEntry} 
-                className="px-6 py-3 rounded-xl font-black text-xs text-white bg-slate-800 hover:bg-slate-900 transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                disabled={
+                  (selectedCategory !== 'Custom' && availableExercises.length === 0) ||
+                  (selectedCategory === 'Custom' && (trackedExercises.filter(v => v.isCustom).length + entries.filter(e => e.isCustom).length >= 10))
+                }
+                className="px-6 py-3 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 transition-colors whitespace-nowrap"
               >
-                ADD TO GRID
+                Add To Grid
               </button>
             </div>
           </div>
 
           <div>
             <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2 uppercase tracking-wider">
-              <Dumbbell size={16}/> Active Tracking Fields
+              <Dumbbell size={16}/> Active Exercise Fields
             </h3>
             
             {(trackedExercises.length === 0 && entries.length === 0) ? (

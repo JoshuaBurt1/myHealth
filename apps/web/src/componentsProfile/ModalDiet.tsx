@@ -333,20 +333,22 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   };
 
   const handleAddEntry = () => {
-    if (selectedCategory !== 'Custom') {
-      if (availableMetrics.length === 0) return;
-      
-      const activeMap = DIET_CATEGORIES[selectedCategory];
-      const key = activeMap[selectedMetric];
-      
-      setEntries(prev => [...prev, {
-        name: key,
-        label: selectedMetric,
-        unit: getStandardUnit(key),
-        value: '',
-        isCustom: false
-      }]);
-    } else {
+  if (selectedCategory !== 'Custom') {
+    if (availableMetrics.length === 0) return;
+    
+    const activeMap = DIET_CATEGORIES[selectedCategory];
+    const key = activeMap[selectedMetric];
+
+    if (existingKeys.has(key)) return; 
+    
+    setEntries(prev => [...prev, {
+      name: key,
+      label: selectedMetric,
+      unit: getStandardUnit(key),
+      value: '',
+      isCustom: false
+    }]);
+  } else {
       if (!customName.trim()) return alert('Please enter a nutrient name.');
       const sanitizedKey = `custom_diet_${customName.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
       if (existingKeys.has(sanitizedKey)) return alert('Metric already tracked.');
@@ -662,7 +664,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                         {isExpanded && (
                           <div className="px-2 pb-3 sm:px-3 sm:pb-3 border-t border-blue-100 bg-white">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1 pt-2">
-                              {[...trackedDiet, ...entries].map((metric) => {
+                              {Array.from(new Map([...trackedDiet, ...entries].map(m => [m.name, m])).values()).map((metric) => {
                                 const itemValue = food.isCustomFood 
                                   ? (food.customValues?.[metric.name] || '')
                                   : getNutrientValue(food, metric.name, metric.label);
@@ -716,7 +718,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
             {/* Diet dropdown */}
             <div className="bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100 w-full">
               <h3 className="text-xs sm:text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-tight">
-                <PlusCircle size={16}/> TRACK A NEW METRIC
+                <PlusCircle size={16}/> TRACK A NEW NUTRIENT
               </h3>      
               
               <div className="flex flex-wrap bg-slate-200/50 p-1 rounded-xl mb-4 gap-1 w-fit">

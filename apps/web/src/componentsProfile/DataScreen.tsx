@@ -420,13 +420,18 @@ const DataScreen: React.FC<DataScreenProps> = ({
     const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
 
     try {
-      await updateDoc(profileRef, {
-        [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
-      });
-
-      if (action === 'update') {
+      if (action === 'delete') {
+        await updateDoc(profileRef, {
+          [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+        });
+      } else if (action === 'update') {
         const newValue = prompt("Enter new value:", selectedPoint.val);
+        
         if (newValue !== null && newValue !== "") {
+          await updateDoc(profileRef, {
+            [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+          });
+
           await updateDoc(profileRef, {
             [selectedPoint.fieldName]: arrayUnion({
               ...selectedPoint.rawObject,

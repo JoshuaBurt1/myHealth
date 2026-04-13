@@ -28,9 +28,8 @@ import DataScreen from '../componentsProfile/DataScreen';
 import type { Group } from '../componentsProfile/componentsGroupScreen/group';
 import { ActiveAlerts } from '../componentsProfile/componentsDataScreen/ActiveAlerts';
 
-import { VITAL_KEY_MAP, DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, STRENGTH_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP, 
+import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, STRENGTH_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP, 
   MOBILITY_KEY_MAP, PHYSIO_KEY_MAP, getStandardUnit } from '../componentsProfile/profileConstants';
-
 
 const ProfileScreen: React.FC = () => {
   const [steps, setSteps] = useState(0);
@@ -77,14 +76,14 @@ const ProfileScreen: React.FC = () => {
   // Unread Groups State
   const { userData: myUserData, userGroups: myGroups } = useNotifications();
 
-  const [dynamicVitals, setDynamicVitals] = useState<{key: string, label: string, isCustom: boolean, unit?: string}[]>([]);
-  const [dynamicVitalsInputs, setDynamicVitalsInputs] = useState<Record<string, string>>({});
+  const [trackedVitals, setTrackedVitals] = useState<{key: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
+  const [trackedVitalsInputs, setTrackedVitalsInputs] = useState<Record<string, string>>({});
 
   const [dietInputs, setDietInputs] = useState<Record<string, string>>({});
   const [dietMetrics, setDietMetrics] = useState<any[]>([]);
   const [dietStreak, setDietStreak] = useState(0);
 
-  const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string}[]>([]);
+  const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
   const [exerciseInputs, setExerciseInputs] = useState<Record<string, string>>({});
   const [exerciseStreak, setExerciseStreak] = useState(0);
 
@@ -171,8 +170,8 @@ const ProfileScreen: React.FC = () => {
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
 
         // 1. Vitals Parsing
-        const loadedDynamicVitals: typeof dynamicVitals = [];
-        const newDynamicVitalsInputs: Record<string, string> = {};
+        const loadedTrackedVitals: typeof trackedVitals = [];
+        const newTrackedVitalsInputs: Record<string, string> = {};
         const seenVitals = new Set<string>();
 
         if (Array.isArray(profData.customVitalsDefinitions)) {
@@ -180,31 +179,31 @@ const ProfileScreen: React.FC = () => {
             if (!seenVitals.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
-              loadedDynamicVitals.push({ key: def.key, label: def.name, isCustom, unit: correctUnit });
-              newDynamicVitalsInputs[def.key] = '';
+              
+              loadedTrackedVitals.push({ key: def.key, label: def.name, type: def.type, unit: correctUnit, isCustom });
+              newTrackedVitalsInputs[def.key] = '';
               seenVitals.add(def.key);
             }
           });
         }
 
-        Object.entries(VITAL_KEY_MAP).forEach(([label, key]) => {
-          if (profData[key] !== undefined && !seenVitals.has(key)) {
-            loadedDynamicVitals.push({ key, label, isCustom: false, unit: getStandardUnit(key) });
-            newDynamicVitalsInputs[key] = '';
-            seenVitals.add(key);
-          }
+        const allStandardVitalMaps = [
+          { map: VITAL_KEY_MAP, type: 'vitals' },
+          { map: BLOODTEST_KEY_MAP, type: 'blood test' },
+          { map: SYMPTOM_KEY_MAP, type: 'symptoms' }
+        ];
+
+        allStandardVitalMaps.forEach(({ map, type }) => {
+          Object.entries(map).forEach(([label, key]) => {
+            if (profData[key] !== undefined && !seenVitals.has(key)) {
+              loadedTrackedVitals.push({ key, label, type: type, unit: getStandardUnit(key), isCustom: false });
+              newTrackedVitalsInputs[key] = '';
+              seenVitals.add(key);
+            }
+          });
         });
 
-        setDynamicVitals(loadedDynamicVitals);
-        setDynamicVitalsInputs(prev => {
-          const updated = { ...newDynamicVitalsInputs };
-          let isDifferent = Object.keys(updated).length !== Object.keys(prev).length;
-          Object.keys(updated).forEach(k => {
-            if (prev[k] !== undefined && prev[k] !== '') updated[k] = prev[k];
-            if (updated[k] !== prev[k]) isDifferent = true;
-          });
-          return isDifferent ? updated : prev;
-        });
+        setTrackedVitals(loadedTrackedVitals);
 
         // 2. Exercises Parsing
         const loadedExercises: typeof trackedExercises = [];
@@ -216,7 +215,7 @@ const ProfileScreen: React.FC = () => {
             if (!seenExercises.has(def.key)) {
               const isCustom = def.key.startsWith('custom_');
               const correctUnit = isCustom ? def.unit : getStandardUnit(def.key);
-              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit });
+              loadedExercises.push({ name: def.key, label: def.name, type: def.type, unit: correctUnit, isCustom });
               newExerciseInputs[def.key] = '';
               seenExercises.add(def.key);
             }
@@ -236,7 +235,7 @@ const ProfileScreen: React.FC = () => {
         allStandardMaps.forEach(({ map, type }) => {
           Object.entries(map).forEach(([label, key]) => {
             if (profData[key] !== undefined && !seenExercises.has(key)) {
-              loadedExercises.push({ name: key, label: label, type: type, unit: getStandardUnit(key) });
+              loadedExercises.push({ name: key, label: label, type: type, unit: getStandardUnit(key), isCustom: false });
               newExerciseInputs[key] = '';
               seenExercises.add(key);
             }
@@ -402,7 +401,7 @@ const ProfileScreen: React.FC = () => {
     const sourceArray = 
       category === 'exercise' ? trackedExercises : 
       category === 'diet' ? dietMetrics : 
-      dynamicVitals;
+      trackedVitals;
 
     const item = sourceArray.find(i => (i.name === fieldKey || i.key === fieldKey));
 
@@ -424,7 +423,7 @@ const ProfileScreen: React.FC = () => {
           objectToRemove.type = 'diet';
           objectToRemove.isCustom = !!item.isCustom;
         } else if (category === 'vital') {
-          objectToRemove.type = 'custom';
+          objectToRemove.type = item.type;
         }
 
         updates[definitionKey] = arrayRemove(objectToRemove);
@@ -873,9 +872,9 @@ const ProfileScreen: React.FC = () => {
         onClose={() => setShowVitalModal(false)}
         userId={userId!}
         onSuccess={() => setShowVitalModal(false)}
-        dynamicVitals={dynamicVitals}
-        dynamicVitalsInputs={dynamicVitalsInputs}
-        setDynamicVitalsInputs={setDynamicVitalsInputs}
+        trackedVitals={trackedVitals}
+        trackedVitalsInputs={trackedVitalsInputs}
+        setTrackedVitalsInputs={setTrackedVitalsInputs}
         hiddenOther={hiddenOther}
         toggleVisibilityOther={toggleVisibilityOther}
         handleDeleteField={handleDeleteField}
