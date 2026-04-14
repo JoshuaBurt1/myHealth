@@ -371,7 +371,7 @@ export const QuickActionsBoard: React.FC<QuickActionsBoardProps> = ({
             <Apple className="text-indigo-600" size={20}/>
           </div>
           <span className="text-[10px] sm:text-xs font-black text-slate-700 tracking-wider uppercase text-center">
-            Diet
+            Nutrition
           </span>
         </button>
         {/* Exercises Button */}

@@ -221,7 +221,7 @@ export const ModalFollow: React.FC<ModalFollowProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex flex-col justify-end sm:items-center sm:justify-center" onClick={onClose}>
       <div 
-        className="bg-white w-full sm:max-w-md h-[80vh] sm:h-150 sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300"
+        className="bg-white w-full sm:max-w-md h-full sm:h-150 rounded-none sm:rounded-3xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-6 border-b border-slate-100">

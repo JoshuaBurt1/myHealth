@@ -7,6 +7,7 @@ import { Users, RefreshCw, Info } from 'lucide-react';
 import { 
   VITAL_KEY_MAP, 
   BLOODTEST_KEY_MAP,
+  SYMPTOM_KEY_MAP,
   DIET_KEY_MAP,
   MICRONUTRIENT_KEY_MAP, 
   STRENGTH_KEY_MAP,
@@ -22,6 +23,7 @@ import {
 
 const VITAL_KEYS = new Set(Object.values(VITAL_KEY_MAP));
 const BLOODTEST_KEYS = new Set(Object.values(BLOODTEST_KEY_MAP));
+const SYMPTOM_KEYS = new Set(Object.values(SYMPTOM_KEY_MAP));
 const DIET_KEYS = new Set(Object.values(DIET_KEY_MAP));
 const MICRONUTRIENT_KEYS = new Set(Object.values(MICRONUTRIENT_KEY_MAP));
 const STRENGTH_KEYS = new Set(Object.values(STRENGTH_KEY_MAP));
@@ -33,7 +35,7 @@ const MOBILITY_KEYS = new Set(Object.values(MOBILITY_KEY_MAP));
 const PHYSIO_KEYS = new Set(Object.values(PHYSIO_KEY_MAP));
 
 const ALL_ALLOWED_KEYS = new Set([
-  ...VITAL_KEYS, ...BLOODTEST_KEYS, ...DIET_KEYS, ...MICRONUTRIENT_KEYS, 
+  ...VITAL_KEYS, ...BLOODTEST_KEYS, ...SYMPTOM_KEYS, ...DIET_KEYS, ...MICRONUTRIENT_KEYS,
   ...STRENGTH_KEYS, ...SPEED_KEYS, ...PLYO_KEYS, ...ENDURANCE_KEYS, ...PHYSIO_KEYS, ...YOGA_KEYS, ...MOBILITY_KEYS
 ]);
 
@@ -62,6 +64,7 @@ const getDisplayName = (key: string): string => {
   const ALL_MAPS = {
     ...VITAL_KEY_MAP,
     ...BLOODTEST_KEY_MAP,
+    ...SYMPTOM_KEY_MAP,
     ...DIET_KEY_MAP,
     ...MICRONUTRIENT_KEY_MAP,
     ...STRENGTH_KEY_MAP,
@@ -467,7 +470,7 @@ const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge 
 
   const renderCategoryGroup = (groupTitle: string, categories: {title: string, keys: Set<string>}[]) => {
     // Treat vitals and diet data similarly regarding neutral z-scores and rendering critical thresholds
-    const isVitalType = groupTitle === 'Vitals' || groupTitle === 'Diet & Nutrition';
+    const isVitalType = groupTitle === 'Vitals' || groupTitle === 'Nutrition';
     
     const activeCategories = categories.map(cat => {
       const orderedKeys = Array.from(cat.keys);
@@ -491,15 +494,26 @@ const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge 
             <Info size={16} className="shrink-0 text-indigo-400 mt-0.5" />
             <div className="space-y-1">
               {groupTitle === 'Exercises' ? (
+                <p> 
+                  A higher positive z-score (σ) is better (shorter time & higher strength/output relative to the group)
+                </p>
+              ) : groupTitle === 'Nutrition' ? (
                 <>
-                  <p> A higher positive z-score (σ) is better (shorter time & higher strength/output relative to the group)</p>
+                  <p>
+                    Nutrition requirements vary between individuals and are dependent on a variety of factors including: height, weight, lean body mass, and physical activity level.
+                  </p>
+                  <p className="text-[10px] text-slate-400"> 
+                    * Data compares individual intake against the random sample. 
+                  </p>
                 </>
               ) : (
                 <>
                   <p>
-                  While a z-score (σ) closer to 0 is generally better, indicating you are near the cohort average, staying within the critical bounds or personal targets is the priority.
-                </p>
-                <p className="text-[10px] text-slate-400"> * The z-score (σ) indicates how many standard deviations you are from the mean. </p>
+                    While a z-score (σ) closer to 0 is generally better, indicating you are near the cohort average, staying within the critical bounds or personal targets is the priority.
+                  </p>
+                  <p className="text-[10px] text-slate-400"> 
+                    * The z-score (σ) indicates how many standard deviations you are from the mean. 
+                  </p>
                 </>
               )}
             </div>
@@ -572,7 +586,7 @@ const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge 
         ) : (
           <div className="space-y-2">
             {renderCategoryGroup('Vitals', CATEGORIES_VITALS)}
-            {renderCategoryGroup('Diet & Nutrition', CATEGORIES_DIETS)}
+            {renderCategoryGroup('Nutrition', CATEGORIES_DIETS)}
             {renderCategoryGroup('Exercises', CATEGORIES_EXERCISES)}
           </div>
         )}

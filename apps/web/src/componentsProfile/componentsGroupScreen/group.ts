@@ -21,8 +21,9 @@ export interface GroupMember {
  * Feature toggles for the group
  */
 export interface GroupFeatures {
-  compareExercise?: boolean;
   compareVitals?: boolean;
+  compareDiet?: boolean;
+  compareExercise?: boolean;
 }
 
 /**
@@ -39,7 +40,7 @@ export interface Group {
   lastUpdated: Timestamp | any;
   lastUpdatedBy?: string;
   schedule?: GroupScheduleEvent[];
-  features?: GroupFeatures; // Added features property
+  features?: GroupFeatures;
 }
 
 /**
@@ -57,7 +58,7 @@ export interface GroupMessage {
 /**
  * Tab types for the Group UI
  */
-export type GroupTabType = 'messages' | 'schedule' | 'compareExercise' | 'compareVitals';
+export type GroupTabType = 'messages' | 'schedule' | 'compareVitals'| 'compareDiet' | 'compareExercise';
 
 /**
  * Helper for searching users to add to groups

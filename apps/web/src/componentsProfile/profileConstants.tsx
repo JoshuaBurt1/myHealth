@@ -54,6 +54,10 @@ export const DIET_KEY_MAP: Record<string, string> = {
   'Carbohydrates': 'carbs',
   'Protein': 'protein',
   'Fat': 'fat',
+  'Saturated Fat': 'sat_fat',
+  'Trans Fat': 'trans_fat',
+  'Sugar': 'sugar',
+  'Cholesterol': 'diet_cholesterol',
   'Sodium': 'sodium',
   'Fiber': 'fiber'
 };
@@ -66,6 +70,8 @@ export const MICRONUTRIENT_KEY_MAP: Record<string, string> = {
   'Potassium': 'potassium',
   'Zinc': 'zinc',
   'Phosphorus': 'phosphorus',
+  'Copper': 'copper',
+  'Manganese': 'manganese',
   // Vitamins
   'Vitamin A': 'vit_a',
   'Vitamin C': 'vit_c',
@@ -277,6 +283,10 @@ export const SINGLE_GRAPHS = [
   { key: 'fat', title: 'TOTAL FAT', unit: 'g', icon: <Droplets className="text-amber-500" />, color: '#f59e0b', thresholds: { warningHigh: 80, criticalHigh: 100 } as MetricThresholds },
   { key: 'sodium', title: 'SODIUM', unit: 'mg', icon: <Waves className="text-blue-400" />, color: '#60a5fa', thresholds: { warningHigh: 2300, criticalHigh: 3400 } as MetricThresholds },
   { key: 'fiber', title: 'FIBER', unit: 'g', icon: <Salad className="text-emerald-600" />, color: '#059669', thresholds: { warningLow: 25, criticalLow: 15 } as MetricThresholds },
+  { key: 'sugar', title: 'SUGAR', unit: 'g', icon: <Pizza className="text-pink-500" />, color: '#ec4899', thresholds: { warningHigh: 50, criticalHigh: 100 } as MetricThresholds },
+  { key: 'sat_fat', title: 'SATURATED FAT', unit: 'g', icon: <Droplets className="text-red-500" />, color: '#ef4444', thresholds: { warningHigh: 20, criticalHigh: 30 } as MetricThresholds },
+  { key: 'trans_fat', title: 'TRANS FAT', unit: 'g', icon: <Activity className="text-red-700" />, color: '#b91c1c', thresholds: { warningHigh: 0, criticalHigh: 2 } as MetricThresholds },
+  { key: 'diet_cholesterol', title: 'CHOLESTEROL', unit: 'mg', icon: <Activity className="text-yellow-600" />, color: '#ca8a04', thresholds: { warningHigh: 300 } as MetricThresholds },
 
   // Minerals (mg)
   { key: 'calcium', title: 'CALCIUM', unit: 'mg', icon: <Shield className="text-slate-400" />, color: '#94a3b8', thresholds: { warningLow: 1000, criticalLow: 700, warningHigh: 2500 } as MetricThresholds },
@@ -285,7 +295,9 @@ export const SINGLE_GRAPHS = [
   { key: 'potassium', title: 'POTASSIUM', unit: 'mg', icon: <Waves className="text-orange-400" />, color: '#fb923c', thresholds: { warningLow: 3400, criticalLow: 2500 } as MetricThresholds },
   { key: 'zinc', title: 'ZINC', unit: 'mg', icon: <Shield className="text-blue-300" />, color: '#93c5fd', thresholds: { warningLow: 8, warningHigh: 40 } as MetricThresholds },
   { key: 'phosphorus', title: 'PHOSPHORUS', unit: 'mg', icon: <Activity className="text-purple-400" />, color: '#c084fc' },
-
+  { key: 'copper', title: 'COPPER', unit: 'mg', icon: <Shield className="text-orange-300" />, color: '#fdba74' },
+  { key: 'manganese', title: 'MANGANESE', unit: 'mg', icon: <Shield className="text-teal-300" />, color: '#5eead4' },
+  
   // Vitamins (mcg)
   { key: 'vit_a', title: 'VITAMIN A', unit: 'mcg', icon: <Eye className="text-emerald-500" />, color: '#10b981', thresholds: { warningLow: 700, warningHigh: 3000 } as MetricThresholds },
   { key: 'vit_d', title: 'VITAMIN D', unit: 'mcg', icon: <Sun className="text-yellow-400" />, color: '#facc15', thresholds: { warningLow: 15, criticalLow: 10, warningHigh: 100 } as MetricThresholds },

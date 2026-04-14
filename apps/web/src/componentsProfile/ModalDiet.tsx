@@ -15,26 +15,33 @@ const DIET_CATEGORIES: Record<string, Record<string, string>> = {
 type DietCategory = 'Macros' | 'Micros' | 'Custom';
 const CATEGORIES: DietCategory[] = ['Macros', 'Micros', 'Custom'];
 
-// Mapping between USDA nutrient keys and App keys
 const USDA_TO_APP_MAP: Record<string, string> = {
-  'energy': 'diet_calories',
-  'calories': 'diet_calories',
-  'protein': 'diet_protein',
-  'total lipid (fat)': 'diet_fat',
-  'fat': 'diet_fat',
-  'carbohydrate, by difference': 'diet_carbs',
-  'carbs': 'diet_carbs',
-  'fiber, total dietary': 'diet_fiber',
-  'fiber': 'diet_fiber',
-  'sugars, total including nlea': 'diet_sugar',
-  'sugar': 'diet_sugar',
-  'calcium, ca': 'diet_calcium',
-  'iron, fe': 'diet_iron',
-  'sodium, na': 'diet_sodium',
-  'vitamin c, total ascorbic acid': 'diet_vit_c',
-  'vitamin a, iu': 'diet_vit_a',
+  'energy': 'calories',
+  'protein': 'protein',
+  'total lipid (fat)': 'fat',
+  'fat': 'fat',
+  'fatty acids, total saturated': 'sat_fat',
+  'fatty acids, total trans': 'trans_fat',
+  'carbohydrate, by difference': 'carbs',
+  'carbs': 'carbs',
+  'fiber, total dietary': 'fiber',
+  'fiber': 'fiber',
+  'sugars, total including nlea': 'sugar',
+  'total sugars': 'sugar',
+  'sugar': 'sugar',
+  'calcium, ca': 'calcium',
+  'iron, fe': 'iron',
+  'sodium, na': 'sodium',
+  'magnesium, mg': 'magnesium',
+  'phosphorus, p': 'phosphorus',
+  'potassium, k': 'potassium',
+  'zinc, zn': 'zinc',
+  'copper, cu': 'copper',
+  'manganese, mn': 'manganese',
+  'vitamin c, total ascorbic acid': 'vit_c',
+  'vitamin a, iu': 'vit_a',
   'cholesterol': 'diet_cholesterol',
-  'water': 'diet_water'
+  'water': 'water_intake'
 };
 
 interface DietEntry {
@@ -127,7 +134,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   // Handle Search Querying
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults([]);
+      searchResults.length && setSearchResults([]);
       return;
     }
     const query = searchQuery.toLowerCase();
@@ -198,7 +205,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
         return extractNumber(typeof valObj === 'object' ? valObj.value : valObj);
     }
 
-    // 2. Check string inclusion
+    // 2. Check string inclusion as fallback
     for (const [nName, nData] of Object.entries(nutrients)) {
       const valObj = typeof nData === 'object' ? (nData as any).value : nData;
       if (nName.includes(lowerLabel) || lowerLabel.includes(nName)) {
@@ -209,7 +216,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   };
 
   const handleAddFoodToTempList = (food: any) => {
-    const uniqueId = Math.random().toString(36).substr(2, 9);
+    const uniqueId = Math.random().toString(36).substring(2, 11);
     const newFood: FoodItem = { ...food, listId: uniqueId, quantity: 1 };
     setSelectedFoods(prev => [...prev, newFood]);
     setExpandedItems(prev => new Set(prev).add(uniqueId));
@@ -244,7 +251,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
 
   const handleAddCustomFood = () => {
   if (!customFoodInput.trim()) return;
-    const uniqueId = Math.random().toString(36).substr(2, 9);
+    const uniqueId = Math.random().toString(36).substring(2, 11);
     const newFood: FoodItem = {
       listId: uniqueId,
       description: customFoodInput.trim(),
@@ -258,7 +265,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     setCustomFoodInput('');
   };
 
-  const updateMetricTotal = (name: string, label: string, delta: number) => {
+  const updateMetricTotal = (name: string, delta: number) => {    
     if (delta === 0) return;
     
     let foundInTracked = false;
@@ -284,7 +291,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     }
   };
 
-  const handleCustomValueChange = (listId: string, metricName: string, metricLabel: string, newValStr: string) => {
+  const handleCustomValueChange = (listId: string, metricName: string, newValStr: string) => {
     const food = selectedFoods.find(f => f.listId === listId);
     if (!food) return;
 
@@ -300,7 +307,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     ));
 
     if (delta !== 0) {
-      updateMetricTotal(metricName, metricLabel, delta);
+      updateMetricTotal(metricName, delta);    
     }
   };
 
@@ -312,7 +319,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     setDietInputs(prev => {
       const next = { ...prev };
       trackedDiet.forEach(dt => {
-        const val = getNutrientValue(foodToRemove, dt.name, dt.label) * qty; // <-- Multiply here
+        const val = getNutrientValue(foodToRemove, dt.name, dt.label) * qty;
         if (val > 0 && next[dt.name]) {
           const curr = parseFloat(next[dt.name]);
           const newVal = Math.max(0, curr - val);
@@ -323,7 +330,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     });
 
     setEntries(prev => prev.map(entry => {
-      const val = getNutrientValue(foodToRemove, entry.name, entry.label) * qty; // <-- Multiply here
+      const val = getNutrientValue(foodToRemove, entry.name, entry.label) * qty; 
       if (val > 0 && entry.value) {
         const curr = parseFloat(entry.value);
         const newVal = Math.max(0, curr - val);
@@ -383,7 +390,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
           : getNutrientValue(food, metric.name, metric.label);
         
         if (baseVal > 0) {
-          updateMetricTotal(metric.name, metric.label, baseVal * deltaQty);
+          updateMetricTotal(metric.name, baseVal * deltaQty);
         }
       });
 
@@ -543,7 +550,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <h2 className="text-lg sm:text-xl font-black text-slate-800 flex items-center gap-2 sm:gap-3 tracking-tight">
             <Apple className="text-emerald-500" size={24} fill="currentColor" fillOpacity={0.2} />
-            LOG DIET
+            LOG NUTRITION
           </h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-full transition-colors">
             <X size={20} />
@@ -692,7 +699,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                                         value={itemValue}
                                         onChange={(e) => {
                                           if (!e.target.value.includes('-')) {
-                                            handleCustomValueChange(food.listId, metric.name, metric.label, e.target.value);
+                                            handleCustomValueChange(food.listId, metric.name, e.target.value);
                                           }
                                         }}
                                       />

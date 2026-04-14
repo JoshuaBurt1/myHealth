@@ -3,18 +3,28 @@ import { Users, Info } from 'lucide-react';
 import type { CompareData, CategoryComparison } from '../compareUtils';
 import { 
   VITAL_KEY_MAP, 
-  STRENGTH_KEY_MAP, 
+  BLOODTEST_KEY_MAP,
+  SYMPTOM_KEY_MAP,
+  DIET_KEY_MAP,
+  MICRONUTRIENT_KEY_MAP, 
+  STRENGTH_KEY_MAP,
   SPEED_KEY_MAP, 
   PLYO_KEY_MAP, 
   ENDURANCE_KEY_MAP, 
   YOGA_KEY_MAP, 
   MOBILITY_KEY_MAP, 
   PHYSIO_KEY_MAP,
-  getThresholds, 
-  getStandardUnit 
+  getThresholds,
+  getStandardUnit,
 } from '../profileConstants'; 
 
+// KEY MAPS
+
 const VITAL_KEYS = new Set(Object.values(VITAL_KEY_MAP));
+const BLOODTEST_KEYS = new Set(Object.values(BLOODTEST_KEY_MAP));
+const SYMPTOM_KEYS = new Set(Object.values(SYMPTOM_KEY_MAP));
+const DIET_KEYS = new Set(Object.values(DIET_KEY_MAP));
+const MICRONUTRIENT_KEYS = new Set(Object.values(MICRONUTRIENT_KEY_MAP));
 const STRENGTH_KEYS = new Set(Object.values(STRENGTH_KEY_MAP));
 const SPEED_KEYS = new Set(Object.values(SPEED_KEY_MAP));
 const PLYO_KEYS = new Set(Object.values(PLYO_KEY_MAP));
@@ -23,11 +33,17 @@ const YOGA_KEYS = new Set(Object.values(YOGA_KEY_MAP));
 const MOBILITY_KEYS = new Set(Object.values(MOBILITY_KEY_MAP));
 const PHYSIO_KEYS = new Set(Object.values(PHYSIO_KEY_MAP));
 
-// Speed metrics are "lower is better" (shorter time)
 const LOWER_IS_BETTER_METRICS = new Set([...SPEED_KEYS]);
 
 const CATEGORIES_VITALS = [
   { title: 'Standard Vitals', keys: VITAL_KEYS },
+  { title: 'Bloodwork', keys: BLOODTEST_KEYS },
+  { title: 'Symptoms', keys: SYMPTOM_KEYS },
+];
+
+const CATEGORIES_DIET = [
+  { title: 'Macronutrients', keys: DIET_KEYS },
+  { title: 'Micronutrients', keys: MICRONUTRIENT_KEYS },
 ];
 
 const CATEGORIES_EXERCISES = [
@@ -36,7 +52,8 @@ const CATEGORIES_EXERCISES = [
   { title: 'Plyometrics', keys: PLYO_KEYS},
   { title: 'Endurance', keys: ENDURANCE_KEYS },
   { title: 'Physiotherapy', keys: PHYSIO_KEYS },
-  { title: 'Mobility & Yoga', keys: new Set([...MOBILITY_KEYS, ...YOGA_KEYS]) },
+  { title: 'Mobility', keys: MOBILITY_KEYS },
+  { title: 'Yoga', keys: YOGA_KEYS },
 ];
 
 // INTERFACES
@@ -92,12 +109,12 @@ const extractGroupStats = (distribution: number[]): GroupStats | null => {
 // COMPONENTS
 const GroupZScoreBellCurve = ({ 
   metricKey, 
-  isVital,
+  isVitalOrDiet,
   users, 
   stats
 }: { 
   metricKey: string,
-  isVital?: boolean,
+  isVitalOrDiet?: boolean,
   users: GroupUserData[],
   stats: GroupStats
 }) => {
@@ -192,13 +209,13 @@ const staggeredUsers = useMemo(() => {
       <svg viewBox="0 -12 100 55" className="w-full h-auto overflow-visible">
         {[-3, -2, -1, 1, 2, 3].map(step => renderSigmaStep(step))}
 
-        {isVital && critLow !== undefined && (
+        {isVitalOrDiet && critLow !== undefined && (
           <g>
             <line x1={getAbsoluteX(critLow)} y1="5" x2={getAbsoluteX(critLow)} y2={baselineY} stroke={COLORS.crit} strokeWidth="0.6" strokeDasharray="1 1" />
             <text x={getAbsoluteX(critLow)} y="3" textAnchor="middle" fontSize="3" fontWeight="bold" fill={COLORS.crit} className="uppercase">Crit Low</text>
           </g>
         )}
-        {isVital && critHigh !== undefined && (
+        {isVitalOrDiet && critHigh !== undefined && (
           <g>
             <line x1={getAbsoluteX(critHigh)} y1="5" x2={getAbsoluteX(critHigh)} y2={baselineY} stroke={COLORS.crit} strokeWidth="0.6" strokeDasharray="1 1" />
             <text x={getAbsoluteX(critHigh)} y="3" textAnchor="middle" fontSize="3" fontWeight="bold" fill={COLORS.crit} className="uppercase">Crit High</text>
@@ -251,7 +268,7 @@ const LegendItem = ({ label, value, color, bold = false }: { label: string, valu
 export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('recent');
 
-  const renderMetricRow = (metric: CategoryComparison, isVital: boolean) => {
+  const renderMetricRow = (metric: CategoryComparison, isVitalOrDiet: boolean) => {
   const usersWithValues: GroupUserData[] = [];
   const excludedNames: string[] = [];
   const baselineValues: number[] = [];
@@ -319,7 +336,7 @@ export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
         <div className="flex items-center">
           <GroupZScoreBellCurve 
             metricKey={metric.metricKey}
-            isVital={isVital}
+            isVitalOrDiet={isVitalOrDiet}
             users={usersWithValues} 
             stats={populationStats} 
           />
@@ -333,7 +350,11 @@ export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
     categories: {title: string, keys: Set<string>}[],
     dataSource: CategoryComparison[]
   ) => {
-    const isVitalGroup = groupTitle === 'Vitals';
+    // Determine specific flags for logic passing
+    const isVitals = groupTitle === 'Vitals';
+    const isDiet = groupTitle === 'Nutrition';
+    const isVitalOrDietGroup = isVitals || isDiet;
+
     const activeCategories = categories.map(cat => {
       const metrics = dataSource.filter(m => cat.keys.has(m.metricKey));
       return { ...cat, metrics };
@@ -351,12 +372,19 @@ export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
           <div className="flex gap-2 text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
             <Info size={16} className="shrink-0 text-indigo-400 mt-0.5" />
             <div className="space-y-1">
-              {isVitalGroup ? (
+              {isVitals ? (
                 <>
                   <p>
                     While clustering near the group mean is common, staying within the critical threshold bounds (red dashed lines) is the absolute priority for vitals.
                   </p>
                   <p className="text-[10px] text-slate-400"> * Standard deviation (σ) spreads show how uniformly the group is performing. </p>
+                </>
+              ) : isDiet ? (
+                <>
+                  <p>
+                    Nutrition requirements vary between individuals and are dependent on a variety of factors including: height, weight, lean body mass, and physical activity level.
+                  </p>
+                  <p className="text-[10px] text-slate-400"> * Data compares individual intake against the group average and standard distribution. </p>
                 </>
               ) : (
                 <p> Curve shifting indicates overall group performance. A tighter curve means the group is highly competitive and similar in output.</p>
@@ -372,7 +400,7 @@ export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
                 {cat.title}
               </h5>
               <div className="grid grid-cols-1 [@media(min-width:450px)]:grid-cols-2 gap-4">
-                {cat.metrics.map(m => renderMetricRow(m, isVitalGroup))} 
+                {cat.metrics.map(m => renderMetricRow(m, isVitalOrDietGroup))} 
               </div>
             </div>
           ))}
@@ -407,6 +435,7 @@ export const GroupCompareZScore: React.FC<Props> = ({ data }) => {
 
       <div className="p-4 md:p-5 space-y-2">
         {data?.vitals?.length > 0 && renderCategoryGroup('Vitals', CATEGORIES_VITALS, data.vitals)}
+        {data?.vitals?.length > 0 && renderCategoryGroup('Nutrition', CATEGORIES_DIET, data.vitals)}
         {data?.exercises?.length > 0 && renderCategoryGroup('Exercises', CATEGORIES_EXERCISES, data.exercises)}
         
         {(!data?.vitals?.length && !data?.exercises?.length) && (

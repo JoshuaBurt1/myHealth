@@ -28,7 +28,8 @@ import DataScreen from '../componentsProfile/DataScreen';
 import type { Group } from '../componentsProfile/componentsGroupScreen/group';
 import { ActiveAlerts } from '../componentsProfile/componentsDataScreen/ActiveAlerts';
 
-import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, STRENGTH_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP, 
+import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, 
+  STRENGTH_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP, 
   MOBILITY_KEY_MAP, PHYSIO_KEY_MAP, getStandardUnit } from '../componentsProfile/profileConstants';
 
 const ProfileScreen: React.FC = () => {

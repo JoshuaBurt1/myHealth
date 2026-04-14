@@ -10,15 +10,29 @@ import {
 import { auth, db } from '../firebase';
 import { 
   ArrowLeft, Send, Users, Loader2, CalendarDays, Info, Trophy,
-  MessageSquare, ShieldCheck, BarChart2, Activity, TrendingUp,
+  MessageSquare, ShieldCheck, Activity, TrendingUp, Apple, Dumbbell,
   X, Clock, Settings, LogOut, Search, Plus, Minus, User as UserIcon, Database, ListFilter
 } from 'lucide-react';
 
 import type { Group, GroupMessage as Message, GroupTabType as TabType, GroupSearchUser as SearchUser } from './componentsGroupScreen/group';
 import { GroupSchedule, type GroupScheduleEvent } from './componentsGroupScreen/GroupSchedule';
+import { 
+  VITAL_KEY_MAP, 
+  BLOODTEST_KEY_MAP,
+  SYMPTOM_KEY_MAP,
+  DIET_KEY_MAP,
+  MICRONUTRIENT_KEY_MAP, 
+  STRENGTH_KEY_MAP,
+  SPEED_KEY_MAP, 
+  PLYO_KEY_MAP, 
+  ENDURANCE_KEY_MAP, 
+  YOGA_KEY_MAP, 
+  MOBILITY_KEY_MAP, 
+  PHYSIO_KEY_MAP
+} from './profileConstants'; 
 
 import { 
-  VITAL_KEY_MAP, EXERCISE_KEY_MAP, calcMean, 
+  calcMean, 
   calcStdDev, calcZScore, type CategoryComparison 
 } from './compareUtils';
 import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
@@ -60,7 +74,7 @@ export const GroupScreen: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<TabType | 'schedule' | 'compareExercise' | 'compareVitals'>('messages');
+  const [activeTab, setActiveTab] = useState<TabType | 'schedule' | 'compareVitals' |'compareDiet' | 'compareExercise'>('messages');
   const [scheduleEvents, setScheduleEvents] = useState<GroupScheduleEvent[]>([]);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
@@ -76,8 +90,9 @@ export const GroupScreen: React.FC = () => {
 
   type CompareViewMode = 'zscore' | 'delta' | 'allTime';
   const [compareView, setCompareView] = useState<CompareViewMode>('zscore');
-  const [exerciseData, setExerciseData] = useState<CategoryComparison[] | null>(null);
   const [vitalsData, setVitalsData] = useState<CategoryComparison[] | null>(null);
+  const [dietData, setDietData] = useState<CategoryComparison[] | null>(null);
+  const [exerciseData, setExerciseData] = useState<CategoryComparison[] | null>(null);
   
   const [isCalculatingStats, setIsCalculatingStats] = useState(false);
   const [memberProfilesMap, setMemberProfilesMap] = useState<Record<string, any>>({}); //active alert
@@ -255,7 +270,7 @@ const handleSendMessage = async (e?: React.FormEvent) => {
     const messagesRef = collection(db, 'myHealth_groups', groupId, 'messages');
     const userRef = doc(db, 'users', user.uid);
 
-    // 1. Write the user's message and include their data
+    // 1. user's message and their data
     const messagePromise = addDoc(messagesRef, {
       text: messageText,
       authorId: user.uid,
@@ -297,33 +312,52 @@ const handleSendMessage = async (e?: React.FormEvent) => {
         });
       };
 
-      extractStats(exerciseData, 'Exercise');
       extractStats(vitalsData, 'Vitals');
+      extractStats(dietData, 'Diet');
+      extractStats(exerciseData, 'Exercise');
 
       const cleanHealthSummary: Record<string, any> = {
         'Active Alerts Summary': formattedAlerts || 'None',
         'Active Alerts': alertList 
       };
 
-      // Extract vitals & history
-      Object.entries(VITAL_KEY_MAP).forEach(([readableName, dbKey]) => {
-        const extracted = extractDetailedValues(rawProfile, dbKey);
-        if (extracted?.length > 0) {
-          cleanHealthSummary[`[Vital] ${readableName}`] = extracted[extracted.length - 1].value;
-          const history = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
-          if (history.length > 0) cleanHealthSummary[`[Vital History] ${readableName}`] = history;
-        }
-      });
+      // 1. Define Map Groups
+      const healthMaps = {
+        Vital: VITAL_KEY_MAP,
+        Blood: BLOODTEST_KEY_MAP,
+        Symptom: SYMPTOM_KEY_MAP,
+        Diet: DIET_KEY_MAP,
+        Micro: MICRONUTRIENT_KEY_MAP
+      };
 
-      // Extract exercise & history
-      Object.entries(EXERCISE_KEY_MAP).forEach(([readableName, dbKey]) => {
-        const extracted = extractDetailedValues(rawProfile, dbKey);
-        if (extracted?.length > 0) {
-          cleanHealthSummary[`[Exercise] ${readableName}`] = extracted[extracted.length - 1].value;
-          const history = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
-          if (history.length > 0) cleanHealthSummary[`[Exercise History] ${readableName}`] = history;
-        }
-      });
+      const performanceMaps = {
+        Strength: STRENGTH_KEY_MAP,
+        Speed: SPEED_KEY_MAP,
+        Plyo: PLYO_KEY_MAP,
+        Endurance: ENDURANCE_KEY_MAP,
+        Yoga: YOGA_KEY_MAP,
+        Mobility: MOBILITY_KEY_MAP,
+        Physio: PHYSIO_KEY_MAP
+      };
+
+      // 2. Processing helper
+      const processProfileMap = (mapGroup: Record<string, Record<string, string>>) => {
+        Object.entries(mapGroup).forEach(([categoryLabel, map]) => {
+          Object.entries(map).forEach(([readableName, dbKey]) => {
+            const extracted = extractDetailedValues(rawProfile, dbKey);
+            if (extracted?.length > 0) {
+              cleanHealthSummary[`[${categoryLabel}] ${readableName}`] = extracted[extracted.length - 1].value;
+              const history = extracted.slice(Math.max(0, extracted.length - 6), extracted.length - 1).map(item => item.value);
+              if (history.length > 0) {
+                cleanHealthSummary[`[${categoryLabel} History] ${readableName}`] = history;
+              }
+            }
+          });
+        });
+      };
+
+      processProfileMap(healthMaps);
+      processProfileMap(performanceMaps);
 
       setIsAiResponding(true);
 
@@ -340,7 +374,6 @@ const handleSendMessage = async (e?: React.FormEvent) => {
               authorId: AI_DOCTOR_UID,
               authorName: 'AI Doctor',
               createdAt: serverTimestamp(),
-              // Metadata helps track which alerts this specific message addressed
               alertMetadata: alertList.map(a => `${a.type}_${a.onset?.seconds}`)
             });
           }
@@ -359,10 +392,11 @@ const handleSendMessage = async (e?: React.FormEvent) => {
   useEffect(() => {
     if (!group) return;
 
-    const needsExercise = activeTab === 'compareExercise' && !exerciseData && group.features?.compareExercise;
     const needsVitals = activeTab === 'compareVitals' && !vitalsData && group.features?.compareVitals;
+    const needsDiet = activeTab === 'compareDiet' && !dietData && group.features?.compareDiet;
+    const needsExercise = activeTab === 'compareExercise' && !exerciseData && group.features?.compareExercise;
     
-    if (!needsExercise && !needsVitals) return;
+    if (!needsExercise && !needsVitals && !needsDiet) return; 
 
     let isMounted = true;
 
@@ -464,11 +498,32 @@ const handleSendMessage = async (e?: React.FormEvent) => {
         };
 
         if (isMounted) {
-          if (needsExercise) {
-            setExerciseData(processMetrics(EXERCISE_KEY_MAP));
-          }
           if (needsVitals) {
-            setVitalsData(processMetrics(VITAL_KEY_MAP));
+            const allVitalKeys = {
+              ...VITAL_KEY_MAP,
+              ...BLOODTEST_KEY_MAP,
+              ...SYMPTOM_KEY_MAP,
+            };
+            setVitalsData(processMetrics(allVitalKeys));
+          }
+          if (needsDiet) {
+            const allDietKeys = {
+              ...DIET_KEY_MAP,
+              ...MICRONUTRIENT_KEY_MAP
+            };
+            setDietData(processMetrics(allDietKeys));
+          }
+          if (needsExercise) {
+            const allExerciseKeys = {
+              ...STRENGTH_KEY_MAP,
+              ...SPEED_KEY_MAP,
+              ...PLYO_KEY_MAP,
+              ...ENDURANCE_KEY_MAP,
+              ...YOGA_KEY_MAP,
+              ...MOBILITY_KEY_MAP,
+              ...PHYSIO_KEY_MAP
+            };
+            setExerciseData(processMetrics(allExerciseKeys));
           }
         }
       } catch (err) {
@@ -484,8 +539,9 @@ const handleSendMessage = async (e?: React.FormEvent) => {
   }, [
     activeTab, 
     group,
-    exerciseData,
     vitalsData,
+    dietData,
+    exerciseData,
     (group as any)?.optedOutDataUids, 
     (group as any)?.adminExcludedUids, 
     (group as any)?.activeDataFields
@@ -658,7 +714,7 @@ const handleSendMessage = async (e?: React.FormEvent) => {
   };
 
   useEffect(() => {
-    if (activeTab === 'compareVitals' && compareView === 'allTime') {
+    if (activeTab !== 'compareExercise' && compareView === 'allTime') {
       setCompareView('zscore');
     }
   }, [activeTab, compareView]);
@@ -771,6 +827,29 @@ const handleSendMessage = async (e?: React.FormEvent) => {
               <CalendarDays size={24} className="mb-1" />
               <span className="text-[10px] font-bold">Schedule</span>
             </button>
+            {group?.features?.compareVitals && (
+              <button 
+                onClick={() => setActiveTab('compareVitals')}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
+                  activeTab === 'compareVitals' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
+              >
+                <Activity size={24} className="mb-1" />
+                <span className="text-[10px] font-bold">Vitals</span>
+              </button>
+            )}
+
+            {group?.features?.compareDiet && (
+              <button 
+                onClick={() => setActiveTab('compareDiet')}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
+                  activeTab === 'compareDiet' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
+              >
+                <Apple size={24} className="mb-1" />
+                <span className="text-[10px] font-bold">Nutrition</span>
+              </button>
+            )}
             
             {group?.features?.compareExercise && (
               <button 
@@ -779,20 +858,8 @@ const handleSendMessage = async (e?: React.FormEvent) => {
                   activeTab === 'compareExercise' ? 'bg-emerald-100 text-emerald-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
                 }`}
               >
-                <Activity size={24} className="mb-1" />
+                <Dumbbell size={24} className="mb-1" />
                 <span className="text-[10px] font-bold">Exercise</span>
-              </button>
-            )}
-
-            {group?.features?.compareVitals && (
-              <button 
-                onClick={() => setActiveTab('compareVitals')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${
-                  activeTab === 'compareVitals' ? 'bg-amber-100 text-amber-600 shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-                }`}
-              >
-                <BarChart2 size={24} className="mb-1" />
-                <span className="text-[10px] font-bold">Vitals</span>
               </button>
             )}
           </div>
@@ -900,12 +967,12 @@ const handleSendMessage = async (e?: React.FormEvent) => {
               )}
 
               {/* COMPARE TABS (EXERCISE & VITALS) */}
-              {(activeTab === 'compareExercise' || activeTab === 'compareVitals') && (
+              {(activeTab === 'compareVitals' || activeTab === 'compareDiet' || activeTab === 'compareExercise') && (
               <section className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6 bg-slate-50">
                 <div className="max-w-5xl mx-auto w-full">
                   
                   {/* View Toggle Header */}
-                  {!isCalculatingStats && ((activeTab === 'compareExercise' && exerciseData) || (activeTab === 'compareVitals' && vitalsData)) && (
+                  {!isCalculatingStats && ((activeTab === 'compareVitals' && vitalsData) || (activeTab === 'compareDiet' && dietData) || (activeTab === 'compareExercise' && exerciseData)) && (
                     <div className="flex items-center justify-center mb-8">
                       <div className="bg-slate-200/50 p-1.5 rounded-2xl flex items-center shadow-inner border border-slate-200 overflow-x-auto">
                         <button 
@@ -928,7 +995,9 @@ const handleSendMessage = async (e?: React.FormEvent) => {
                         >
                           <TrendingUp size={18} /> Trend Delta
                         </button>
-                        {activeTab !== 'compareVitals' && (
+                        
+                        {/* RESTRICTED: Only show All-Time if it's the Exercise tab */}
+                        {activeTab === 'compareExercise' && (
                           <button 
                             onClick={() => setCompareView('allTime')}
                             className={`px-4 md:px-6 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
@@ -946,24 +1015,31 @@ const handleSendMessage = async (e?: React.FormEvent) => {
 
                   {isCalculatingStats ? (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                      <Loader2 className={`animate-spin mb-4 ${activeTab === 'compareExercise' ? 'text-emerald-500' : 'text-amber-500'}`} size={40} />
+                      <Loader2 className={`animate-spin mb-4 ${activeTab === 'compareExercise' ? 'text-emerald-500' : 'text-emerald-500'}`} size={40} />
                       <p className="font-medium text-sm">Calculating group statistics...</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {activeTab === 'compareExercise' && exerciseData && (
-                        <>
-                          {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: exerciseData, vitals: [] }} />}
-                          {compareView === 'delta' && <GroupCompareTrend data={{ exercises: exerciseData, vitals: [] }} />}
-                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: exerciseData, vitals: [] }} />}
-                        </>
-                      )}
                       
                       {activeTab === 'compareVitals' && vitalsData && (
                         <>
                           {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: [], vitals: vitalsData }} />}
                           {compareView === 'delta' && <GroupCompareTrend data={{ exercises: [], vitals: vitalsData }} />}
-                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: [], vitals: vitalsData }} />}
+                        </>
+                      )}
+
+                      {activeTab === 'compareDiet' && dietData && (
+                        <>
+                          {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: [], vitals: dietData }} />}
+                          {compareView === 'delta' && <GroupCompareTrend data={{ exercises: [], vitals: dietData }} />}
+                        </>
+                      )}
+
+                      {activeTab === 'compareExercise' && exerciseData && (
+                        <>
+                          {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'delta' && <GroupCompareTrend data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: exerciseData, vitals: [] }} />}
                         </>
                       )}
                     </div>

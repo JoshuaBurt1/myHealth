@@ -7,12 +7,18 @@ import type { Group } from './group';
 
 import { 
   VITAL_KEY_MAP, 
-  STRENGTH_KEY_MAP, 
+  BLOODTEST_KEY_MAP,
+  SYMPTOM_KEY_MAP,
+  DIET_KEY_MAP,
+  MICRONUTRIENT_KEY_MAP, 
+  STRENGTH_KEY_MAP,
   SPEED_KEY_MAP, 
-  PHYSIO_KEY_MAP, 
+  PLYO_KEY_MAP, 
+  ENDURANCE_KEY_MAP, 
   YOGA_KEY_MAP, 
-  MOBILITY_KEY_MAP 
-} from '../compareUtils';
+  MOBILITY_KEY_MAP, 
+  PHYSIO_KEY_MAP
+} from '../profileConstants'; 
 
 interface ManageDataFieldsModalProps {
   group: Group;
@@ -26,18 +32,27 @@ export const ManageDataFieldsModal: React.FC<ManageDataFieldsModalProps> = ({ gr
   // Map all sub-categories into ALL_FIELDS with specific category labels
   const ALL_FIELDS = [
     ...Object.entries(VITAL_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Vitals' })),
+    ...Object.entries(BLOODTEST_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Blood' })),
+    ...Object.entries(SYMPTOM_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Symptoms' })),
+    ...Object.entries(DIET_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Diet' })),
+    ...Object.entries(MICRONUTRIENT_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Micros' })),
     ...Object.entries(STRENGTH_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Strength' })),
     ...Object.entries(SPEED_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Speed' })),
+    ...Object.entries(PLYO_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Plyo' })),
+    ...Object.entries(ENDURANCE_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Endurance' })),
     ...Object.entries(PHYSIO_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Physio' })),
     ...Object.entries(YOGA_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Yoga' })),
     ...Object.entries(MOBILITY_KEY_MAP).map(([name, key]) => ({ name, key, category: 'Mobility' }))
   ];
 
-  const CATEGORY_LIST = ['Vitals', 'Strength', 'Speed', 'Physio', 'Yoga', 'Mobility'];
+  const CATEGORY_LIST = [
+    'Vitals', 'Blood', 'Symptoms', 'Diet', 'Micros', 
+    'Strength', 'Speed', 'Plyo', 'Endurance', 'Physio', 'Yoga', 'Mobility'
+  ];
 
   useEffect(() => {
     const savedFields = (group as any).activeDataFields;
-    if (savedFields) {
+    if (savedFields && Array.isArray(savedFields)) {
       setActiveFields(savedFields);
     } else {
       setActiveFields(ALL_FIELDS.map(f => f.key));
@@ -58,8 +73,8 @@ export const ManageDataFieldsModal: React.FC<ManageDataFieldsModalProps> = ({ gr
       setActiveFields(prev => prev.filter(key => !categoryKeys.includes(key)));
     } else {
       setActiveFields(prev => {
-        const uniqueOtherFields = prev.filter(key => !categoryKeys.includes(key));
-        return [...uniqueOtherFields, ...categoryKeys];
+        const otherFields = prev.filter(key => !categoryKeys.includes(key));
+        return [...otherFields, ...categoryKeys];
       });
     }
   };
@@ -81,7 +96,7 @@ export const ManageDataFieldsModal: React.FC<ManageDataFieldsModalProps> = ({ gr
   };
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
           <div>

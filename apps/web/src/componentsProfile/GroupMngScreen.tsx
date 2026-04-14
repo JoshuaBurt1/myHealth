@@ -1,6 +1,6 @@
 // GroupMngScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2, Stars, Info, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, Activity, BarChart2, Apple, Stars, Info, ShieldCheck, Dumbbell } from 'lucide-react';
 import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -46,8 +46,9 @@ export const GroupMngScreen: React.FC = () => {
   const [userAge, setUserAge] = useState<number>(0);
 
   // Split compare features
-  const [enableCompareExercise, setEnableCompareExercise] = useState(false);
   const [enableCompareVitals, setEnableCompareVitals] = useState(false);
+  const [enableCompareDiet, setEnableCompareDiet] = useState(false);
+  const [enableCompareExercise, setEnableCompareExercise] = useState(false);
 
   const isLoadingGroups = userGroups === null || userData === null;
 
@@ -219,7 +220,8 @@ export const GroupMngScreen: React.FC = () => {
         lastUpdated: serverTimestamp(),
         features: {
           compareExercise: enableCompareExercise,
-          compareVitals: enableCompareVitals
+          compareVitals: enableCompareVitals,
+          compareDiet: enableCompareDiet
         }
       };
 
@@ -563,28 +565,43 @@ export const GroupMngScreen: React.FC = () => {
                         <div className="flex items-center gap-3">
                           <input 
                             type="checkbox" 
-                            id="exerciseCompareCheck"
-                            checked={enableCompareExercise}
-                            onChange={(e) => setEnableCompareExercise(e.target.checked)}
-                            className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
-                          />
-                          <label htmlFor="exerciseCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
-                            <Activity size={16} className="text-emerald-500" /> Group Exercise Comparisons
-                          </label>
-                        </div>
-                        
-                        <div className="flex items-center gap-3">
-                          <input 
-                            type="checkbox" 
                             id="vitalsCompareCheck"
                             checked={enableCompareVitals}
                             onChange={(e) => setEnableCompareVitals(e.target.checked)}
                             className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-amber-500 focus:ring-offset-1 cursor-pointer"
                           />
                           <label htmlFor="vitalsCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
-                            <BarChart2 size={16} className="text-emerald-500" /> Group Vitals Comparisons
+                            <Activity size={16} className="text-emerald-500" /> Group Vitals Comparisons
                           </label>
                         </div>
+
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="dietCompareCheck"
+                            checked={enableCompareDiet}
+                            onChange={(e) => setEnableCompareDiet(e.target.checked)}
+                            className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
+                          />
+                          <label htmlFor="dietCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
+                            {/* You might need to import Utensils from 'lucide-react' at the top */}
+                            <Apple size={16} className="text-emerald-500" /> Group Nutrition Comparisons
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="exerciseCompareCheck"
+                            checked={enableCompareExercise}
+                            onChange={(e) => setEnableCompareExercise(e.target.checked)}
+                            className="w-5 h-5 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer"
+                          />
+                          <label htmlFor="exerciseCompareCheck" className="text-sm font-semibold text-slate-600 flex items-center gap-2 cursor-pointer select-none">
+                            <Dumbbell size={16} className="text-emerald-500" /> Group Exercise Comparisons
+                          </label>
+                        </div>
+                       
                       </div>
                     </div>
 
