@@ -49,6 +49,43 @@ export const SYMPTOM_KEY_MAP: Record<string, string> = {
   'Shortness of Breath': 'dyspnea'
 };
 
+export const DIET_TYPES_MAP: Record<string, any> = {
+  'Food Guide': {
+    carbs: { min: 0.45, max: 0.65 },
+    fat: { min: 0.20, max: 0.35 },
+    protein: { min: 0.10, max: 0.35 }
+  },
+  'Mediterranean': {
+    carbs: { min: 0.40, max: 0.50 },
+    fat: { min: 0.30, max: 0.40 },
+    protein: { min: 0.15, max: 0.20 }
+  },
+  'High-Protein Fitness': {
+    carbs: { min: 0.20, max: 0.40 },
+    fat: { min: 0.20, max: 0.30 },
+    protein: { min: 0.30, max: 0.50 }
+  },
+  'Keto': {
+    carbs: { min: 0.05, max: 0.10 },
+    fat: { min: 0.70, max: 0.80 },
+    protein: { min: 0.15, max: 0.25 }
+  },
+  'DASH': {
+    carbs: { min: 0.50, max: 0.60 },
+    fat: { min: 0.20, max: 0.30 },
+    protein: { min: 0.15, max: 0.20 },
+    sodium: { max: 2300 }
+  },
+  'Kidney Health': {
+    carbs: { min: 0.45, max: 0.60 },
+    fat: { min: 0.25, max: 0.35 },
+    protein: { min: 0.10, max: 0.20 },
+    sodium: { max: 2000 },
+    potassium: { max: 2000 },
+    phosphorus: { max: 1000 }
+  }
+};
+
 export const DIET_KEY_MAP: Record<string, string> = {
   'Calories': 'calories',
   'Carbohydrates': 'carbs',
@@ -278,9 +315,9 @@ export const SINGLE_GRAPHS = [
   
   // Diet & Nutrition
   { key: 'calories', title: 'CALORIES', unit: 'kcal', icon: <Scale className="text-orange-500" />, color: '#f97316' },
-  { key: 'carbs', title: 'CARBOHYDRATES', unit: 'g', icon: <Pizza className="text-yellow-600" />, color: '#ca8a04', thresholds: { warningHigh: 300, criticalHigh: 400 } as MetricThresholds },
+  { key: 'carbs', title: 'CARBOHYDRATES', unit: 'g', icon: <Pizza className="text-yellow-600" />, color: '#ca8a04' },
   { key: 'protein', title: 'PROTEIN', unit: 'g', icon: <Drumstick className="text-rose-700" />, color: '#be123c' },
-  { key: 'fat', title: 'TOTAL FAT', unit: 'g', icon: <Droplets className="text-amber-500" />, color: '#f59e0b', thresholds: { warningHigh: 80, criticalHigh: 100 } as MetricThresholds },
+  { key: 'fat', title: 'TOTAL FAT', unit: 'g', icon: <Droplets className="text-amber-500" />, color: '#f59e0b' },
   { key: 'sodium', title: 'SODIUM', unit: 'mg', icon: <Waves className="text-blue-400" />, color: '#60a5fa', thresholds: { warningHigh: 2300, criticalHigh: 3400 } as MetricThresholds },
   { key: 'fiber', title: 'FIBER', unit: 'g', icon: <Salad className="text-emerald-600" />, color: '#059669', thresholds: { warningLow: 25, criticalLow: 15 } as MetricThresholds },
   { key: 'sugar', title: 'SUGAR', unit: 'g', icon: <Pizza className="text-pink-500" />, color: '#ec4899', thresholds: { warningHigh: 50, criticalHigh: 100 } as MetricThresholds },

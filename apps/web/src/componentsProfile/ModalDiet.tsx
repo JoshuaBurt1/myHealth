@@ -119,7 +119,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch USDA JSON Data
+  // Fetch USDA JSON data
   useEffect(() => {
     if (isOpen) {
       fetch('/total_usda_nutrients.json')
@@ -131,7 +131,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     }
   }, [isOpen]);
 
-  // Handle Search Querying
+  // Handle search querying
   useEffect(() => {
     if (!searchQuery.trim()) {
       searchResults.length && setSearchResults([]);
@@ -151,6 +151,26 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     }
     setSearchResults(results);
   }, [searchQuery, usdaData]);
+
+  useEffect(() => {
+    const newTotals: Record<string, string> = {};
+
+    [...trackedDiet, ...entries].forEach(metric => {
+      const total = selectedFoods.reduce((sum, food) => {
+        const baseVal = food.isCustomFood 
+          ? extractNumber(food.customValues?.[metric.name]) 
+          : getNutrientValue(food, metric.name, metric.label);
+        return sum + (baseVal * (food.quantity || 0));
+      }, 0);
+
+      // Show '0' for active fields, or '' to hide them if preferred
+      newTotals[metric.name] = total > 0 
+        ? total.toFixed(1).replace(/\.0$/, '') 
+        : '0'; 
+    });
+
+    setDietInputs(prev => ({ ...prev, ...newTotals }));
+  }, [selectedFoods, entries, trackedDiet]);
 
   const existingKeys = useMemo(() => new Set([
     ...trackedDiet.map(d => d.name),
@@ -181,14 +201,14 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
     });
   };
 
-  // Extract numeric value from string (e.g. "52 kcal" -> 52)
+  // Extract numeric value from the USDA string
   const extractNumber = (valString: any) => {
     if (valString === undefined || valString === null || valString === '') return 0;
     const match = valString.toString().match(/[\d.]+/);
     return match ? parseFloat(match[0]) : 0;
   };
 
-  // Logic to map Food Item nutrients to our app's input fields
+  // Logic to map nutrients input fields
   const getNutrientValue = (food: FoodItem, fieldName: string, fieldLabel: string) => {
     if (food.isCustomFood) {
       return extractNumber(food.customValues?.[fieldName] || 0);
@@ -261,33 +281,33 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
       quantity: 1
     };
     setSelectedFoods(prev => [...prev, newFood]);
-    setExpandedItems(prev => new Set(prev).add(uniqueId)); // Auto-expand
+    setExpandedItems(prev => new Set(prev).add(uniqueId));
     setCustomFoodInput('');
   };
 
   const updateMetricTotal = (name: string, delta: number) => {    
     if (delta === 0) return;
     
-    let foundInTracked = false;
-    trackedDiet.forEach(d => {
-        if (d.name === name) foundInTracked = true;
-    });
+    const safeParse = (val: string) => {
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+    };
 
-    if (foundInTracked) {
-        setDietInputs(prev => {
-            const curr = parseFloat(prev[name] || '0');
-            const newVal = Math.max(0, curr + delta);
-            return { ...prev, [name]: newVal > 0 ? newVal.toFixed(1).replace(/\.0$/, '') : '' };
-        });
+    if (trackedDiet.some(d => d.name === name)) {
+      setDietInputs(prev => {
+        const curr = safeParse(prev[name] || '0');
+        const newVal = Math.max(0, curr + delta);
+        return { ...prev, [name]: newVal.toFixed(1).replace(/\.0$/, '') };
+      });
     } else {
-        setEntries(prev => prev.map(entry => {
-            if (entry.name === name) {
-                const curr = parseFloat(entry.value || '0');
-                const newVal = Math.max(0, curr + delta);
-                return { ...entry, value: newVal > 0 ? newVal.toFixed(1).replace(/\.0$/, '') : '' };
-            }
-            return entry;
-        }));
+      setEntries(prev => prev.map(entry => {
+        if (entry.name === name) {
+          const curr = safeParse(entry.value || '0');
+          const newVal = Math.max(0, curr + delta);
+          return { ...entry, value: newVal.toFixed(1).replace(/\.0$/, '') };
+        }
+        return entry;
+      }));
     }
   };
 
@@ -314,7 +334,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   const handleRemoveFoodFromTempList = (foodToRemove: FoodItem) => {
     setSelectedFoods(prev => prev.filter(f => f.listId !== foodToRemove.listId));
 
-    const qty = foodToRemove.quantity || 1; // Get current multiplier
+    const qty = foodToRemove.quantity || 1;
 
     setDietInputs(prev => {
       const next = { ...prev };
@@ -376,26 +396,10 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   };
 
   const handleQuantityChange = (listId: string, newQtyStr: string) => {
-    const newQty = parseFloat(newQtyStr) || 0;
-    
-    setSelectedFoods(prev => prev.map(food => {
-      if (food.listId !== listId) return food;
-
-      const oldQty = food.quantity || 1;
-      const deltaQty = newQty - oldQty;
-
-      [...trackedDiet, ...entries].forEach(metric => {
-        const baseVal = food.isCustomFood 
-          ? extractNumber(food.customValues?.[metric.name]) 
-          : getNutrientValue(food, metric.name, metric.label);
-        
-        if (baseVal > 0) {
-          updateMetricTotal(metric.name, baseVal * deltaQty);
-        }
-      });
-
-      return { ...food, quantity: newQty };
-    }));
+    const newQty = parseFloat(newQtyStr);
+    setSelectedFoods(prev => prev.map(f => 
+      f.listId === listId ? { ...f, quantity: isNaN(newQty) ? 0 : newQty } : f
+    ));
   };
 
   const handleSaveDiet = async () => {
@@ -559,7 +563,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6 lg:gap-8">
           
-          {/* LEFT COLUMN: Search & Meal Name */}
+          {/* Search & Meal Name */}
           <div className="w-full lg:w-1/2 flex flex-col gap-6">
             
             {/* Database search */}
@@ -899,7 +903,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                                   <InputField
                                     label={`Total ${entry.unit ? `(${entry.unit})` : ''}`.trim()}
                                     type="text"
-                                    value={entry.value || ''}
+                                    value={dietInputs[entry.name] || '0'} 
                                     onChange={() => {}}
                                     disabled={false}
                                     icon={<div className="w-4" />} 

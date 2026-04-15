@@ -14,19 +14,20 @@ import { doc, updateDoc, arrayRemove, setDoc, collection, query, arrayUnion, onS
 import { auth, db } from '../firebase';
 import { User, Users, Camera, Stars, Activity, Loader2, RefreshCw, LineChart, Bell, Shield, TrendingUp, Settings} from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
-import { Badge, InputField, SexInputField, AgeInputField, MobileTabNav, QuickActionsBoard } from '../componentsProfile/ProfileUI';
+import { Badge, InputField, SexInputField, AgeInputField, MobileTabNav, TDEECalculatorCard, QuickActionsBoard } from '../componentsProfile/ProfileUI';
 import { ModalDOB, ModalFollow } from '../componentsProfile/ModalProfile';
 import { ModalSettings, type PrivacySettings } from '../componentsProfile/ModalSettings';
 import { ModalVitals } from '../componentsProfile/ModalVitals';
 import { ModalDiet } from '../componentsProfile/ModalDiet';
 import { ModalExercises } from '../componentsProfile/ModalExercises';
-import { useImageUpload } from '../componentsProfile/useImageUpload';
+import { userImageUpload } from '../componentsProfile/userImageUpload';
 import { HealthSyncSection } from '../componentsProfile/HealthSyncSection';
 import PrivacyWrapper from '../componentsProfile/PrivacyWrapper';
 import FollowButton from '../componentsProfile/FollowButton';
 import DataScreen from '../componentsProfile/DataScreen';
 import type { Group } from '../componentsProfile/componentsGroupScreen/group';
 import { ActiveAlerts } from '../componentsProfile/componentsDataScreen/ActiveAlerts';
+import { calculateTDEE, estimateActivityFactorFromSteps } from '../componentsProfile/tdeeUtils';
 
 import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, 
   STRENGTH_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP, 
@@ -34,6 +35,7 @@ import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, DIET_KEY_MAP, MICRON
 
 const ProfileScreen: React.FC = () => {
   const [steps, setSteps] = useState(0);
+  const [dailySteps, setDailySteps] = useState(0);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   
   const { userId } = useParams<{ userId: string }>();
@@ -41,7 +43,7 @@ const ProfileScreen: React.FC = () => {
   const isMe = userId === currentUserId;
 
   const [loading, setLoading] = useState(true);
-  const { handlePickImage, isUploading: imageUploading } = useImageUpload(
+  const { handlePickImage, isUploading: imageUploading } = userImageUpload(
     userId, 
     (base64) => setProfileImage(base64)
   );
@@ -83,6 +85,7 @@ const ProfileScreen: React.FC = () => {
   const [trackedDiet, setTrackedDiet] = useState<{name: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
   const [dietInputs, setDietInputs] = useState<Record<string, string>>({});
   const [dietStreak, setDietStreak] = useState(0);
+  const dietKeys = useMemo(() => trackedDiet.map(d => d.name), [trackedDiet]);
 
   const [trackedExercises, setTrackedExercises] = useState<{name: string, label: string, type: string, unit?: string, isCustom: boolean}[]>([]);
   const [exerciseInputs, setExerciseInputs] = useState<Record<string, string>>({});
@@ -111,6 +114,33 @@ const ProfileScreen: React.FC = () => {
   const [activeAlertCount, setActiveAlertCount] = useState<number>(0);
   const [activeAlertLast, setActiveAlertLast] = useState<number | null>(null);
   const [currentSeverity, setCurrentSeverity] = useState<'critical' | 'info'>('info');
+
+  // TDEE STATES
+  const [tdeeFormula, setTdeeFormula] = useState<'mifflin' | 'katch'>('mifflin');
+  const [lbm, setLbm] = useState<string>('');
+  const [selectedActivityFactor, setSelectedActivityFactor] = useState<number | 'auto'>('auto');
+  const [selectedDiet, setSelectedDiet] = useState<string>('Food Guide');
+
+  // TDEE CALCULATIONS
+  const autoActivityData = estimateActivityFactorFromSteps(steps);
+  const currentActivityFactor = selectedActivityFactor === 'auto' ? autoActivityData.factor : selectedActivityFactor;
+
+  const tdeeResult = useMemo(() => {
+    const weightVal = parseFloat(formData.weight) || 0;
+    const heightVal = parseFloat(formData.height) || 0;
+    const ageVal = parseInt(formData.age) || 0;
+    const lbmVal = parseFloat(lbm) || 0;
+
+    return calculateTDEE(
+      tdeeFormula, 
+      weightVal, 
+      heightVal, 
+      ageVal, 
+      formData.sex, 
+      lbmVal, 
+      currentActivityFactor
+    );
+  }, [tdeeFormula, formData, lbm, currentActivityFactor]);
 
   // Load user data 
   useEffect(() => {
@@ -143,7 +173,7 @@ const ProfileScreen: React.FC = () => {
           name: rootData.display_name || prev.name,
           gems: rootData.gems !== undefined ? rootData.gems.toString() : '0' 
         }));
-        if (rootData.daily_steps !== undefined) setSteps(rootData.daily_steps);
+        if (rootData.daily_steps !== undefined) setDailySteps(rootData.daily_steps);
         if (rootData.last_step_update) setLastSynced(rootData.last_step_update.toDate());
         if (rootData.exercise_streak !== undefined) setExerciseStreak(rootData.exercise_streak);
         if (rootData.diet_streak !== undefined) setDietStreak(rootData.diet_streak);
@@ -169,6 +199,23 @@ const ProfileScreen: React.FC = () => {
         }));
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
+
+        // 0. TDEE metabolic rate calculation requirement (steps)
+        if (Array.isArray(profData.steps) && profData.steps.length > 0) {
+
+          // Calculate the sum of values
+          const last5Entries = profData.steps.slice(-5);          
+          const totalSteps = last5Entries.reduce((sum: number, entry: any) => {
+            const val = typeof entry.value === 'number' ? entry.value : parseFloat(entry.value) || 0;
+            return sum + val;
+          }, 0);
+
+          // Calculate average and update the steps state
+          const averageSteps = Math.round(totalSteps / last5Entries.length);
+          setSteps(averageSteps);
+        } else {
+          setSteps(0);
+        }
 
         // 1. Vitals Parsing
         const loadedTrackedVitals: typeof trackedVitals = [];
@@ -417,10 +464,9 @@ const ProfileScreen: React.FC = () => {
 
       if (item) {
         // Construct the exact object as it exists in your Firestore arrays
-        // Note: Vital uses 'key' as the identifier, others use 'name'
         const objectToRemove: any = {
-          name: item.label || item.name || item.key, // UI Label
-          key: item.name || item.key,                // Database Key
+          name: item.label || item.name || item.key,
+          key: item.name || item.key,
           unit: item.unit ?? (category === 'diet' ? 'g' : ''),
           type: item.type,
           isCustom: !!item.isCustom
@@ -736,11 +782,27 @@ const ProfileScreen: React.FC = () => {
                     />
                   </PrivacyWrapper>
                 </div>
+                {/* TDEE CALCULATOR CARD */}
+                <TDEECalculatorCard 
+                  tdeeFormula={tdeeFormula}
+                  setTdeeFormula={setTdeeFormula}
+                  lbm={lbm}
+                  setLbm={setLbm}
+                  selectedActivityFactor={selectedActivityFactor}
+                  setSelectedActivityFactor={setSelectedActivityFactor}
+                  autoActivityData={autoActivityData}
+                  tdeeResult={tdeeResult}
+                  isMe={isMe}
+                  updateBasicInfo={updateBasicInfo}
+                  formData={formData}
+                  selectedDiet={selectedDiet}
+                  setSelectedDiet={setSelectedDiet}
+                />
                 {isMe && !!window.ReactNativeWebView && (
                     <HealthSyncSection 
                       userId={userId!} 
                       isMe={isMe} 
-                      steps={steps} 
+                      steps={dailySteps} 
                       lastSynced={lastSynced} 
                       onSyncComplete={(newSteps, syncTime, earnedGems) => {
                         setSteps(newSteps);
@@ -811,11 +873,13 @@ const ProfileScreen: React.FC = () => {
                 onExportAlerts={handleExportAlerts} 
                 onExportSeverity={setCurrentSeverity}
                 onExportAlertLastMs={setActiveAlertLast}
+                dietKeys={dietKeys}
+                tdeeResult={tdeeResult}
+                selectedDiet={selectedDiet}
               />
             </div>
           </div>
         </div>
-        
         {/* Status tab (mobile only) */}
         <div className={`${activeTab === 'status' ? 'block' : 'hidden'} lg:hidden space-y-4`}>
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">

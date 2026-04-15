@@ -1,15 +1,13 @@
-// src/components/MetricChartRenderer.tsx
 import React from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { SPEED_KEY_MAP, BP_THRESHOLDS, type MetricThresholds } from '../profileConstants';
+import { SPEED_KEY_MAP, BP_THRESHOLDS, DIET_TYPES_MAP, type MetricThresholds } from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
-export const MetricGraph = ({ title, unit, icon, children, percentageDisplay, alertType }: any) => {
-  // Mapping logic to match ActiveAlerts.tsx styles
+export const MetricGraph = ({ title, unit, icon, children, percentageDisplay, alertType, isAggregated, customLabel, fractionsDisplay }: any) => {
   const bgClass = alertType === 'critical' 
     ? 'bg-red-50/50 border-red-100' 
     : alertType === 'warning' 
@@ -24,9 +22,22 @@ export const MetricGraph = ({ title, unit, icon, children, percentageDisplay, al
           <div className="flex-1 w-full">
             <div className="flex items-center justify-between w-full">
               <h3 className="text-sm font-black text-slate-900 tracking-widest uppercase">{title}</h3>
-              {percentageDisplay}
+              <div className="flex items-center gap-2">
+                {customLabel}
+                {percentageDisplay}
+              </div>
             </div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase">{unit}</p>
+            <div className="flex items-start justify-between mt-1">
+              <div className="flex flex-col">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">{unit}</p>
+                {fractionsDisplay}
+              </div>
+              {isAggregated && (
+                <span className="text-[9px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter h-fit">
+                  Aggregated by day
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -45,6 +56,9 @@ interface MetricChartRendererProps {
   onPointClick: (point: any, fieldName: string, dataKey: string) => void;
   reportData?: Record<string, number[]>;
   activeAlerts?: any[];
+  aggregatedKeys?: string[];
+  tdeeResult?: number;
+  selectedDiet?: string;
 }
 
 export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({ 
@@ -52,20 +66,20 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   filteredData, 
   onPointClick,
   reportData = {},
-  activeAlerts = []
+  activeAlerts = [],
+  aggregatedKeys = [],
+  tdeeResult,
+  selectedDiet
 }) => {
   if (!graph) return null;
 
-  // Helper to find the alert type for a specific metric key
   const getAlertType = (key: string) => {
-    // Find the most severe alert (critical > warning) for this metric key
     const relevantAlerts = activeAlerts.filter(a => a.metricKeys?.includes(key));
     if (relevantAlerts.some(a => a.type === 'critical')) return 'critical';
     if (relevantAlerts.some(a => a.type === 'warning')) return 'warning';
     return undefined;
   };
 
-  // Update the signature to include opacity
   const renderThresholdLines = (
     thresholds?: MetricThresholds, 
     labelPrefix: string = '', 
@@ -73,7 +87,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   ) => {
     if (!thresholds) return null;
     
-    // Define colors once for easier maintenance
     const CRIT_COLOR = "#ef4444";
     const WARN_COLOR = "#eab308";
 
@@ -327,6 +340,126 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     const alertType = getAlertType(config.key);
     const domain = config.domain || ['auto', 'auto'];
 
+    const today = new Date();
+    const todayData = filteredData.filter(d => {
+      if (!d.timestamp) return false;
+      const dDate = new Date(d.timestamp);
+      return dDate.getDate() === today.getDate() &&
+             dDate.getMonth() === today.getMonth() &&
+             dDate.getFullYear() === today.getFullYear() &&
+             d[config.key] != null;
+    });
+
+    const currentAmount = todayData.reduce((sum, d) => sum + Number(d[config.key]), 0);
+    const currentDisplay = Number.isInteger(currentAmount) ? currentAmount : Number(currentAmount.toFixed(1));
+
+    // Dynamic Diet Threshold Logic
+    let dietThresholds: { min?: number; max?: number } | null = null;
+    const isMacro = ['carbs', 'protein', 'fat'].includes(config.key);
+    const isMicro = ['sodium', 'potassium', 'phosphorus'].includes(config.key);
+
+    if (selectedDiet && DIET_TYPES_MAP[selectedDiet]) {
+      const diet = DIET_TYPES_MAP[selectedDiet];
+
+      // Map % values to grams using the TDEE (Carbs/Protein = 4 kcal/g, Fat = 9 kcal/g)
+      if (isMacro && tdeeResult && diet[config.key]) {
+        const calPerGram = config.key === 'fat' ? 9 : 4;
+        dietThresholds = {
+          min: (tdeeResult * diet[config.key].min) / calPerGram,
+          max: (tdeeResult * diet[config.key].max) / calPerGram
+        };
+
+        if (config.key === 'carbs') console.log(`Carbs - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
+        if (config.key === 'protein') console.log(`Protein - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
+        if (config.key === 'fat') console.log(`Fat - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
+
+      } else if (isMicro && diet[config.key]) {
+        dietThresholds = {
+          max: diet[config.key].max,
+          min: diet[config.key].min
+        };
+      }
+    }
+
+    let customLabelElement = null;
+    let fractionsDisplay = null;
+
+    if (config.key === 'calories') {
+      let labelText = "no data on current day";
+      let labelColor = "bg-slate-100 text-slate-500";
+      let LabelIcon = null;
+
+      if (todayData.length > 0) {
+        if (tdeeResult) {
+          if (tdeeResult > currentAmount) {
+            labelText = "losing weight";
+            labelColor = "text-red-500"; 
+            LabelIcon = TrendingDown;            
+          } else if (tdeeResult < currentAmount) {
+            labelText = "gaining weight";
+            labelColor = "text-emerald-500";
+            LabelIcon = TrendingUp;                    
+          } else {
+             labelText = "maintaining weight";
+             labelColor = "text-blue-500";
+          }
+
+          fractionsDisplay = (
+            <div className="flex flex-col gap-0.5 mt-2">
+              <span className="text-[12px] font-bold text-slate-500">
+                {currentDisplay} / {tdeeResult.toFixed(0)} {config.unit}
+              </span>
+            </div>
+          );
+        }
+      }
+
+      customLabelElement = (
+        <span className={`flex items-center gap-1 text-[12px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter ${labelColor}`}>
+          {LabelIcon && <LabelIcon size={10} />}
+          {labelText}
+        </span>
+      );
+    } else if ((isMacro || isMicro) && dietThresholds && todayData.length > 0) {
+      let labelText = "within diet req";
+      let labelColor = "text-blue-500";
+      let LabelIcon = null;
+
+      if (dietThresholds.min !== undefined && currentAmount < dietThresholds.min) {
+        labelText = "under diet req";
+        labelColor = "text-red-500";
+        LabelIcon = TrendingDown;
+      } else if (dietThresholds.max !== undefined && currentAmount > dietThresholds.max) {
+        labelText = "above diet req";
+        labelColor = "text-emerald-500";
+        LabelIcon = TrendingUp;
+      }
+
+      customLabelElement = (
+        <span className={`flex items-center gap-1 text-[12px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter ${labelColor}`}>
+          {LabelIcon && <LabelIcon size={10} />}
+          {labelText}
+        </span>
+      );
+    }
+
+    if (['carbs', 'protein', 'fat'].includes(config.key) && dietThresholds && todayData.length > 0) {
+      fractionsDisplay = (
+        <div className="flex flex-col gap-0.5 mt-2">
+          {dietThresholds.min && (
+            <span className="text-[10px] font-bold text-blue-500">
+              Min: {currentDisplay} / {dietThresholds.min.toFixed(0)} {config.unit}
+            </span>
+          )}
+          {dietThresholds.max && (
+            <span className="text-[10px] font-bold text-blue-500">
+              Max: {currentDisplay} / {dietThresholds.max.toFixed(0)} {config.unit}
+            </span>
+          )}
+        </div>
+      );
+    }
+
     return (
       <MetricGraph 
         key={config.key} 
@@ -335,6 +468,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         icon={config.icon}
         alertType={alertType}
         percentageDisplay={renderPercentage(config.key)}
+        isAggregated={aggregatedKeys.includes(config.key)}
+        customLabel={customLabelElement}
+        fractionsDisplay={fractionsDisplay}
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
@@ -346,6 +482,64 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             formatter={(value: any) => [`${value ?? ''} ${config.unit}`, config.title]} 
           />
           {renderThresholdLines(config.thresholds)}
+          
+          {/* Diet Threshold Lines */}
+          {dietThresholds?.max && (
+            <ReferenceLine 
+              y={dietThresholds.max} 
+              stroke="#3b82f6"
+              strokeDasharray="4 4" 
+              strokeWidth={1.5} 
+              strokeOpacity={0.6}
+              style={{ pointerEvents: 'none' }}
+              label={{ 
+                position: 'insideBottomLeft', 
+                value: `${selectedDiet} Max`, 
+                fill: '#3b82f6', 
+                fontSize: 10, 
+                fontWeight: 'bold',
+                fillOpacity: 0.8
+              }} 
+            />
+          )}
+          {dietThresholds?.min && (
+            <ReferenceLine 
+              y={dietThresholds.min} 
+              stroke="#3b82f6"
+              strokeDasharray="4 4" 
+              strokeWidth={1.5} 
+              strokeOpacity={0.6}
+              style={{ pointerEvents: 'none' }}
+              label={{ 
+                position: 'insideBottomLeft', 
+                value: `${selectedDiet} Min`, 
+                fill: '#3b82f6', 
+                fontSize: 10, 
+                fontWeight: 'bold',
+                fillOpacity: 0.8
+              }} 
+            />
+          )}
+
+          {/* TDEE MAINTENANCE LINE */}
+          {config.key === 'calories' && tdeeResult && tdeeResult > 0 && (
+            <ReferenceLine 
+              y={tdeeResult} 
+              stroke={config.color}
+              strokeDasharray="4 4" 
+              strokeWidth={2} 
+              strokeOpacity={0.8}
+              style={{ pointerEvents: 'none' }}
+              label={{ 
+                position: 'insideBottomLeft', 
+                value: 'Maintenance', 
+                fill: config.color, 
+                fontSize: 10, 
+                fontWeight: 'bold',
+                fillOpacity: 0.8
+              }} 
+            />
+          )}
           <Line 
             type="monotone" 
             dataKey={config.key} 
@@ -374,6 +568,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         icon={<PlusCircle style={{ color: customColor }} />}
         alertType={alertType}
         percentageDisplay={renderPercentage(m.key)}
+        isAggregated={aggregatedKeys.includes(m.key)}
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />

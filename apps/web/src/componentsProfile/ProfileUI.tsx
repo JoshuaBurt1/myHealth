@@ -1,7 +1,7 @@
 // ProfileUI.tsx
 // These are various buttons and fields used in ProfileScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import {ChevronDown, Timer, AlertTriangle, AlertCircle, Activity, Dumbbell, User, LineChart, Stars, Apple} from 'lucide-react';
+import {ChevronDown, ChevronUp, Timer, AlertTriangle, AlertCircle, Activity, Dumbbell, User, Calculator, LineChart, Stars, Apple} from 'lucide-react';
 
 const SHARED_INPUT_CLASSES = `
   w-full bg-slate-50 border border-slate-100 rounded-xl 
@@ -276,7 +276,153 @@ export const MobileTabNav: React.FC<MobileTabNavProps> = ({
   );
 };
 
-// 8. QUICK ACTIONS DASHBOARD
+// 8. TDEE CALCULATOR CARD
+export interface TDEECalculatorCardProps {
+  tdeeFormula: 'mifflin' | 'katch';
+  setTdeeFormula: (val: 'mifflin' | 'katch') => void;
+  lbm: string;
+  setLbm: (val: string) => void;
+  selectedActivityFactor: number | 'auto';
+  setSelectedActivityFactor: (val: number | 'auto') => void;
+  autoActivityData: { label: string; factor: number };
+  tdeeResult: number;
+  isMe: boolean;
+  updateBasicInfo: (key: string, value: string) => void;
+  formData: {
+    weight: string;
+    height: string;
+    age: string;
+  };
+  selectedDiet: string;
+  setSelectedDiet: (diet: string) => void;
+}
+
+export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
+  tdeeFormula,
+  setTdeeFormula,
+  lbm,
+  setLbm,
+  selectedActivityFactor,
+  setSelectedActivityFactor,
+  autoActivityData,
+  tdeeResult,
+  isMe,
+  updateBasicInfo,
+  formData,
+  selectedDiet,
+  setSelectedDiet
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      {/* Dropdown Header */}
+      <button 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+      >
+        <h3 className="flex text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2 px-1">
+          <Calculator size={14} className="text-orange-400"/> TDEE Calculator
+        </h3>
+        {isExpanded ? (
+          <ChevronUp size={18} className="text-slate-400 mr-2" />
+        ) : (
+          <ChevronDown size={18} className="text-slate-400 mr-2" />
+        )}
+      </button>
+      
+      {/* Collapsible Calculator Inputs */}
+      {isExpanded && (
+        <div className="p-4 md:p-5 pb-0 md:pb-0 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Calculation Method</label>
+              <select
+                className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                value={tdeeFormula}
+                onChange={(e) => setTdeeFormula(e.target.value as 'mifflin' | 'katch')}
+                disabled={!isMe}
+              >
+                <option value="mifflin">Mifflin-St Jeor</option>
+                <option value="katch">Katch-McArdle</option>
+              </select>
+            </div>
+
+            {tdeeFormula === 'katch' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Lean Body Mass (kg)</label>
+                <input
+                  type="number"
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="e.g. 65"
+                  value={lbm}
+                  onChange={(e) => setLbm(e.target.value)}
+                  disabled={!isMe}
+                  onBlur={() => updateBasicInfo('lbm', lbm)}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Activity Factor</label>
+            <select
+              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              value={selectedActivityFactor}
+              onChange={(e) => setSelectedActivityFactor(e.target.value === 'auto' ? 'auto' : parseFloat(e.target.value))}
+              disabled={!isMe}
+            >
+              <option value="auto">Auto: {autoActivityData.label}</option>
+              <option value={1.2}>Sedentary (1.2)</option>
+              <option value={1.375}>Lightly Active (1.375)</option>
+              <option value={1.55}>Moderately Active (1.55)</option>
+              <option value={1.725}>Very Active (1.725)</option>
+              <option value={1.9}>Extra Active (1.9)</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Target Diet Setup</label>
+            <select
+              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              value={selectedDiet}
+              onChange={(e) => setSelectedDiet(e.target.value)}
+              disabled={!isMe}
+            >
+              <option value="Food Guide">Food Guide</option>
+              <option value="Mediterranean">Mediterranean</option>
+              <option value="High-Protein Fitness">High-Protein Fitness</option>
+              <option value="Keto">Ketogenic</option>
+              <option value="DASH">DASH</option>
+              <option value="Kidney Health">Kidney Health</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Always Visible Estimated TDEE */}
+      <div className="p-4 md:p-5">
+        <div className="bg-orange-50 rounded-xl p-4 flex items-center justify-between border border-orange-100">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-orange-600 uppercase tracking-wide">Estimated TDEE</span>
+            <span className="text-slate-500 text-xs mt-1">
+              {tdeeFormula === 'mifflin' && (!formData.weight || !formData.height || !formData.age)
+                ? "Requires Height, Weight, Age, & Sex"
+                : tdeeFormula === 'katch' && !lbm
+                ? "Requires Lean Body Mass"
+                : "Calories per day to maintain weight"}
+            </span>
+          </div>
+          <div className="text-2xl font-black text-orange-600">
+            {tdeeResult > 0 ? `${tdeeResult} kcal` : '--'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 9. QUICK ACTIONS DASHBOARD
 interface QuickActionsBoardProps {
   setShowExerciseModal: (val: boolean) => void;
   setShowVitalModal: (val: boolean) => void;

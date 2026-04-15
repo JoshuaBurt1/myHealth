@@ -26,6 +26,9 @@ interface DataScreenProps {
   onExportAlerts?: (alerts: any[]) => void;
   onExportAlertLastMs?: (activeAlertLast: number | null) => void;
   onExportSeverity?: (severity: 'critical' | 'info') => void;
+  dietKeys: string[];
+  tdeeResult?: number;
+  selectedDiet: string;
 }
 
 const toDateTimeLocal = (date: Date) => {
@@ -33,8 +36,6 @@ const toDateTimeLocal = (date: Date) => {
   const localDate = new Date(date.getTime() - (offset * 60 * 1000));
   return localDate.toISOString().slice(0, 16);
 };
-
-const DIET_METRICS = ['calories', 'carbs', 'protein', 'fat', 'sodium', 'fiber'];
 
 const aggregateDataByDay = (data: any[], metricsToAggregate: string[]) => {
   const dailyAggregates: Record<string, any> = {};
@@ -82,7 +83,10 @@ const DataScreen: React.FC<DataScreenProps> = ({
   hiddenOther,
   onExportAlerts,
   onExportAlertLastMs,
-  onExportSeverity
+  onExportSeverity,
+  dietKeys,
+  tdeeResult,
+  selectedDiet
 }) => {
   const [dataOwnerId, setDataOwnerId] = useState<string | null>(null);
   const [vitalsData, setVitalsData] = useState<any[]>([]);
@@ -203,7 +207,8 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
         const dynamicMetrics: CustomMetric[] = [
           ...(p.customVitalsDefinitions || []),
-          ...(p.customWorkoutsDefinitions || [])
+          ...(p.customWorkoutsDefinitions || []),
+          ...(p.customDietDefinitions || [])
         ].filter(m => !standardKeys.has(m.key.toLowerCase()));
 
         setCustomMetrics(dynamicMetrics);
@@ -309,7 +314,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     }
 
     // Aggregate diet metrics
-    result = aggregateDataByDay(result, DIET_METRICS);
+    result = aggregateDataByDay(result, dietKeys);
 
     const uniqueMap: { [key: number]: any } = {};
     result.forEach(point => {
@@ -391,7 +396,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     // Merge the buckets and the last point
     return [...bucketedResults, lastActualPoint].sort((a, b) => a.timestamp - b.timestamp);
 
-  }, [vitalsData, timeRange, customStart, customEnd, reductionFactor]);
+  }, [vitalsData, timeRange, customStart, customEnd, reductionFactor, dietKeys]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -557,11 +562,14 @@ const DataScreen: React.FC<DataScreenProps> = ({
         {showAll && visibleGraphs.map((graph, idx) => (
           <div key={idx} className="w-full h-125"> 
             <MetricChartRenderer 
-              graph={graph} 
-              filteredData={filteredData} 
+              graph={graph}
+              filteredData={filteredData}
               onPointClick={handlePointClick}
               reportData={reportData}
               activeAlerts={notifications}
+              aggregatedKeys={dietKeys}
+              tdeeResult={tdeeResult}
+              selectedDiet={selectedDiet}
             />
           </div>
         ))}
@@ -584,6 +592,9 @@ const DataScreen: React.FC<DataScreenProps> = ({
                 onPointClick={handlePointClick} 
                 reportData={reportData}
                 activeAlerts={notifications}
+                aggregatedKeys={dietKeys}
+                tdeeResult={tdeeResult}
+                selectedDiet={selectedDiet}
               />
             </div>
 

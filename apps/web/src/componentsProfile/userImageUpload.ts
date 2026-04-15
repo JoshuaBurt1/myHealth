@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export const useImageUpload = (
+export const userImageUpload = (
   userId: string | undefined, 
   onUploadSuccess: (base64: string) => void
 ) => {
