@@ -1,4 +1,4 @@
-# myHealth
+# MyHealth
 
 Social platform for tracking personal health.
 
@@ -9,7 +9,7 @@ Includes facilities for:
 * interacting with AI trained in health and wellness
 * forum to discuss anything ranging from personal health topics to public health concerns.
 
-![myHealth Profile Example](./assets/profileExample.png)
+![MyHealth Profile Example](./assets/profileExample.png)
 
 ## Getting Started
 

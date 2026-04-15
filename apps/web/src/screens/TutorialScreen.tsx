@@ -57,8 +57,10 @@ const TutorialScreen: React.FC = () => {
                     <Dumbbell className="w-4 h-4 md:w-5.5 md:h-5.5" />
                     </div>
                     <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">1. Log Exercise</h3>
-                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">An indicator of general health showing if you are improving or declining.</p>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">1. Total Daily Energy Expenditure (TDEE) Calculator</h3>
+                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">
+                      Used to calculate your total daily energy requirements and set dietary thresholds to keep you on track.
+                    </p>
                     </div>
                 </div>
 
@@ -67,8 +69,10 @@ const TutorialScreen: React.FC = () => {
                     <Activity className="w-4 h-4 md:w-5.5 md:h-5.5" />
                     </div>
                     <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">2. Log Vital Signs</h3>
-                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">An indicator of true health. It tells you if you are at risk of an adverse health event.</p>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">2. Log Vitals, Nutrition, and Exercises</h3>
+                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">
+                      These indicators are used to track your progress and health status.
+                    </p>
                     </div>
                 </div>
 
@@ -78,7 +82,9 @@ const TutorialScreen: React.FC = () => {
                     </div>
                     <div>
                     <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">3. Risk Alerts</h3>
-                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">Your profile alerts you immediately if vital signs fall out of the normal range.</p>
+                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">
+                      Your profile alerts you immediately if vital signs fall out of the normal range.
+                    </p>
                     </div>
                 </div>
 
@@ -87,9 +93,7 @@ const TutorialScreen: React.FC = () => {
                     <Settings className="w-4 h-4 md:w-5.5 md:h-5.5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">
-                      4. Privacy Settings
-                    </h3>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">4. Privacy Settings</h3>
                     <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">
                       Modify what information is available to public and group view at any time.
                     </p>
@@ -98,26 +102,26 @@ const TutorialScreen: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-3 md:gap-10 h-fit md:h-full">
-            
-                <div className="flex gap-3 md:gap-4 items-start">
-                    <div className="p-1.5 md:p-2.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-xl shrink-0">
-                    <MessageSquare className="w-4 h-4 md:w-5.5 md:h-5.5" />
-                    </div>
-                    <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">5. Community Forum</h3>
-                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">Discuss health topics. Aggregated data helps us identify public health concerns.</p>
-                    </div>
-                </div>
 
                 <div className="flex gap-3 md:gap-4 items-start">
                     <div className="p-1.5 md:p-2.5 bg-emerald-50 text-emerald-600 rounded-lg md:rounded-xl shrink-0">
                     <Users className="w-4 h-4 md:w-5.5 md:h-5.5" />
                     </div>
                     <div>
-                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">6. Group Functions</h3>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">5. Group Functions</h3>
                     <ul className="text-slate-500 text-[10px] md:text-xs space-y-1 mt-0.5 md:mt-1 list-disc list-inside">
                         <li>Cohort comparisons • Group chat • AI assistance</li>
                     </ul>
+                    </div>
+                </div>
+            
+                <div className="flex gap-3 md:gap-4 items-start">
+                    <div className="p-1.5 md:p-2.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-xl shrink-0">
+                    <MessageSquare className="w-4 h-4 md:w-5.5 md:h-5.5" />
+                    </div>
+                    <div>
+                    <h3 className="font-bold text-slate-800 text-[13px] md:text-lg mb-0.5 md:mb-1">6. Community Forum</h3>
+                    <p className="text-slate-500 text-[11px] md:text-sm leading-tight md:leading-relaxed">Discuss health topics. Aggregated data helps us identify public health concerns.</p>
                     </div>
                 </div>
 
