@@ -9,6 +9,8 @@ Includes facilities for:
 * interacting with AI trained in health and wellness
 * forum to discuss anything ranging from personal health topics to public health concerns.
 
+![myHealth Profile Example](./assets/profileExample.png)
+
 ## Getting Started
 
 https://myhealth79.web.app/
