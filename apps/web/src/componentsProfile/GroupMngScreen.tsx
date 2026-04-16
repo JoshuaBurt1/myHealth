@@ -1,7 +1,7 @@
 // GroupMngScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Plus, Minus, Users, User as UserIcon, Loader2, ChevronRight, LogOut, Trash2, Bell, 
-  Activity, BarChart2, Apple, Stars, Info, ShieldCheck, Dumbbell, FlaskConical } from 'lucide-react';
+  Activity, BarChart2, Apple, Stars, Info, ShieldCheck, Dumbbell, FlaskConical, LineChart } from 'lucide-react';
 import { writeBatch, collection, query, getDocs, doc, getDoc, addDoc, serverTimestamp, where, updateDoc, collectionGroup, limit, setDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
@@ -10,6 +10,7 @@ import { type Group, type GroupSearchUser as SearchUser } from './componentsGrou
 import aiDoctorImage from '../assets/_aiDoctor.jpg';
 
 const CohortComparison = React.lazy(() => import('./componentsGroupScreen/CohortComparison'));
+const Correlation = React.lazy(() => import('./componentsGroupScreen/Correlation'));
 const HypothesisTest = React.lazy(() => import('./componentsGroupScreen/HypothesisTest'));
 
 
@@ -32,8 +33,9 @@ export const GroupMngScreen: React.FC = () => {
   const navigate = useNavigate();
   const { userData, userGroups } = useNotifications();
 
-  const [activeTab, setActiveTab] = useState<'my-groups' | 'create-group' | 'cohort' | 'hypothesis-test'>('my-groups'); 
+  const [activeTab, setActiveTab] = useState<'my-groups' | 'create-group' | 'cohort' | 'correlation' | 'hypothesis-test'>('my-groups');
   const [hasStartedCohort, setHasStartedCohort] = useState(false);
+  const [hasStartedCorrelation, setHasStartedCorrelation] = useState(false);
   const [hasStartedHypothesis, setHasStartedHypothesis] = useState(false);
 
   const [groupName, setGroupName] = useState('');
@@ -310,7 +312,9 @@ export const GroupMngScreen: React.FC = () => {
             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3 tracking-tight">
               {activeTab === 'cohort' ? (
                 <><BarChart2 className="text-emerald-500" size={28} /> Cohort Overview</>
-              ) : activeTab === 'hypothesis-test' ? ( // Add this block
+              ) : activeTab === 'correlation' ? ( // Add this block
+                <><LineChart className="text-emerald-500" size={28} /> Data Correlation</>
+              ) : activeTab === 'hypothesis-test' ? (
                 <><FlaskConical className="text-emerald-500" size={28} /> Hypothesis Test</>
               ) : activeTab === 'my-groups' ? (
                 <><Users className="text-emerald-500" size={28} /> My Groups</>
@@ -376,6 +380,24 @@ export const GroupMngScreen: React.FC = () => {
                 activeTab === 'cohort' ? 'text-emerald-600' : 'text-slate-500'
               }`}>
                 Cohort
+              </span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab('correlation')}
+              className="flex flex-col items-center gap-1.5 w-full group outline-none"
+            >
+              <div className={`p-3 rounded-2xl transition-all duration-200 ${
+                activeTab === 'correlation' 
+                  ? 'bg-emerald-100 text-emerald-600 shadow-sm' 
+                  : 'text-slate-400 group-hover:bg-slate-50'
+              }`}>
+                <LineChart size={24} />
+              </div>
+              <span className={`text-[10px] md:text-xs font-bold text-center ${
+                activeTab === 'correlation' ? 'text-emerald-600' : 'text-slate-500'
+              }`}>
+                Correlation
               </span>
             </button>
 
@@ -446,12 +468,43 @@ export const GroupMngScreen: React.FC = () => {
                   </div>
                 }>
                   <HypothesisTest
-                    userId={userData?.uid}
                     profileData={profileData}
                    />
                 </React.Suspense>
               )}
             </div>
+          ) : activeTab === 'correlation' ? (
+          <div className="p-0 md:p-6 max-w-5xl mx-auto">
+            {!hasStartedCorrelation ? (
+              <div className="bg-white rounded-4xl border border-slate-100 shadow-sm p-8 md:p-12 text-center mt-4 md:mt-0">
+                <div className="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center text-emerald-500 mx-auto mb-6">
+                  <LineChart size={40} />
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-4">Correlation Analysis</h3>
+                <p className="text-slate-600 max-w-lg mx-auto mb-8">
+                  Discover relationships between different health metrics. See how your activity 
+                  impacts your sleep quality or how diet changes correlate with your heart rate.
+                </p>
+                
+                <button 
+                  onClick={() => setHasStartedCorrelation(true)}
+                  className="group flex items-center justify-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-emerald-600 transition-all duration-300 shadow-lg shadow-slate-200 hover:shadow-emerald-100 mx-auto"
+                >
+                  Explore Correlations
+                  <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            ) : (
+              <React.Suspense fallback={
+                <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                  <Loader2 className="animate-spin text-emerald-500 mb-4" size={32} />
+                  <span className="font-medium text-sm">Analyzing correlations...</span>
+                </div>
+              }>
+                <Correlation profileData={profileData} />
+              </React.Suspense>
+            )}
+          </div>
           ) : activeTab === 'cohort' ? (
               <div className="p-0 md:p-6 max-w-5xl mx-auto">
                 
