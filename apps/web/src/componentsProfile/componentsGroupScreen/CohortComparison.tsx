@@ -44,6 +44,7 @@ const LOWER_IS_BETTER_METRICS = new Set([...SPEED_KEYS]);
 const CATEGORIES_VITALS = [
   { title: 'Standard Vitals', keys: VITAL_KEYS },
   { title: 'Blood test Values', keys: BLOODTEST_KEYS },
+  { title: 'Symptoms', keys: SYMPTOM_KEYS },
 ];
 
 const CATEGORIES_DIETS = [
@@ -57,7 +58,8 @@ const CATEGORIES_EXERCISES = [
   { title: 'Plyometrics', keys: PLYO_KEYS},
   { title: 'Endurance', keys: ENDURANCE_KEYS },
   { title: 'Physiotherapy', keys: PHYSIO_KEYS },
-  { title: 'Mobility & Yoga', keys: new Set([...MOBILITY_KEYS, ...YOGA_KEYS]) },
+  { title: 'Mobility', keys: MOBILITY_KEYS },
+  { title: 'Yoga', keys: YOGA_KEYS },
 ];
 
 const getDisplayName = (key: string): string => {

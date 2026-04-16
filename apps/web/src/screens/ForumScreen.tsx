@@ -418,7 +418,7 @@ const ForumScreen: React.FC = () => {
           <div className="relative">
             <button 
               onClick={() => activeSection === 'Population Health' ? setIsHazardOpen(!isHazardOpen) : setIsTopicOpen(!isTopicOpen)}
-              className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-4 flex items-center justify-between text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 transition-all"
+              className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-4 flex items-center justify-between text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 transition-all cursor-pointer"
             >
               <span className="truncate">
                 {activeSection === 'Population Health' 
@@ -492,7 +492,7 @@ const ForumScreen: React.FC = () => {
           <div className="flex flex-col items-end gap-2 shrink-0">
             <button 
               onClick={() => handleOpenModal('post')}
-              className="flex items-center justify-center gap-2 bg-indigo-600 text-white w-28 sm:w-32 py-3 lg:px-6 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 whitespace-nowrap order-1"
+              className="flex items-center justify-center gap-2 bg-indigo-600 text-white w-28 sm:w-32 py-3 lg:px-6 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 whitespace-nowrap order-1 cursor-pointer"
             >
               <MessageSquarePlus size={20} />
               <span className="text-sm sm:text-base">Create</span>
@@ -527,7 +527,7 @@ const ForumScreen: React.FC = () => {
                     setSearchQuery('');
                     setShowOnlyNew(false); 
                   }}
-                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-1 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                     activeSection === section.id && !showOnlyNew
                       ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' 
                       : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'

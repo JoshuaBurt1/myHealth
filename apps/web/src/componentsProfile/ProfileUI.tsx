@@ -10,8 +10,8 @@ const SHARED_INPUT_CLASSES = `
   disabled:opacity-60 disabled:cursor-not-allowed
   text-xs sm:text-sm 
   p-2.5 sm:p-3
+  cursor-pointer
 `;
-
 
 // theme based on vital sign alert status
 export const getStatusTheme = (activeAlertCount: number, alertType?: 'critical' | 'warning' | 'info') => {
@@ -128,7 +128,7 @@ export const SexInputField: React.FC<SexInputFieldProps> = ({ label, value, onCh
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`${SHARED_INPUT_CLASSES} appearance-none cursor-pointer pr-8 sm:pr-10`}
+        className={`${SHARED_INPUT_CLASSES} appearance-none pr-8 sm:pr-10`}
       >
         <option value="" disabled>--</option>
         <option value="M">M</option>
@@ -161,7 +161,7 @@ export const AgeInputField: React.FC<AgeInputFieldProps> = ({ label, value, onIc
     {isMe && onIconClick && (
       <button 
         onClick={onIconClick}
-        className="absolute right-2 sm:right-2.5 bottom-1.25 sm:bottom-1.5 p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+        className="absolute cursor-pointer right-2 sm:right-2.5 bottom-1.25 sm:bottom-1.5 p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
       >
         <Timer size={14} className="sm:w-4 sm:h-4 w-3.5 h-3.5" />
       </button>
@@ -234,7 +234,7 @@ export const MobileTabNav: React.FC<MobileTabNavProps> = ({
     <div className="lg:hidden flex flex-1 p-1 bg-slate-200/50 rounded-xl gap-1 max-w-full">
       <button
         onClick={() => setActiveTab('profile')}
-        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
           activeTab === 'profile' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/30'
         }`}
       >
@@ -243,7 +243,7 @@ export const MobileTabNav: React.FC<MobileTabNavProps> = ({
 
       <button
         onClick={() => setActiveTab('history')}
-        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+        className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
           activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/30'
         }`}
       >
@@ -252,7 +252,7 @@ export const MobileTabNav: React.FC<MobileTabNavProps> = ({
 
       <button
         onClick={() => setActiveTab('status')}
-        className={`relative flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all overflow-hidden ${
+        className={`relative flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all overflow-hidden cursor-pointer ${
           activeTab === 'status' 
             ? `bg-white shadow-sm ${theme.text}` 
             : activeAlertCount > 0 
@@ -319,10 +319,10 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
       {/* Dropdown Header */}
       <button 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between hover:bg-slate-100/50 transition-colors"
+        className="w-full p-3 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between hover:bg-slate-100/50 transition-colors cursor-pointer"
       >
         <h3 className="flex text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2 px-1">
-          <Calculator size={14} className="text-orange-400"/> TDEE Calculator
+          <Calculator size={14} className="text-indigo-400"/> TDEE Calculator
         </h3>
         {isExpanded ? (
           <ChevronUp size={18} className="text-slate-400 mr-2" />
@@ -338,7 +338,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Calculation Method</label>
               <select
-                className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
                 value={tdeeFormula}
                 onChange={(e) => setTdeeFormula(e.target.value as 'mifflin' | 'katch')}
                 disabled={!isMe}
@@ -353,7 +353,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Lean Body Mass (kg)</label>
                 <input
                   type="number"
-                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
                   placeholder="e.g. 65"
                   value={lbm}
                   onChange={(e) => setLbm(e.target.value)}
@@ -367,7 +367,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Activity Factor</label>
             <select
-              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
               value={selectedActivityFactor}
               onChange={(e) => setSelectedActivityFactor(e.target.value === 'auto' ? 'auto' : parseFloat(e.target.value))}
               disabled={!isMe}
@@ -382,9 +382,9 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Target Diet Setup</label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1"> Diet (Macronutrient Allocation)</label>
             <select
-              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100"
+              className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
               value={selectedDiet}
               onChange={(e) => setSelectedDiet(e.target.value)}
               disabled={!isMe}
@@ -402,9 +402,9 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
 
       {/* Always Visible Estimated TDEE */}
       <div className="p-4 md:p-5">
-        <div className="bg-orange-50 rounded-xl p-4 flex items-center justify-between border border-orange-100">
+        <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between border border-slate-100">
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-orange-600 uppercase tracking-wide">Estimated TDEE</span>
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Estimated TDEE</span>
             <span className="text-slate-500 text-xs mt-1">
               {tdeeFormula === 'mifflin' && (!formData.weight || !formData.height || !formData.age)
                 ? "Requires Height, Weight, Age, & Sex"
@@ -413,7 +413,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
                 : "Calories per day to maintain weight"}
             </span>
           </div>
-          <div className="text-2xl font-black text-orange-600">
+          <div className="text-1xl font-black text-slate-600">
             {tdeeResult > 0 ? `${tdeeResult} kcal` : '--'}
           </div>
         </div>
@@ -477,7 +477,7 @@ export const QuickActionsBoard: React.FC<QuickActionsBoardProps> = ({
         {/* Vitals Button */}
         <button 
           onClick={() => setShowVitalModal(true)} 
-          className={`relative flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all group overflow-hidden ${theme.bg} ${activeAlertCount === 0 ? 'border-emerald-100 hover:border-emerald-300' : 'border-rose-100 hover:border-rose-300'}`}
+          className={`relative flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all group overflow-hidden cursor-pointer ${theme.bg} ${activeAlertCount === 0 ? 'border-emerald-100 hover:border-emerald-300' : 'border-rose-100 hover:border-rose-300'}`}
         >
           <div className="absolute top-1.5 left-0 right-0 px-3 flex justify-between items-center">
             <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-tighter opacity-80">
@@ -502,7 +502,7 @@ export const QuickActionsBoard: React.FC<QuickActionsBoardProps> = ({
         {/* Diet Button */}
         <button 
           onClick={() => setShowDietModal(true)} 
-          className="relative flex flex-col items-center justify-center p-3 sm:p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md transition-all group overflow-hidden"
+          className="relative flex flex-col items-center justify-center p-3 sm:p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md transition-all group overflow-hidden cursor-pointer"
         >
           <div className="absolute top-1.5 left-0 right-0 px-3 flex justify-between items-center">
             <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-tighter opacity-80">
@@ -523,7 +523,7 @@ export const QuickActionsBoard: React.FC<QuickActionsBoardProps> = ({
         {/* Exercises Button */}
         <button 
           onClick={() => setShowExerciseModal(true)} 
-          className="relative flex flex-col items-center justify-center p-3 sm:p-4 bg-purple-50/50 rounded-2xl border border-purple-100 shadow-sm hover:bg-purple-50 hover:border-purple-300 hover:shadow-md transition-all group overflow-hidden"
+          className="relative flex flex-col items-center justify-center p-3 sm:p-4 bg-purple-50/50 rounded-2xl border border-purple-100 shadow-sm hover:bg-purple-50 hover:border-purple-300 hover:shadow-md transition-all group overflow-hidden cursor-pointer"
         >
           <div className="absolute top-1.5 left-0 right-0 px-3 flex justify-between items-center">
             <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-tighter opacity-80">

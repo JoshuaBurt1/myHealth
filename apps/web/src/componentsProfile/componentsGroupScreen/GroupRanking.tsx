@@ -6,7 +6,7 @@ interface Props {
   data: CompareData;
 }
 
-export const AllTimeRanking: React.FC<Props> = ({ data }) => {
+export const GroupRanking: React.FC<Props> = ({ data }) => {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Unknown Date';

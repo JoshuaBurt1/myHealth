@@ -494,7 +494,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
                   setCustomStart('');
                   setCustomEnd('');
                 }}
-                className={`flex-1 shrink-0 py-2 font-bold transition-all duration-200 rounded-xl
+                className={`flex-1 shrink-0 py-2 font-bold transition-all duration-200 rounded-xl cursor-pointer
                   text-[clamp(9px,2vw,12px)] 
                   px-[clamp(8px,1.5vw,16px)]
                   ${timeRange === range && !customStart
@@ -510,7 +510,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
             
             <button 
               onClick={handleOpenDatePicker}
-              className={`shrink-0 p-2 transition-colors ${customStart ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}
+              className={`shrink-0 p-2 transition-colors cursor-pointer ${customStart ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}
             >
               <Calendar 
                 strokeWidth={2.5} 
@@ -522,7 +522,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
           <div className="flex flex-nowrap items-center gap-2 md:gap-4 w-full">
             <button 
               onClick={() => setShowAll(!showAll)}
-              className="relative inline-flex items-center justify-center gap-2 px-3 md:px-5 py-2.5 bg-white text-indigo-600 font-bold text-xs md:text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors shrink-0 overflow-hidden"
+              className="relative inline-flex items-center justify-center gap-2 px-3 md:px-5 py-2.5 bg-white text-indigo-600 font-bold text-xs md:text-sm border border-slate-200 shadow-sm rounded-xl hover:bg-slate-50 transition-colors shrink-0 overflow-hidden cursor-pointer"
             >
               <div className="invisible flex items-center gap-2">
                 <LayoutGrid size={16} />
@@ -579,7 +579,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
             {visibleGraphs.length > 1 && (
               <button 
                 onClick={handlePrevGraph} 
-                className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+                className="absolute -left-3 md:-left-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
                 <ChevronLeft size={24} />
               </button>
@@ -601,7 +601,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
             {visibleGraphs.length > 1 && (
               <button 
                 onClick={handleNextGraph} 
-                className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all"
+                className="absolute -right-3 md:-right-6 z-10 p-3 bg-white rounded-full shadow-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"
               >
                 <ChevronRight size={24} />
               </button>

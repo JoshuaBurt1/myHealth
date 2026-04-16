@@ -724,7 +724,7 @@ const ProfileScreen: React.FC = () => {
                     </label>
                     <button 
                       onClick={() => setShowPrivacyModal(true)}
-                      className="w-full bg-white text-slate-600 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm"
+                      className="w-full bg-white text-slate-600 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm cursor-pointer"
                     >
                       <Settings size={16} className="text-slate-400" />
                       Settings

@@ -35,11 +35,11 @@ import {
   calcMean, 
   calcStdDev, calcZScore, type CategoryComparison 
 } from './compareUtils';
-import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
 import { ManageDataSourceModal } from './componentsGroupScreen/ManageDataSourceModal';
 import { ManageDataFieldsModal } from './componentsGroupScreen/ManageDataFieldsModal';
+import { GroupCompareZScore } from './componentsGroupScreen/GroupCompareZScore';
 import { GroupCompareTrend } from './componentsGroupScreen/GroupCompareTrend';
-import { AllTimeRanking } from './componentsGroupScreen/AllTimeRanking';
+import { GroupRanking } from './componentsGroupScreen/GroupRanking';
 import { extractDetailedValues } from './compareUtils';
 import { getAiDoctorResponse } from '../services/aiDoctorService';
 
@@ -1039,7 +1039,7 @@ const handleSendMessage = async (e?: React.FormEvent) => {
                         <>
                           {compareView === 'zscore' && <GroupCompareZScore data={{ exercises: exerciseData, vitals: [] }} />}
                           {compareView === 'delta' && <GroupCompareTrend data={{ exercises: exerciseData, vitals: [] }} />}
-                          {compareView === 'allTime' && <AllTimeRanking data={{ exercises: exerciseData, vitals: [] }} />}
+                          {compareView === 'allTime' && <GroupRanking data={{ exercises: exerciseData, vitals: [] }} />}
                         </>
                       )}
                     </div>
