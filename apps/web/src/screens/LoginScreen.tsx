@@ -1,4 +1,9 @@
 // LoginScreen.tsx
+// To active the functionality for the Correlate and Intervention Global modes to work (since this is not using Firestore Blaze plan)
+// 1. Register a user that logs in with email: global@stats.com
+// 2. Login with this user; which runs runGlobalAggregation 
+// (only this user can read, average fields by 24 hr period, and write user data to the document myHealth_globalStats/globalStats)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -8,8 +13,182 @@ import {
   signInWithCredential
 } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { Download, LogIn } from 'lucide-react';
+import * as Maps from '../componentsProfile/profileConstants';
+
+const calculateAge = (dobString: string): number => {
+  if (!dobString) return 0;
+  const today = new Date();
+  const birthDate = new Date(dobString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+};
+
+const getPercentile = (sortedArr: number[], p: number) => {
+  if (sortedArr.length === 0) return 0;
+  const index = (p / 100) * (sortedArr.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index - lower;
+  if (upper >= sortedArr.length) return sortedArr[lower];
+  return sortedArr[lower] * (1 - weight) + sortedArr[upper] * weight;
+};
+
+const calculateSkewness = (vals: number[], mean: number, stdDev: number) => {
+  if (vals.length < 3 || stdDev === 0) return 0;
+  const n = vals.length;
+  const m3 = vals.reduce((acc, val) => acc + Math.pow(val - mean, 3), 0) / n;
+  return m3 / Math.pow(stdDev, 3);
+};
+
+const runGlobalAggregation = async () => {
+  console.log("🚀 Starting Unified Aggregation (Global & Cohorts)...");
+  
+  // 1. Threshold Check (24-hour guard to save Firestore usage)
+  const statusRef = doc(db, 'myHealth_globalStats', 'status');
+  const statusSnap = await getDoc(statusRef);
+
+  if (statusSnap.exists()) {
+    const lastUpdated = statusSnap.data().lastUpdated?.toDate();
+    const now = new Date();
+    //86400000 ms = 1 day
+    if (lastUpdated && (now.getTime() - lastUpdated.getTime()) < 86400000) {
+      console.log("✅ Stats are fresh. Skipping.");
+      return;
+    }
+  }
+
+  // 2. Initialize keys and data structures
+  const allMetricKeys = [
+    ...Object.values({
+      ...Maps.VITAL_KEY_MAP, ...Maps.BLOODTEST_KEY_MAP, ...Maps.DIET_KEY_MAP,
+      ...Maps.MICRONUTRIENT_KEY_MAP, ...Maps.STRENGTH_KEY_MAP, ...Maps.SPEED_KEY_MAP,
+      ...Maps.MOBILITY_KEY_MAP, ...Maps.PHYSIO_KEY_MAP, ...Maps.PLYO_KEY_MAP,
+      ...Maps.ENDURANCE_KEY_MAP, ...Maps.YOGA_KEY_MAP
+    }),
+    'weight', 'height'
+  ];
+
+  // Global Stats (Date-based bucket)
+  const globalGrouped: Record<string, Record<string, number[]>> = {};
+  allMetricKeys.forEach(key => globalGrouped[key] = {});
+
+  // Cohort Stats (Sex -> Type -> Value -> Metric bucket)
+  const cohortGrouped: any = { M: { 1: {}, 3: {}, 10: {} }, F: { 1: {}, 3: {}, 10: {} } };
+
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    
+    for (const userDoc of usersSnap.docs) {
+      const profileSnap = await getDoc(doc(db, 'users', userDoc.id, 'profile', 'user_data'));
+      
+      if (profileSnap.exists()) {
+        const data = profileSnap.data();
+        const sex = data.sex === 'Female' ? 'F' : 'M';
+        const age = calculateAge(data.dob);
+
+        allMetricKeys.forEach(key => {
+          const entries = data[key];
+          if (Array.isArray(entries) && entries.length > 0) {
+            
+            // A. myHealth_globalStats
+            entries.forEach((entry: any) => {
+              const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
+              const dateStr = entry.dateTime?.split('T')[0];
+              if (!isNaN(val) && dateStr) {
+                if (!globalGrouped[key][dateStr]) globalGrouped[key][dateStr] = [];
+                globalGrouped[key][dateStr].push(val);
+              }
+            });
+
+            // B. myHealth_cohorts
+            const lastFiveEntries = entries.slice(-5);
+            const validValues = lastFiveEntries
+              .map(e => (typeof e.value === 'string' ? parseFloat(e.value) : e.value))
+              .filter(v => !isNaN(v));
+
+            if (validValues.length > 0 && age > 0) {
+              // Calculate the user's personal average for this metric
+              const userAverage = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+
+              const brackets = [
+                { type: 1, val: age },
+                { type: 3, val: Math.floor(age / 3) * 3 },
+                { type: 10, val: Math.floor(age / 10) * 10 }
+              ];
+
+              brackets.forEach(b => {
+                if (!cohortGrouped[sex][b.type][b.val]) cohortGrouped[sex][b.type][b.val] = {};
+                if (!cohortGrouped[sex][b.type][b.val][key]) cohortGrouped[sex][b.type][b.val][key] = [];  
+                cohortGrouped[sex][b.type][b.val][key].push(userAverage);
+              });
+            }
+          }
+        });
+      }
+    }
+
+    // 4. Finalized myHealth_globalStats
+    const finalGlobalStats: any = { lastUpdated: serverTimestamp() };
+    Object.keys(globalGrouped).forEach(key => {
+      const dateBuckets = globalGrouped[key];
+      const resultList: any[] = [];
+      Object.keys(dateBuckets).forEach(date => {
+        const vals = dateBuckets[date];
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        resultList.push({ value: parseFloat(mean.toFixed(2)), dateTime: `${date}T12:00:00Z` });
+      });
+      if (resultList.length > 0) {
+        finalGlobalStats[key] = resultList.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+      }
+    });
+    await setDoc(doc(db, 'myHealth_globalStats', 'globalStats'), finalGlobalStats);
+
+    // 5. Finalized myHealth_cohorts
+    for (const sex of ['M', 'F']) {
+      for (const type of [1, 3, 10]) {
+        const bValues = Object.keys(cohortGrouped[sex][type]);
+        for (const bVal of bValues) {
+          const docId = `${sex}_t${type}_v${bVal}`;
+          const finalCohortDoc: any = {
+            metadata: { sex, bracketType: type, bracketValue: parseInt(bVal) },
+            stats: {},
+            lastUpdated: serverTimestamp()
+          };
+
+          const cohortMetrics = cohortGrouped[sex][type][bVal];
+          Object.keys(cohortMetrics).forEach(key => {
+            const vals = cohortMetrics[key].sort((a: number, b: number) => a - b);
+            const n = vals.length;
+            const mean = vals.reduce((a: number, b: number) => a + b, 0) / n;
+            const stdDev = Math.sqrt(vals.reduce((a: number, b: number) => a + Math.pow(b - mean, 2), 0) / n);
+
+            finalCohortDoc.stats[key] = {
+              mean: parseFloat(mean.toFixed(2)),
+              stdDev: parseFloat(stdDev.toFixed(2)),
+              median: parseFloat(getPercentile(vals, 50).toFixed(2)),
+              q1: parseFloat(getPercentile(vals, 25).toFixed(2)),
+              q3: parseFloat(getPercentile(vals, 75).toFixed(2)),
+              min: vals[0],
+              max: vals[n - 1],
+              sampleSize: n,
+              skewness: parseFloat(calculateSkewness(vals, mean, stdDev).toFixed(3))
+            };
+          });
+          await setDoc(doc(db, 'myHealth_cohorts', docId), finalCohortDoc);
+        }
+      }
+    }
+
+    await setDoc(statusRef, { lastUpdated: serverTimestamp() });
+    console.log("✅ Unified Aggregation Successful.");
+  } catch (err) {
+    console.error("❌ Aggregation Error:", err);
+  }
+};
 
 const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -152,8 +331,16 @@ const LoginScreen: React.FC = () => {
     setError('');
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Check if this is the special trigger account or just a normal login
+      if (email === "global@stats.com") {
+        await runGlobalAggregation();
+        return; 
+      }
 
       await updateLoginTimestamps(userCredential.user.uid);
+      // Silent check for global update on every login
+      runGlobalAggregation(); 
 
       notifyMobileApp(userCredential.user.uid);
       navigate(`/profile/${userCredential.user.uid}`);

@@ -1,6 +1,6 @@
 // CohortComparison.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Users, RefreshCw, Info } from 'lucide-react';
 
@@ -83,6 +83,23 @@ const getDisplayName = (key: string): string => {
   return displayName || key.replace(/([A-Z])/g, ' $1').trim();
 };
 
+interface CohortStats {
+  mean: number;
+  median: number;
+  q1: number;
+  q3: number;
+  min: number;
+  max: number;
+  stdDev: number;
+  skewness: number;
+  sampleSize: number;
+}
+
+interface CohortDocument {
+  stats: Record<string, CohortStats | number[]>;
+  metadata: { sex: string; bracketType: number; bracketValue: number };
+}
+
 interface Props {
   userId: string | undefined;
   userData: any; 
@@ -114,6 +131,7 @@ interface ProcessedMetric {
   stdDev: number;
 }
 
+
 // Convert values to numbers and filter out invalid entries
 const extractStats = (dataArr: any[]): MetricStat | null => {
   if (!dataArr || !Array.isArray(dataArr) || dataArr.length === 0) return null;  
@@ -129,16 +147,6 @@ const extractStats = (dataArr: any[]): MetricStat | null => {
   const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
   
   return { recent, avg };
-};
-
-const calculateAge = (dobString: string): number => {
-  if (!dobString) return 0;
-  const today = new Date();
-  const birthDate = new Date(dobString);
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-  return age;
 };
 
 const ZScoreBellCurve = ({ 
@@ -273,136 +281,128 @@ const LegendItem = ({ label, value, color, bold = false }: { label: string, valu
   </div>
 );
 
-const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge }) => {
+const CohortComparison: React.FC<Props> = ({ userData, userSex, userAge }) => {
   const [cohortRange, setCohortRange] = useState<CohortRange>(10);
   const [loading, setLoading] = useState(false);
-  const [sampleData, setSampleData] = useState<any[]>([]);
+  const [cohortDocData, setCohortDocData] = useState<CohortDocument | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Fetch and process cohort sample
   useEffect(() => {
     if (!userSex || !userAge) return;
 
-    const fetchCohort = async () => {
+    const fetchCohortStats = async () => {
       setLoading(true);
       try {
-        const q = query(
-          collectionGroup(db, 'profile'), 
-          where('sex', '==', userSex)
-        );
-        
-        const snapshot = await getDocs(q);
-        let validMatches: any[] = [];
+        // Generate document ID based on sex, range, and base age
+        const sexPrefix = userSex.charAt(0).toUpperCase();
+        const vValue = Math.floor(userAge / cohortRange) * cohortRange;
+        const docId = `${sexPrefix}_t${cohortRange}_v${vValue}`;
 
-        snapshot.forEach((doc) => {
-          if (doc.ref.path.includes(userId || '')) return;
+        const docRef = doc(db, 'myHealth_cohorts', docId);
+        const docSnap = await getDoc(docRef);
 
-          const data = doc.data();
-          let docAge: number | null = null;
-
-          if (data.dob) {
-            docAge = calculateAge(data.dob);
-          } else if (data.age && Array.isArray(data.age) && data.age.length > 0) {
-            docAge = parseInt(data.age[data.age.length - 1].value);
-          }
-
-          if (docAge === null || isNaN(docAge)) return;
-
-          let isMatch = false;
-          if (cohortRange === 1 && docAge === userAge) isMatch = true;
-          if (cohortRange === 3 && Math.floor(docAge / 3) === Math.floor(userAge / 3)) isMatch = true;
-          if (cohortRange === 10 && Math.floor(docAge / 10) === Math.floor(userAge / 10)) isMatch = true;
-
-          if (isMatch) validMatches.push(data);
-        });
-
-        const shuffled = validMatches.sort(() => 0.5 - Math.random());
-        setSampleData(shuffled.slice(0, 10));
+        if (docSnap.exists()) {
+          setCohortDocData(docSnap.data() as CohortDocument);
+        } else {
+          setCohortDocData(null);
+        }
 
       } catch (error) {
-        console.error("Error fetching cohort:", error);
+        console.error("Error fetching cohort stats:", error);
+        setCohortDocData(null);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCohort();
-  }, [userSex, userAge, cohortRange, refreshTrigger, userId]);
+    fetchCohortStats();
+  }, [userSex, userAge, cohortRange, refreshTrigger]);
 
   // Calculate percentiles
   const comparedMetrics = useMemo(() => {
-    if (!userData || sampleData.length === 0) return [];
+  if (!userData || !cohortDocData) return [];
 
-    const results: ProcessedMetric[] = [];
-    
-    const keysToCompare = Object.keys(userData).filter(key => 
-      ALL_ALLOWED_KEYS.has(key) && 
-      Array.isArray(userData[key]) && 
-      userData[key].length > 0 && 
-      userData[key][0].value !== undefined
-    );
+  const results: ProcessedMetric[] = [];
+  const keysToCompare = Object.keys(userData).filter(key => 
+    ALL_ALLOWED_KEYS.has(key) && 
+    Array.isArray(userData[key]) && 
+    userData[key].length > 0
+  );
 
-    keysToCompare.forEach(key => {
-      const userStats = extractStats(userData[key]);
-      if (!userStats) return;
+  keysToCompare.forEach(key => {
+    const userStats = extractStats(userData[key]);
+    if (!userStats) return;
 
-      const unit = getStandardUnit(key); 
+    const unit = getStandardUnit(key); 
+    const metricData = cohortDocData.stats?.[key];
 
-      const cohortRecentValues = sampleData
-        .map(user => extractStats(user[key])?.recent)
-        .filter((val): val is number => val !== undefined && val !== null);
+    if (!metricData) return;
 
-      if (cohortRecentValues.length === 0) return;
+    let mean = 0, median = 0, q1 = 0, q3 = 0, min = 0, max = 0, 
+        stdDev = 0, skewness = 0, sampleSize = 0, zScore = 0;
 
-      const distribution = [...cohortRecentValues, userStats.recent];
+    if (typeof metricData === 'object' && !Array.isArray(metricData)) {
+      // It's a pre-aggregated object
+      const s = metricData as CohortStats;
+      mean = s.mean ?? 0;
+      median = s.median ?? 0;
+      q1 = s.q1 ?? 0;
+      q3 = s.q3 ?? 0;
+      min = s.min ?? 0;
+      max = s.max ?? 0;
+      stdDev = s.stdDev ?? 0;
+      skewness = s.skewness ?? 0;
+      sampleSize = s.sampleSize ?? 1;
+    } else if (Array.isArray(metricData)) {
+      const distribution = [...metricData, userStats.recent];
       const sortedDist = [...distribution].sort((a, b) => a - b);
       
-      const mean = distribution.reduce((a, b) => a + b, 0) / distribution.length;
+      mean = distribution.reduce((a, b) => a + b, 0) / distribution.length;
       const mid = Math.floor(sortedDist.length / 2);
-      const median = sortedDist.length % 2 !== 0 
+      median = sortedDist.length % 2 !== 0 
         ? sortedDist[mid] 
         : (sortedDist[mid - 1] + sortedDist[mid]) / 2;
+      
       const variance = distribution.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / distribution.length;
-      const stdDev = Math.sqrt(variance);
-
-      const min = sortedDist[0];
-      const max = sortedDist[sortedDist.length - 1];
-      const q1 = sortedDist[Math.floor(sortedDist.length * 0.25)];
-      const q3 = sortedDist[Math.floor(sortedDist.length * 0.75)];
-
-      // SKEWNESS CALCULATION
-      const skewness = stdDev === 0 ? 0 : 
+      stdDev = Math.sqrt(variance);
+      min = sortedDist[0];
+      max = sortedDist[sortedDist.length - 1];
+      q1 = sortedDist[Math.floor(sortedDist.length * 0.25)];
+      q3 = sortedDist[Math.floor(sortedDist.length * 0.75)];
+      
+      skewness = stdDev === 0 ? 0 : 
         (distribution.reduce((acc, val) => acc + Math.pow(val - mean, 3), 0) / distribution.length) 
         / Math.pow(stdDev, 3);
       
-      let zScore = stdDev === 0 ? 0 : (userStats.recent - mean) / stdDev;
+      sampleSize = metricData.length;
+    }
 
-      const isLowerBetter = LOWER_IS_BETTER_METRICS.has(key);
-      if (isLowerBetter) zScore = zScore * -1;
+    // Shared Z-Score calculation
+    zScore = stdDev === 0 ? 0 : (userStats.recent - mean) / stdDev;
+    if (LOWER_IS_BETTER_METRICS.has(key)) zScore *= -1;
 
-
-      results.push({
-        key,
-        name: getDisplayName(key),
-        unit,
-        zScore,
-        sampleSize: cohortRecentValues.length,
-        skewness: skewness || 0,
-        userValue: userStats.recent,
-        mean,
-        median,
-        q1,
-        q3,
-        min,
-        max,
-        stdDev
-      });
+    results.push({
+      key,
+      name: getDisplayName(key),
+      unit,
+      zScore,
+      sampleSize,
+      skewness,
+      userValue: userStats.recent,
+      mean,
+      median,
+      q1,
+      q3,
+      min,
+      max,
+      stdDev
     });
+  });
 
-    return results;
-  }, [userData, sampleData]);
+  return results;
+}, [userData, cohortDocData]);
 
-  // UI Helpers
   const handleRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value);
     if (val === 0) setCohortRange(1);
@@ -471,7 +471,6 @@ const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge 
   };
 
   const renderCategoryGroup = (groupTitle: string, categories: {title: string, keys: Set<string>}[]) => {
-    // Treat vitals and diet data similarly regarding neutral z-scores and rendering critical thresholds
     const isVitalType = groupTitle === 'Vitals' || groupTitle === 'Nutrition';
     
     const activeCategories = categories.map(cat => {
@@ -571,7 +570,7 @@ const CohortComparison: React.FC<Props> = ({ userId, userData, userSex, userAge 
             className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
           />
           <p className="text-xs text-slate-500 mt-3 text-center font-medium">
-            Comparing your last 5 entries for each vital and exercise category, against {sampleData.length} random {userSex} users in your {cohortRange === 1 ? 'exact age' : `${cohortRange}-year age bracket`}.
+            Comparing your last 5 entries for each vital and exercise category against other {userSex} users in your {cohortRange === 1 ? 'exact age' : `${cohortRange}-year age bracket`}.
           </p>
         </div>
       </div>
