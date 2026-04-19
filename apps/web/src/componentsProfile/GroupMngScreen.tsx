@@ -445,6 +445,7 @@ export const GroupMngScreen: React.FC = () => {
                         <Activity className="w-4 h-4 text-slate-400 mt-0.5" />
                         <p className="text-slate-800 text-sm leading-relaxed">
                           <span className="font-bold">Example:</span> Weight gain<br />
+                          <span className="font-bold">Target Dataset:</span> Personal<br />
                           <span className="font-bold">Intervention:</span> Calories<br />
                           <span className="font-bold">Dependent metric:</span> Weight
                         </p>
@@ -460,12 +461,13 @@ export const GroupMngScreen: React.FC = () => {
                         <Activity className="w-4 h-4 text-slate-400 mt-0.5" />
                         <p className="text-slate-800 text-sm leading-relaxed">
                           <span className="font-bold">Example:</span> Contamination<br />
+                          <span className="font-bold">Target Dataset:</span> Global<br />
                           <span className="font-bold">Intervention:</span> Food item<br />
                           <span className="font-bold">Dependent metric:</span> Nausea
                         </p>
                       </div>
                       <p className="text-xs text-slate-500 italic ml-6">
-                        "Did the time period where I ingested a food item result in nausea symptoms, compared to a different time period?"
+                        "Did symptomatic nausea related a food item, change depending on time period, for everyone?"
                       </p>
                     </div>
                   </div>

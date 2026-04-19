@@ -27,6 +27,8 @@ interface AnalysisResults {
   xBar: string;      
   zStatistic: string;
   controlEndStr: string; 
+  interventionRatio?: string;
+  dependentChange?: string;
 }
 
 const TOPIC_GROUPS = [
@@ -142,9 +144,11 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
   const [endDate, setEndDate] = useState<string>('');
   const [locationRadius, setLocationRadius] = useState<string>('');
 
+  const [interventionCategory, setInterventionCategory] = useState<string>(TOPIC_GROUPS[2].label); // Default to Vitals
   const [interventionVar, setInterventionVar] = useState<string>(''); 
-  const [effect, setEffect] = useState<string>('a difference');
+  const [dependentCategory, setDependentCategory] = useState<string>(TOPIC_GROUPS[0].label); // Default to Nutrition
   const [dependentVar, setDependentVar] = useState<string>('Weight');
+  const [effect, setEffect] = useState<string>('a difference');
   const [significanceLevel, setSignificanceLevel] = useState<string>('0.05');
   
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -173,14 +177,26 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
   
 
   // Dynamic Hypothesis Strings
-  const getHypothesisStrings = (formattedDate: string) => {
+  const getHypothesisStrings = (formattedDate: string, interventionRatio?: string) => {
     let mathOperator = '≠';
     if (effect === 'an increase') mathOperator = '>';
     if (effect === 'a decrease') mathOperator = '<';
 
-    const causeText = `the time period post-${formattedDate || '[Intervention Date]'}`;
-    const h0String = `${causeText} causes no change in ${dependentVar.toLowerCase()} (μ = μ0).`;
-    const h1String = `${causeText} causes ${effect} in ${dependentVar.toLowerCase()} (μ ${mathOperator} μ0).`;
+    const dateText = formattedDate || '[Intervention Date]';
+    
+    let displayIntPct = "";
+    if (interventionRatio && interventionRatio !== "N/A") {
+      const num = parseFloat(interventionRatio);
+      displayIntPct = ` (${num > 0 ? "+" : ""}${interventionRatio}%)`;
+    }
+
+    const causeText = interventionVar 
+      ? `${interventionVar} intervention${displayIntPct} starting on ${dateText}`
+      : `the time period post-${dateText}`;
+
+    // Removed displayDepPct from h1String
+    const h0String = `${causeText} is associated with no change in ${dependentVar.toLowerCase()} (μ = μ0).`;
+    const h1String = `${causeText} is associated with ${effect} in ${dependentVar.toLowerCase()} (μ ${mathOperator} μ0).`;
     
     return { h0String, h1String };
   };
@@ -214,14 +230,18 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
     
     try {
       const depKey = getDbKey(dependentVar);
+      const intKey = getDbKey(interventionVar);
+      
       const experimentalValues: number[] = [];
       const controlValues: number[] = [];
+      
+      const intExperimentalValues: number[] = [];
+      const intControlValues: number[] = [];
 
       const controlStartMs = controlStartDate 
         ? new Date(controlStartDate + 'T00:00:00').getTime() 
         : 0; 
 
-      // Standardize the intervention boundary
       const controlEndMs = new Date(interventionDate + 'T23:59:59').getTime();
       const expStartMs = controlEndMs + 1;
       const expEndMs = endDate 
@@ -229,21 +249,39 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
         : Infinity;
 
       const extractOneSampleValues = (dataObj: Record<string, any>) => {
-        if (!dataObj || !dataObj[depKey] || !Array.isArray(dataObj[depKey])) return;
-        dataObj[depKey].forEach((entry: any) => {
-          const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
-          const timeSource = entry.dateTime || entry.date || entry.timestamp;
-          if (isNaN(val) || !timeSource) return;
+        if (!dataObj) return;
 
-          const entryTime = new Date(timeSource).getTime();
+        // Extract Dependent Variable
+        if (dataObj[depKey] && Array.isArray(dataObj[depKey])) {
+          dataObj[depKey].forEach((entry: any) => {
+            const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
+            const timeSource = entry.dateTime || entry.date || entry.timestamp;
+            if (isNaN(val) || !timeSource) return;
 
-          // Comparisons now work because controlStartMs is guaranteed to be a number
-          if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
-            controlValues.push(val);
-          } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
-            experimentalValues.push(val);
-          }
-        });
+            const entryTime = new Date(timeSource).getTime();
+            if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
+              controlValues.push(val);
+            } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
+              experimentalValues.push(val);
+            }
+          });
+        }
+
+        // Extract Intervention Variable
+        if (interventionVar && dataObj[intKey] && Array.isArray(dataObj[intKey])) {
+           dataObj[intKey].forEach((entry: any) => {
+            const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
+            const timeSource = entry.dateTime || entry.date || entry.timestamp;
+            if (isNaN(val) || !timeSource) return;
+
+            const entryTime = new Date(timeSource).getTime();
+            if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
+              intControlValues.push(val);
+            } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
+              intExperimentalValues.push(val);
+            }
+          });
+        }
       };
 
       if (dataSource === 'personal') {
@@ -258,7 +296,7 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
           
           if (globalSnap.exists()) {
             const data = globalSnap.data();
-            setGlobalData(data); // Sync state so graphs show up
+            setGlobalData(data);
             extractOneSampleValues(data);
           } else {
             throw new Error("Global statistics have not been generated yet.");
@@ -275,6 +313,19 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
         experimentalGroup: { count: experimentalValues.length, mean: calculateMean(experimentalValues) }
       });
 
+      let interventionRatioStr = "N/A";
+      if (intControlValues.length > 0 && intExperimentalValues.length > 0) {
+        const intControlMean = calculateMean(intControlValues);
+        const intExpMean = calculateMean(intExperimentalValues);
+        
+        // Calculate percentage change: ((New - Old) / Old) * 100
+        if (intControlMean !== 0) {
+          const pctChange = ((intExpMean - intControlMean) / intControlMean) * 100;
+          // Store as a string with 1 decimal place
+          interventionRatioStr = pctChange.toFixed(1); 
+        }
+      }
+
       const n = experimentalValues.length;
       if (n < 1) throw new Error(`Not enough data points found for ${dependentVar} in the experimental dataset (Found: ${n}).`);
       
@@ -286,6 +337,13 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
       if (sigma === 0) throw new Error("Control group standard deviation is 0. A Z-test cannot be performed without variance in the control baseline.");
 
       const xBar = calculateMean(experimentalValues);
+
+      let dependentChangeStr = "0.0";
+      if (mu0 !== 0) {
+        const depPctChange = ((xBar - mu0) / mu0) * 100;
+        dependentChangeStr = depPctChange.toFixed(1);
+      }
+
       const standardError = sigma / Math.sqrt(n);
       const zStatistic = (xBar - mu0) / standardError;
 
@@ -295,7 +353,9 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
         sigma: sigma.toFixed(2),
         xBar: xBar.toFixed(2),
         zStatistic: zStatistic.toFixed(3),
-        controlEndStr: interventionDate
+        controlEndStr: interventionDate,
+        interventionRatio: interventionRatioStr,
+        dependentChange: dependentChangeStr
       });
 
       setShowResults(true);
@@ -333,14 +393,13 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
             </p>
           </div>
         </div>
-
       <div className="p-4 md:p-6 space-y-8">
         
         {/* Config Block */}
         <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Intervention Experiment Builder</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+            <div className="space-y-4  mb-4">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Target Dataset</label>
               <div className="flex bg-slate-200/50 p-1 rounded-xl w-full">
                 <button onClick={() => setDataSource('personal')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${dataSource === 'personal' ? 'bg-white text-emerald-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -350,9 +409,6 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                   <Database size={16} /> Global
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500 font-medium ml-1">
-                {dataSource === 'personal' ? "Your data" : "Analysis uses a sample of all users data"}
-              </p>
             </div>
 
             {dataSource === 'global' && (
@@ -367,38 +423,87 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-            {/* Find Intervention Column */}
-            <div className="space-y-4">
-               <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Find Intervention Date</label>
-                  <div className="relative">
-                    <select 
-                      value={interventionVar}
-                      onChange={(e) => setInterventionVar(e.target.value)}
-                      className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    >
-                      <option value="">Select a Health metric...</option>
-                      <optgroup label="Vitals">
-                        {[...Object.keys(VITAL_KEY_MAP), ...Object.keys(BLOODTEST_KEY_MAP)].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </optgroup>
-                      <optgroup label="Nutrition">
-                        {[...Object.keys(DIET_KEY_MAP), ...Object.keys(MICRONUTRIENT_KEY_MAP)].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </optgroup>
-                      <optgroup label="Exercise">
-                        {[
-                          ...Object.keys(STRENGTH_KEY_MAP), ...Object.keys(SPEED_KEY_MAP), ...Object.keys(ENDURANCE_KEY_MAP), 
-                          ...Object.keys(PLYO_KEY_MAP), ...Object.keys(YOGA_KEY_MAP), ...Object.keys(MOBILITY_KEY_MAP), ...Object.keys(PHYSIO_KEY_MAP)
-                        ].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </optgroup>
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                  </div>
-               </div>
+          {/* 4-Column Metric Selector Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            
+            {/* 1. Intervention Category */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Intervention Category</label>
+              <div className="relative">
+                <select 
+                  value={interventionCategory}
+                  onChange={(e) => {
+                    setInterventionCategory(e.target.value);
+                    setInterventionVar(''); // Reset option when category changes
+                  }}
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                >
+                  {TOPIC_GROUPS.map(group => <option key={group.label} value={group.label}>{group.label}</option>)}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+            </div>
 
-               {interventionVar && currentGraphData && (
-                <div className="mt-4 bg-white rounded-2xl border border-slate-100 p-4">
+            {/* 2. Intervention Option */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Intervention Metric</label>
+              <div className="relative">
+                <select 
+                  value={interventionVar}
+                  onChange={(e) => setInterventionVar(e.target.value)}
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                >
+                  <option value="">Select metric...</option>
+                  {TOPIC_GROUPS.find(g => g.label === interventionCategory)?.options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+            </div>
+
+            {/* 3. Dependent Category */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Dependent Category</label>
+              <div className="relative">
+                <select 
+                  value={dependentCategory}
+                  onChange={(e) => {
+                    setDependentCategory(e.target.value);
+                    setDependentVar('');
+                  }}
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                >
+                  {TOPIC_GROUPS.map(group => <option key={group.label} value={group.label}>{group.label}</option>)}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+            </div>
+
+            {/* 4. Dependent Option */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Dependent Metric</label>
+              <div className="relative">
+                <select 
+                  value={dependentVar}
+                  onChange={(e) => setDependentVar(e.target.value)}
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                >
+                  <option value="">Select metric...</option>
+                  {TOPIC_GROUPS.find(g => g.label === dependentCategory)?.options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+            {/* Left Column: Intervention Graph */}
+            <div>
+              {interventionVar && currentGraphData && (
+                <div className="bg-white rounded-2xl border border-slate-100 p-4 h-full">
                   <h5 className="text-xs font-bold text-slate-500 mb-2">
                     Select a point to set Intervention Date:
                   </h5>
@@ -412,34 +517,19 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
               )}
             </div>
 
-            {/* Dependent Variable Column */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1">Dependent Variable (Control & Experimental)</label>
-                <div className="relative">
-                  <select 
-                    value={dependentVar}
-                    onChange={(e) => setDependentVar(e.target.value)}
-                    className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                  >
-                    {TOPIC_GROUPS.map((group, idx) => (
-                      <optgroup key={idx} label={group.label}>
-                        {group.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                </div>
-              </div>
+            {/* Right Column: Dependent Variable Graph */}
+            <div>
               {dependentVar && currentGraphData && (
-                <div className="mt-4 bg-white rounded-2xl border border-slate-100 p-4">
-                  <h5 className="text-xs font-bold text-slate-500 mb-2">Dependent Variable Trends</h5>
+                <div className="bg-white rounded-2xl border border-slate-100 p-4 h-full">
+                  <h5 className="text-xs font-bold text-slate-500 mb-2">
+                    Dependent Variable Trends
+                  </h5>
                   <InterventionGraph 
-                  data={currentGraphData} 
-                  metricKey={getDbKey(dependentVar)} 
-                  title={dependentVar}
-                  onPointClick={handleGraphPointClick} 
-                />
+                    data={currentGraphData} 
+                    metricKey={getDbKey(dependentVar)} 
+                    title={dependentVar}
+                    onPointClick={handleGraphPointClick} 
+                  />
                 </div>
               )}
             </div>
@@ -647,8 +737,10 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                       H0: Null Hypothesis
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300">{getHypothesisStrings(resultsData.controlEndStr).h0String}</p>
-                </div>
+                  <p className="text-xs text-slate-300">
+                    {getHypothesisStrings(resultsData.controlEndStr, resultsData.interventionRatio).h0String}
+                  </p>              
+                  </div>
 
                 {/* Alternative Hypothesis (H1) */}
                 <div className={`p-4 rounded-2xl border transition-all duration-500 ${
@@ -661,7 +753,33 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                       H1: Alternative Hypothesis
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300">{getHypothesisStrings(resultsData.controlEndStr).h1String}</p>
+                  <p className="text-xs text-slate-300">
+                    {getHypothesisStrings(resultsData.controlEndStr, resultsData.interventionRatio).h1String}
+                  </p>
+                </div>
+              </div>
+              {/* Analysis Statement Section */}
+              <div className={`mt-6 p-5 rounded-2xl border transition-all duration-500 shadow-inner ${
+                isSignificant 
+                  ? 'bg-emerald-500/10 border-emerald-500/50' 
+                  : 'bg-amber-500/10 border-amber-500/50'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className="space-y-1">
+                    <span className={`text-sm font-bold ${isSignificant ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      Results:
+                    </span>
+                    <p className="text-sm text-slate-200 leading-relaxed">
+                      An average change of <span className="font-mono font-bold text-white">
+                        {parseFloat(resultsData.interventionRatio || '0') > 0 ? '+' : ''}{resultsData.interventionRatio}%
+                      </span> in <span className="text-white">{interventionVar || 'the intervention'}</span> was associated with an average change of <span className="font-mono font-bold text-white">
+                        {parseFloat(resultsData.dependentChange || '0') > 0 ? '+' : ''}{resultsData.dependentChange}%
+                      </span> in <span className="text-white">{dependentVar}</span>, which is <span className={`font-bold ${isSignificant ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {isSignificant ? 'statistically significant' : 'not statistically significant'}
+                      </span> at a <span className="text-white">{( (1 - parseFloat(significanceLevel)) * 100).toFixed(0)}%</span> confidence level 
+                      (p = <span className="font-mono">{dynamicPValue.toFixed(4)}</span>, α = <span className="font-mono">{significanceLevel}</span>).
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

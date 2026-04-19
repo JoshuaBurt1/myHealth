@@ -13,8 +13,8 @@ import {
 } from 'recharts';
 import {
   VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP,
-  DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, STRENGTH_KEY_MAP,
-  SPEED_KEY_MAP, ENDURANCE_KEY_MAP
+  DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, 
+  STRENGTH_KEY_MAP, SPEED_KEY_MAP, ENDURANCE_KEY_MAP
 } from '../profileConstants';
 
 export interface CorrelationProps {
@@ -34,6 +34,7 @@ interface CorrelationResults {
   pValue: number;
   df1: number;
   df2: number;
+  slope: number;
 }
 
 interface PlotPoint {
@@ -43,7 +44,7 @@ interface PlotPoint {
 }
 
 const TOPIC_GROUPS = [
-  { label: 'Diet & Nutrition', options: [...Object.keys(DIET_KEY_MAP), ...Object.keys(MICRONUTRIENT_KEY_MAP)] },
+  { label: 'Nutrition', options: [...Object.keys(DIET_KEY_MAP), ...Object.keys(MICRONUTRIENT_KEY_MAP)] },
   { label: 'Body Measurements', options: ['Weight', 'Height'] },
   { label: 'Vitals & Blood', options: [...Object.keys(VITAL_KEY_MAP), ...Object.keys(BLOODTEST_KEY_MAP)] },
   { label: 'Symptoms', options: Object.keys(SYMPTOM_KEY_MAP) },
@@ -69,8 +70,12 @@ const normalCDF = (x: number): number => {
 
 const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
   const [dataSource, setDataSource] = useState<'personal' | 'global'>('personal');
+
+  const [independentGroup, setIndependentGroup] = useState<string>(TOPIC_GROUPS[0].label); // Default 'Nutrition'
   const [independentVar, setIndependentVar] = useState<string>('Calories');
+  const [dependentGroup, setDependentGroup] = useState<string>(TOPIC_GROUPS[1].label); // Default 'Body Measurements'
   const [dependentVar, setDependentVar] = useState<string>('Weight');
+  
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [locationRadius, setLocationRadius] = useState<string>('');
@@ -194,7 +199,8 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
       statType,
       pValue,
       df1,
-      df2
+      df2,
+      slope
     };
   };
 
@@ -209,7 +215,7 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
       const synchronizedData: PlotPoint[] = [];
 
       const startTs = startDate ? new Date(startDate).getTime() : -Infinity;
-      const endTs = endDate ? new Date(endDate).getTime() + 86400000 : Infinity; //86400000
+      const endTs = endDate ? new Date(endDate).getTime() + 86400000 : Infinity; //86400000 = 1 day
       const bucketMs = bucketHours * 60 * 60 * 1000;
 
       const processDataset = (dataObj: Record<string, any>) => {
@@ -338,18 +344,70 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
 
         {/* Variables & Dates */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          
+          {/* Independent (X) Selection */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Independent (X)</label>
-            <select value={independentVar} onChange={(e) => setIndependentVar(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-3 font-medium outline-none focus:ring-2 focus:ring-blue-500">
-              {TOPIC_GROUPS.map(g => <optgroup key={g.label} label={g.label}>{g.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</optgroup>)}
-            </select>
+            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Independent (X) Category & Variable</label>
+            <div className="flex gap-2">
+              {/* Category Select */}
+              <select 
+                value={independentGroup} 
+                onChange={(e) => {
+                  const newGroup = e.target.value;
+                  setIndependentGroup(newGroup);
+                  const firstOpt = TOPIC_GROUPS.find(g => g.label === newGroup)?.options[0];
+                  if (firstOpt) setIndependentVar(firstOpt);
+                }} 
+                className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {TOPIC_GROUPS.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
+              </select>
+              
+              {/* Variable Select */}
+              <select 
+                value={independentVar} 
+                onChange={(e) => setIndependentVar(e.target.value)} 
+                className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {TOPIC_GROUPS.find(g => g.label === independentGroup)?.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Dependent (Y) Selection */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Dependent (Y)</label>
-            <select value={dependentVar} onChange={(e) => setDependentVar(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-3 font-medium outline-none focus:ring-2 focus:ring-blue-500">
-              {TOPIC_GROUPS.map(g => <optgroup key={g.label} label={g.label}>{g.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</optgroup>)}
-            </select>
+            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Dependent (Y) Category & Variable</label>
+            <div className="flex gap-2">
+              {/* Category Select */}
+              <select 
+                value={dependentGroup} 
+                onChange={(e) => {
+                  const newGroup = e.target.value;
+                  setDependentGroup(newGroup);
+                  const firstOpt = TOPIC_GROUPS.find(g => g.label === newGroup)?.options[0];
+                  if (firstOpt) setDependentVar(firstOpt);
+                }} 
+                className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {TOPIC_GROUPS.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
+              </select>
+              
+              {/* Variable Select */}
+              <select 
+                value={dependentVar} 
+                onChange={(e) => setDependentVar(e.target.value)} 
+                className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {TOPIC_GROUPS.find(g => g.label === dependentGroup)?.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Dates */}
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 flex items-center gap-1"><Calendar size={12}/> Start</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-medium outline-none focus:ring-2 focus:ring-blue-500" />
@@ -532,6 +590,7 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
 
               {/* Hypothesis section */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                {/* Null Hypothesis Box */}
                 <div className={`p-4 rounded-2xl border transition-all duration-500 ${
                   results.pValue >= alpha 
                     ? 'bg-amber-500/10 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
@@ -542,15 +601,18 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Null Hypothesis</span>
                   </div>
                   <p className="text-sm font-medium text-slate-200 leading-relaxed">
-                    {results.modelType === 'Linear' 
-                      ? "There is no linear relationship between the variables (correlation is zero)."
-                      : "The quadratic model does not explain the variance any better than chance."}
+                    {results.modelType === 'Linear'
+                      ? `There is no statistically significant linear relationship between ${independentVar} and ${dependentVar}.`
+                      : `The quadratic model for ${dependentVar} based on ${independentVar} does not explain the variance significantly better than chance.`}
                   </p>
                   {results.pValue >= alpha && (
-                    <p className="text-[10px] font-bold text-amber-400 mt-2 uppercase flex items-center gap-1"><CheckCircle2 size={12}/> Result: Fail to Reject</p>
+                    <p className="text-[10px] font-bold text-amber-400 mt-2 uppercase flex items-center gap-1">
+                      <CheckCircle2 size={12}/> Result: Fail to Reject
+                    </p>
                   )}
                 </div>
 
+                {/* Alternative Hypothesis Box */}
                 <div className={`p-4 rounded-2xl border transition-all duration-500 ${
                   results.pValue < alpha 
                     ? 'bg-emerald-500/10 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
@@ -561,15 +623,53 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Alternative Hypothesis</span>
                   </div>
                   <p className="text-sm font-medium text-slate-200 leading-relaxed">
-                    {results.modelType === 'Linear' 
-                      ? "There is a statistically significant linear relationship between the variables."
-                      : "The quadratic model explains a significant portion of the variance."}
+                    {results.modelType === 'Linear'
+                      ? `There is a statistically significant linear relationship between ${independentVar} and ${dependentVar}.`
+                      : `The quadratic model explains a significant portion of the variance in ${dependentVar} based on ${independentVar}.`}
                   </p>
                   {results.pValue < alpha && (
-                    <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase flex items-center gap-1"><CheckCircle2 size={12}/> Result: Significant Change</p>
+                    <p className="text-[10px] font-bold text-emerald-400 mt-2 uppercase flex items-center gap-1">
+                      <CheckCircle2 size={12}/> Result: Significant Change
+                    </p>
                   )}
                 </div>
               </div>
+
+              {/* Analysis Statement Section */}
+              <div className={`mt-6 p-5 rounded-2xl border transition-all duration-500 shadow-inner ${
+                results.pValue < alpha 
+                  ? 'bg-emerald-500/10 border-emerald-500/50' 
+                  : 'bg-amber-500/10 border-amber-500/50'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <Calculator size={18} className={results.pValue < alpha ? 'text-emerald-400' : 'text-amber-400'} />
+                  <div className="space-y-1">
+                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${results.pValue < alpha ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      Final Analysis
+                    </h4>
+                    <p className="text-sm text-slate-200 leading-relaxed">
+                      {results.modelType === 'Linear' ? (
+                        <>
+                          A <span className="font-mono font-bold text-white">1-unit</span> increase in <span className="text-white">{independentVar}</span> was associated with an average change of <span className="font-mono font-bold text-white">
+                            {results.slope > 0 ? '+' : ''}{results.slope.toFixed(3)} units
+                          </span> in <span className="text-white">{dependentVar}</span>, which is <span className={`font-bold ${results.pValue < alpha ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {results.pValue < alpha ? 'statistically significant' : 'not statistically significant'}
+                          </span> at a <span className="text-white">{((1 - alpha) * 100).toFixed(0)}%</span> confidence level 
+                          (p = <span className="font-mono">{results.pValue < 0.0001 ? '< 0.0001' : results.pValue.toFixed(4)}</span>, α = <span className="font-mono">{alpha}</span>).
+                        </>
+                      ) : (
+                        <>
+                          The data is best modeled by a <span className="text-white font-bold">quadratic curve</span>, indicating that the rate of change in <span className="text-white">{dependentVar}</span> relative to <span className="text-white">{independentVar}</span> is dynamic and non-constant. This relationship is <span className={`font-bold ${results.pValue < alpha ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {results.pValue < alpha ? 'statistically significant' : 'not statistically significant'}
+                          </span> at a <span className="text-white">{((1 - alpha) * 100).toFixed(0)}%</span> confidence level 
+                          (p = <span className="font-mono">{results.pValue < 0.0001 ? '< 0.0001' : results.pValue.toFixed(4)}</span>, α = <span className="font-mono">{alpha}</span>).
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
