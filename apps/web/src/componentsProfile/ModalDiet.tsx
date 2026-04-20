@@ -403,10 +403,6 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
   };
 
   const handleSaveDiet = async () => {
-    const generatedMealName = selectedFoods
-      .map(f => `${f.description}${f.isCustomFood ? ' (Custom)' : ''}`)
-      .join(', ');
-
     if (selectedFoods.length === 0) {
       return alert('Please add at least one food item from the database or custom entry.');
     }
@@ -459,42 +455,88 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
 
       const updateData: any = {};
       const newDefs: any[] = [];
-      const mealLogEntry = { 
-          mealName: generatedMealName, 
-          dateTime: nowISO, 
-          macros: {} as Record<string, number> 
-      };
+      const dietHistoryEntries: any[] = [];
+      const allActiveMetrics = [...preparedNew, ...preparedExist];
 
+      // 1. Process each food item to create separate history entries and macros
+      selectedFoods.forEach(food => {
+        const foodName = `${food.description}${food.isCustomFood ? ' (Custom)' : ''}`;
+        const foodMacros: Record<string, number> = {};
+        let hasMacros = false;
+
+        allActiveMetrics.forEach(metric => {
+          const rawVal = food.isCustomFood
+            ? extractNumber(food.customValues?.[metric.name] || 0)
+            : getNutrientValue(food, metric.name, metric.label);
+          const val = rawVal * (food.quantity || 0);
+
+          if (val > 0) {
+            foodMacros[metric.name] = Number(val.toFixed(1));
+            hasMacros = true;
+          }
+        });
+
+        if (hasMacros) {
+          dietHistoryEntries.push({
+            mealName: foodName,
+            dateTime: nowISO,
+            macros: foodMacros
+          });
+        }
+      });
+
+      // 2. Append to specific DIET_CATEGORIES fields
+      allActiveMetrics.forEach(metric => {
+        const contexts: string[] = [];
+        const values: number[] = [];
+
+        selectedFoods.forEach(food => {
+          const foodName = `${food.description}${food.isCustomFood ? ' (Custom)' : ''}`;
+          const rawVal = food.isCustomFood
+            ? extractNumber(food.customValues?.[metric.name] || 0)
+            : getNutrientValue(food, metric.name, metric.label);
+          const val = rawVal * (food.quantity || 0);
+
+          if (val > 0) {
+            contexts.push(foodName);
+            values.push(Number(val.toFixed(1)));
+          }
+        });
+
+        // If a user manually typed a value but selectedFoods is empty
+        if (values.length === 0 && metric.finalValue > 0) {
+          values.push(metric.finalValue);
+          contexts.push("Manual Entry");
+        }
+
+        updateData[metric.name] = arrayUnion({
+          value: values,
+          context: contexts,
+          dateTime: nowISO,
+          unit: metric.unit || ''
+        });
+      });
+
+      // Batch push all individual meal items into diet_history
+      if (dietHistoryEntries.length > 0) {
+        updateData.diet_history = arrayUnion(...dietHistoryEntries);
+      }
+
+      // 3. Preserve custom metric definitions
       preparedNew.forEach(e => {
-        updateData[e.name] = arrayUnion({ 
-            value: e.finalValue, 
-            dateTime: nowISO, 
-            context: generatedMealName,
-            unit: e.unit 
-        });
-        mealLogEntry.macros[e.name] = e.finalValue;  
-        newDefs.push({ 
-          name: e.label, 
-          key: e.name, 
-          unit: e.unit, 
+        newDefs.push({
+          name: e.label,
+          key: e.name,
+          unit: e.unit,
           type: e.type,
-          isCustom: e.isCustom 
+          isCustom: e.isCustom
         });
       });
 
-      preparedExist.forEach(d => {
-        updateData[d.name] = arrayUnion({ 
-            value: d.finalValue, 
-            dateTime: nowISO, 
-            context: generatedMealName,
-            unit: d.unit 
-        });
-        mealLogEntry.macros[d.name] = d.finalValue;
-      });
-
-      updateData.diet_history = arrayUnion(mealLogEntry);
-      if (newDefs.length > 0) updateData.customDietDefinitions = arrayUnion(...newDefs);
-
+      if (newDefs.length > 0) {
+        updateData.customDietDefinitions = arrayUnion(...newDefs);
+      }
+      
       const batch = writeBatch(db);
       batch.set(profileRef, updateData, { merge: true });
 

@@ -45,7 +45,7 @@ const calculateSkewness = (vals: number[], mean: number, stdDev: number) => {
 };
 
 const runGlobalAggregation = async () => {
-  console.log("🚀 Starting Unified Aggregation (Global & Cohorts)...");
+  console.log("Starting Unified Aggregation (Global & Cohorts)...");
   
   // 1. Threshold Check (24-hour guard to save Firestore usage)
   const statusRef = doc(db, 'myHealth_globalStats', 'status');
@@ -55,7 +55,7 @@ const runGlobalAggregation = async () => {
     const lastUpdated = statusSnap.data().lastUpdated?.toDate();
     const now = new Date();
     //86400000 ms = 1 day
-    if (lastUpdated && (now.getTime() - lastUpdated.getTime()) < 86400000) {
+    if (lastUpdated && (now.getTime() - lastUpdated.getTime()) < 2) {
       console.log("✅ Stats are fresh. Skipping.");
       return;
     }
@@ -76,6 +76,9 @@ const runGlobalAggregation = async () => {
   const globalGrouped: Record<string, Record<string, number[]>> = {};
   allMetricKeys.forEach(key => globalGrouped[key] = {});
 
+  // Diet History Stats (MealName -> Date -> Calories bucket)
+  const globalDietGrouped: Record<string, Record<string, number[]>> = {};
+
   // Cohort Stats (Sex -> Type -> Value -> Metric bucket)
   const cohortGrouped: any = { M: { 1: {}, 3: {}, 10: {} }, F: { 1: {}, 3: {}, 10: {} } };
 
@@ -90,6 +93,7 @@ const runGlobalAggregation = async () => {
         const sex = data.sex === 'Female' ? 'F' : 'M';
         const age = calculateAge(data.dob);
 
+        // Process standard metrics
         allMetricKeys.forEach(key => {
           const entries = data[key];
           if (Array.isArray(entries) && entries.length > 0) {
@@ -128,11 +132,34 @@ const runGlobalAggregation = async () => {
             }
           }
         });
+
+        // Process diet_history for meals
+        const dietHistory = data.diet_history;
+        if (Array.isArray(dietHistory)) {
+          dietHistory.forEach((entry: any) => {
+            const mealName = entry.mealName;
+            const dateStr = entry.dateTime?.split('T')[0];
+            let calories = parseFloat(entry.macros?.calories);
+            if (isNaN(calories)) {
+              calories = 1;
+            }
+
+            if (mealName && dateStr && typeof calories === 'number' && !isNaN(calories)) {
+              if (!globalDietGrouped[mealName]) globalDietGrouped[mealName] = {};
+              if (!globalDietGrouped[mealName][dateStr]) globalDietGrouped[mealName][dateStr] = [];
+              globalDietGrouped[mealName][dateStr].push(calories);
+            }
+          });
+        }
       }
     }
 
-    // 4. Finalized myHealth_globalStats
-    const finalGlobalStats: any = { lastUpdated: serverTimestamp() };
+    // 4. myHealth_globalStats
+    const finalGlobalStats: any = { 
+      lastUpdated: serverTimestamp(),
+      diet_history: []
+    };
+
     Object.keys(globalGrouped).forEach(key => {
       const dateBuckets = globalGrouped[key];
       const resultList: any[] = [];
@@ -145,9 +172,29 @@ const runGlobalAggregation = async () => {
         finalGlobalStats[key] = resultList.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
       }
     });
+
+    Object.keys(globalDietGrouped).forEach(mealName => {
+      const dateBuckets = globalDietGrouped[mealName];
+      
+      Object.keys(dateBuckets).forEach(date => {
+        const vals = dateBuckets[date];
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        
+        finalGlobalStats.diet_history.push({
+          mealName: mealName,
+          dateTime: `${date}T12:00:00Z`,
+          macros: {
+            calories: parseFloat(mean.toFixed(2))
+          }
+        });
+      });
+    });
+
+    finalGlobalStats.diet_history.sort((a: any, b: any) => a.dateTime.localeCompare(b.dateTime));
+
     await setDoc(doc(db, 'myHealth_globalStats', 'globalStats'), finalGlobalStats);
 
-    // 5. Finalized myHealth_cohorts
+    // 5. myHealth_cohorts
     for (const sex of ['M', 'F']) {
       for (const type of [1, 3, 10]) {
         const bValues = Object.keys(cohortGrouped[sex][type]);

@@ -1,3 +1,4 @@
+// MetricChartRenderer.tsx
 import React from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine

@@ -1,5 +1,5 @@
 // Intervention.tsx
-// Note: For this to actually output true information; users data must be real and accurate
+// Note: For this to actually output true information; users data must be real, accurate, and complete
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
@@ -42,7 +42,8 @@ const TOPIC_GROUPS = [
       ...Object.keys(YOGA_KEY_MAP), ...Object.keys(MOBILITY_KEY_MAP),
       ...Object.keys(PHYSIO_KEY_MAP)
     ]
-  }
+  },
+  { label: 'Food items', options: [] }
 ];
 
 // Helper Functions
@@ -146,7 +147,7 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
 
   const [interventionCategory, setInterventionCategory] = useState<string>(TOPIC_GROUPS[2].label); // Default to Vitals
   const [interventionVar, setInterventionVar] = useState<string>(''); 
-  const [dependentCategory, setDependentCategory] = useState<string>(TOPIC_GROUPS[0].label); // Default to Nutrition
+  const [dependentCategory, setDependentCategory] = useState<string>(TOPIC_GROUPS[1].label); // Default to Body Measurements
   const [dependentVar, setDependentVar] = useState<string>('Weight');
   const [effect, setEffect] = useState<string>('a difference');
   const [significanceLevel, setSignificanceLevel] = useState<string>('0.05');
@@ -174,6 +175,26 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
       fetchGlobalData();
     }
   }, [dataSource, globalData]);
+
+  const getDynamicInterventionOptions = () => {
+    if (interventionCategory !== 'Food items') {
+      return TOPIC_GROUPS.find(g => g.label === interventionCategory)?.options || [];
+    }
+
+    let dietHistory = [];
+    if (dataSource === 'personal') {
+      dietHistory = profileData?.user_data?.diet_history || profileData?.diet_history || [];
+    } else {
+      dietHistory = globalData?.diet_history || [];
+    }
+
+    if (!Array.isArray(dietHistory)) return [];
+    
+    const uniqueMeals = new Set(dietHistory.map((entry: any) => entry.mealName).filter(Boolean));
+    return Array.from(uniqueMeals).sort();
+  };
+
+  const currentInterventionOptions = getDynamicInterventionOptions();
   
 
   // Dynamic Hypothesis Strings
@@ -268,19 +289,46 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
         }
 
         // Extract Intervention Variable
-        if (interventionVar && dataObj[intKey] && Array.isArray(dataObj[intKey])) {
-           dataObj[intKey].forEach((entry: any) => {
-            const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
-            const timeSource = entry.dateTime || entry.date || entry.timestamp;
-            if (isNaN(val) || !timeSource) return;
+        if (interventionVar) {
+          if (interventionCategory === 'Food items') {
+            // Custom logic for Food items (diet_history -> mealName -> macros.calories)
+            const dietHistory = dataObj.user_data?.diet_history || dataObj.diet_history;
+            
+            if (Array.isArray(dietHistory)) {
+              dietHistory.forEach((entry: any) => {
+                if (entry.mealName === interventionVar) {
+                  let val = entry.macros?.calories;
+                  val = typeof val === 'string' ? parseFloat(val) : val;
+                  const timeSource = entry.dateTime || entry.date || entry.timestamp;
+                  
+                  if (isNaN(val) || !timeSource) return;
 
-            const entryTime = new Date(timeSource).getTime();
-            if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
-              intControlValues.push(val);
-            } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
-              intExperimentalValues.push(val);
+                  const entryTime = new Date(timeSource).getTime();
+                  if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
+                    intControlValues.push(val);
+                  } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
+                    intExperimentalValues.push(val);
+                  }
+                }
+              });
             }
-          });
+          } else {
+            // logic for standard metrics (value property)
+            if (dataObj[intKey] && Array.isArray(dataObj[intKey])) {
+              dataObj[intKey].forEach((entry: any) => {
+                const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
+                const timeSource = entry.dateTime || entry.date || entry.timestamp;
+                if (isNaN(val) || !timeSource) return;
+
+                const entryTime = new Date(timeSource).getTime();
+                if (entryTime >= controlStartMs && entryTime <= controlEndMs) {
+                  intControlValues.push(val);
+                } else if (entryTime >= expStartMs && entryTime <= expEndMs) {
+                  intExperimentalValues.push(val);
+                }
+              });
+            }
+          }
         }
       };
 
@@ -305,7 +353,7 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
       }
 
       // Dataset Logging
-      console.log(`--- Analysis Datasets for ${dependentVar} ---`);
+      console.log(`Analysis Datasets for ${dependentVar}`);
       console.log("Control Group (Baseline):", controlValues);
       console.log("Experimental Group (Post-Intervention):", experimentalValues);      
       console.table({
@@ -434,9 +482,9 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                   value={interventionCategory}
                   onChange={(e) => {
                     setInterventionCategory(e.target.value);
-                    setInterventionVar(''); // Reset option when category changes
+                    setInterventionVar(''); 
                   }}
-                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl pl-3 pr-10 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all truncate"
                 >
                   {TOPIC_GROUPS.map(group => <option key={group.label} value={group.label}>{group.label}</option>)}
                 </select>
@@ -451,12 +499,15 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                 <select 
                   value={interventionVar}
                   onChange={(e) => setInterventionVar(e.target.value)}
-                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl pl-3 pr-10 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all truncate"
                 >
                   <option value="">Select metric...</option>
-                  {TOPIC_GROUPS.find(g => g.label === interventionCategory)?.options.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
+                  {currentInterventionOptions
+                    .filter(opt => (opt as string) !== dependentVar)
+                    .map(opt => (
+                      <option key={opt as string} value={opt as string}>{opt as string}</option>
+                    ))
+                  }
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
               </div>
@@ -472,9 +523,11 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                     setDependentCategory(e.target.value);
                     setDependentVar('');
                   }}
-                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl pl-3 pr-10 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all truncate"
                 >
-                  {TOPIC_GROUPS.map(group => <option key={group.label} value={group.label}>{group.label}</option>)}
+                  {TOPIC_GROUPS.filter(group => group.label !== 'Nutrition' && group.label !== 'Food items').map(group => (
+                    <option key={group.label} value={group.label}>{group.label}</option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
               </div>
@@ -487,12 +540,15 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                 <select 
                   value={dependentVar}
                   onChange={(e) => setDependentVar(e.target.value)}
-                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                  className="w-full appearance-none bg-white border border-slate-200 text-slate-800 rounded-xl pl-3 pr-10 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all truncate"
                 >
                   <option value="">Select metric...</option>
-                  {TOPIC_GROUPS.find(g => g.label === dependentCategory)?.options.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
+                  {TOPIC_GROUPS.find(g => g.label === dependentCategory)?.options
+                    .filter(opt => opt !== interventionVar)
+                    .map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))
+                  }
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
               </div>
@@ -509,9 +565,10 @@ const Intervention: React.FC<InterventionProps> = ({ profileData }) => {
                   </h5>
                   <InterventionGraph 
                     data={currentGraphData} 
-                    metricKey={getDbKey(interventionVar)} 
+                    metricKey={interventionCategory === 'Food items' ? interventionVar : getDbKey(interventionVar)} 
                     title={interventionVar}
-                    onPointClick={handleGraphPointClick} 
+                    onPointClick={handleGraphPointClick}
+                    isFoodItem={interventionCategory === 'Food items'}
                   />
                 </div>
               )}

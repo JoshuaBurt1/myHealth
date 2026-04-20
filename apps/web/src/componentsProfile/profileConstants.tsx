@@ -5,7 +5,7 @@ import {
   ChevronUp, Shield, Accessibility, Anchor, Fingerprint, Target, ArrowLeftRight, Zap, Move,
   Sun, Sword, Moon, TreePine, Bird, Triangle, Bed, Clock, MessageSquare, BatteryLow,
   Globe, RefreshCw, RotateCcw, ArrowDown, MoveDown, Split, Bug, Repeat,
-  Pizza, Drumstick, Salad, Waves, GlassWater, Stars, Eye
+  Pizza, Drumstick, Salad, Waves, GlassWater, Stars, Eye, Volume2, UserRound
 } from 'lucide-react';
 
 export interface MetricThresholds {
@@ -41,7 +41,10 @@ export const BLOODTEST_KEY_MAP: Record<string, string> = {
 
 export const SYMPTOM_KEY_MAP: Record<string, string> = {
   'Nausea': 'nausea',
+  'Headache': 'headache',
+  'Sore Throat': 'soreThroat',
   'Pain': 'pain',
+  'Energy level': 'energyLevel',
   'Last bowel movement': 'lastBm',
   'Cough': 'cough',
   'Fatigue': 'fatigue',
@@ -260,14 +263,41 @@ export const SINGLE_GRAPHS = [
     domain: [0, 10] as [number, number], 
     thresholds: { warningHigh: 4, criticalHigh: 7 } as MetricThresholds 
   },
+{ 
+    key: 'headache', 
+    title: 'HEADACHE', 
+    unit: '/10', 
+    icon: <UserRound className="text-amber-500" />,
+    color: '#f59e0b', 
+    domain: [0, 10] as [number, number], 
+    thresholds: { warningHigh: 5, criticalHigh: 8 } as MetricThresholds 
+  },
+  { 
+    key: 'soreThroat', 
+    title: 'SORE THROAT', 
+    unit: '/10', 
+    icon: <Volume2 className="text-orange-500" />,
+    color: '#f97316', 
+    domain: [0, 10] as [number, number], 
+    thresholds: { warningHigh: 5, criticalHigh: 8 } as MetricThresholds 
+  },
   { 
     key: 'pain', 
     title: 'PAIN LEVEL', 
     unit: '/10', 
-    icon: <Zap className="text-orange-500" />, 
-    color: '#f97316', 
+    icon: <Zap className="text-red-500" />,
+    color: '#ef4444', 
     domain: [0, 10] as [number, number], 
     thresholds: { warningHigh: 5, criticalHigh: 8 } as MetricThresholds 
+  },
+  { 
+    key: 'energyLevel', 
+    title: 'ENERGY LEVEL', 
+    unit: '/10', 
+    icon: <BatteryLow className="text-orange-400" />, 
+    color: '#fb923c', 
+    domain: [0, 10] as [number, number], 
+    thresholds: { warningLow: 5, criticalLow: 2 } as MetricThresholds 
   },
   { 
     key: 'lastBm', 

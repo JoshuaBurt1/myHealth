@@ -1,7 +1,7 @@
 // Correlation.tsx
-// Note: For this to actually output true information; users data must be real and accurate
+// Note: For this to actually output true information; users data must be real, accurate, and complete
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { 
@@ -48,7 +48,8 @@ const TOPIC_GROUPS = [
   { label: 'Body Measurements', options: ['Weight', 'Height'] },
   { label: 'Vitals & Blood', options: [...Object.keys(VITAL_KEY_MAP), ...Object.keys(BLOODTEST_KEY_MAP)] },
   { label: 'Symptoms', options: Object.keys(SYMPTOM_KEY_MAP) },
-  { label: 'Performance', options: [...Object.keys(STRENGTH_KEY_MAP), ...Object.keys(SPEED_KEY_MAP), ...Object.keys(ENDURANCE_KEY_MAP)] }
+  { label: 'Performance', options: [...Object.keys(STRENGTH_KEY_MAP), ...Object.keys(SPEED_KEY_MAP), ...Object.keys(ENDURANCE_KEY_MAP)] },
+  { label: 'Food items', options: [] }
 ];
 
 const getDbKey = (displayName: string): string => {
@@ -70,6 +71,7 @@ const normalCDF = (x: number): number => {
 
 const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
   const [dataSource, setDataSource] = useState<'personal' | 'global'>('personal');
+  const [globalFoodOptions, setGlobalFoodOptions] = useState<string[]>([]);
 
   const [independentGroup, setIndependentGroup] = useState<string>(TOPIC_GROUPS[0].label); // Default 'Nutrition'
   const [independentVar, setIndependentVar] = useState<string>('Calories');
@@ -88,12 +90,60 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
   const [plotData, setPlotData] = useState<PlotPoint[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const dynamicTopicGroups = useMemo(() => {
+    return TOPIC_GROUPS.map(group => {
+      // 1. Existing food items logic
+      if (group.label === 'Food items') {
+        if (dataSource === 'personal' && profileData?.diet_history) {
+          const meals = profileData.diet_history.map((entry: any) => entry.mealName).filter(Boolean);
+          return { ...group, options: Array.from(new Set(meals)) as string[] };
+        } 
+        if (dataSource === 'global') {
+          return { ...group, options: globalFoodOptions };
+        }
+      }
+      return group;
+    });
+  }, [dataSource, profileData, globalFoodOptions]);
+
   const getSafeTimestamp = (entry: any): number | null => {
     const rawValue = entry.dateTime || entry.date || entry.timestamp;
     if (!rawValue) return null;
     const parsed = new Date(rawValue).getTime();
     return isNaN(parsed) ? null : parsed;
   };
+
+  useEffect(() => {
+    const fetchGlobalOptions = async () => {
+      try {
+        const globalDocRef = doc(db, 'myHealth_globalStats', 'globalStats');
+        const docSnap = await getDoc(globalDocRef);
+        
+        if (docSnap.exists()) {
+          const dietHistory = docSnap.data().diet_history || [];
+          const uniqueMeals = Array.from(new Set(
+            dietHistory.map((entry: any) => entry.mealName).filter(Boolean)
+          )) as string[];
+          setGlobalFoodOptions(uniqueMeals);
+        }
+      } catch (err) {
+        console.error("Error fetching global food items:", err);
+      }
+    };
+
+    fetchGlobalOptions();
+  }, []);
+
+  // Prevent X and Y from being the same if X is changed to match Y
+  useEffect(() => {
+    if (independentVar === dependentVar) {
+      const currentGroupOpts = dynamicTopicGroups.find(g => g.label === dependentGroup)?.options || [];
+      const fallback = currentGroupOpts.find(opt => opt !== independentVar);
+      if (fallback) {
+        setDependentVar(fallback);
+      }
+    }
+  }, [independentVar, dependentVar, dependentGroup, dynamicTopicGroups]);
 
   const calculateRegression = (data: PlotPoint[]): CorrelationResults => {
     const n = data.length;
@@ -208,31 +258,48 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
     setIsRunning(true);
     setErrorMsg(null);
     setResults(null);
+
+    const synchronizedData: PlotPoint[] = [];
     
     try {
-      const xKey = getDbKey(independentVar);
-      const yKey = getDbKey(dependentVar);
-      const synchronizedData: PlotPoint[] = [];
-
       const startTs = startDate ? new Date(startDate).getTime() : -Infinity;
       const endTs = endDate ? new Date(endDate).getTime() + 86400000 : Infinity; //86400000 = 1 day
       const bucketMs = bucketHours * 60 * 60 * 1000;
 
+      // Add this helper function to handle both standard data and dynamic Food Items
+      const getEntriesForVar = (dataObj: Record<string, any>, varName: string, groupName: string) => {
+        if (groupName === 'Food items') {
+          return (dataObj.diet_history || [])
+            .filter((e: any) => e.mealName === varName)
+            .map((e: any) => ({
+              ...e,
+              value: e.macros?.calories || 0
+            }));
+        }
+        return dataObj[getDbKey(varName)] || [];
+      };
+
       const processDataset = (dataObj: Record<string, any>) => {
-        // Accessing fields like 'calories', 'weight', etc., from the document
-        const xEntries = (dataObj[xKey] || []).filter((e: any) => {
+        const rawX = getEntriesForVar(dataObj, independentVar, independentGroup);
+        const rawY = getEntriesForVar(dataObj, dependentVar, dependentGroup);
+
+        // LOG FOR DEBUGGING: 
+         console.log("X count:", rawX.length, "Y count:", rawY.length);
+
+        const xEntries = rawX.filter((e: any) => {
           const ts = getSafeTimestamp(e);
           return ts && ts >= startTs && ts <= endTs;
         });
 
-        const yEntries = (dataObj[yKey] || []).filter((e: any) => {
+        const yEntries = rawY.filter((e: any) => {
           const ts = getSafeTimestamp(e);
           return ts && ts >= startTs && ts <= endTs;
         });
 
         xEntries.forEach((xEntry: any) => {
           const xTs = getSafeTimestamp(xEntry)!;
-          const xVal = parseFloat(xEntry.value);
+          // Check if value exists directly or inside entry
+          const xVal = parseFloat(xEntry.value ?? xEntry); 
           if (isNaN(xVal)) return;
 
           let bestY: number | null = null;
@@ -240,7 +307,7 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
 
           yEntries.forEach((yEntry: any) => {
             const yTs = getSafeTimestamp(yEntry)!;
-            const yVal = parseFloat(yEntry.value);
+            const yVal = parseFloat(yEntry.value ?? yEntry);
             if (isNaN(yVal)) return;
 
             const diff = Math.abs(xTs - yTs);
@@ -284,12 +351,23 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
     }
   };
 
+  const displayIndependentVar = useMemo(() => 
+  independentGroup === 'Food items' ? `${independentVar} (dosage kcal)` : independentVar,
+  [independentGroup, independentVar]
+  );
+
+  const displayDependentVar = useMemo(() => 
+    dependentGroup === 'Food items' ? `${dependentVar} (dosage kcal)` : dependentVar,
+    [dependentGroup, dependentVar]
+  );
+
   const graphTitle = useMemo(() => {
     const dateRange = startDate && endDate 
       ? `(${startDate} to ${endDate})` 
       : (startDate ? `(Since ${startDate})` : (endDate ? `(Until ${endDate})` : "(All Time)"));
-    return `${dependentVar} vs. ${independentVar} ${dateRange}`;
-  }, [dependentVar, independentVar, startDate, endDate]);
+      
+    return `${displayDependentVar} vs. ${displayIndependentVar} ${dateRange}`;
+  }, [displayDependentVar, displayIndependentVar, startDate, endDate]);
 
   return (
     <div className="bg-transparent md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100 overflow-hidden mt-6">
@@ -355,12 +433,12 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
                 onChange={(e) => {
                   const newGroup = e.target.value;
                   setIndependentGroup(newGroup);
-                  const firstOpt = TOPIC_GROUPS.find(g => g.label === newGroup)?.options[0];
+                  const firstOpt = dynamicTopicGroups.find(g => g.label === newGroup)?.options[0];
                   if (firstOpt) setIndependentVar(firstOpt);
                 }} 
                 className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {TOPIC_GROUPS.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
+                {dynamicTopicGroups.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
               </select>
               
               {/* Variable Select */}
@@ -369,7 +447,7 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
                 onChange={(e) => setIndependentVar(e.target.value)} 
                 className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {TOPIC_GROUPS.find(g => g.label === independentGroup)?.options.map(opt => (
+                {dynamicTopicGroups.find(g => g.label === independentGroup)?.options.map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
@@ -380,29 +458,42 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Dependent (Y) Category & Variable</label>
             <div className="flex gap-2">
-              {/* Category Select */}
+              {/* Category Select - Filtered to remove Nutrition and Food Items */}
               <select 
                 value={dependentGroup} 
                 onChange={(e) => {
                   const newGroup = e.target.value;
                   setDependentGroup(newGroup);
-                  const firstOpt = TOPIC_GROUPS.find(g => g.label === newGroup)?.options[0];
-                  if (firstOpt) setDependentVar(firstOpt);
+                  
+                  // FIND THIS LINE AND REPLACE THE LOGIC BELOW IT:
+                  const groupOptions = dynamicTopicGroups.find(g => g.label === newGroup)?.options || [];
+                  
+                  // NEW LOGIC: Filter out the independentVar from being the default selection
+                  const firstAvailable = groupOptions.find(opt => opt !== independentVar) || groupOptions[0];
+                  if (firstAvailable) setDependentVar(firstAvailable);
                 }} 
                 className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {TOPIC_GROUPS.map(g => <option key={g.label} value={g.label}>{g.label}</option>)}
+                {dynamicTopicGroups
+                  .filter(g => g.label !== 'Nutrition' && g.label !== 'Food items')
+                  .map(g => <option key={g.label} value={g.label}>{g.label}</option>)
+                }
               </select>
               
-              {/* Variable Select */}
+              {/* Variable Select - Filtered to remove the current Independent (X) variable */}
               <select 
                 value={dependentVar} 
                 onChange={(e) => setDependentVar(e.target.value)} 
                 className="w-1/2 bg-white border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {TOPIC_GROUPS.find(g => g.label === dependentGroup)?.options.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
+                {dynamicTopicGroups
+                  .find(g => g.label === dependentGroup)?.options
+                  // ADD THIS FILTER LINE:
+                  .filter(opt => opt !== independentVar) 
+                  .map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))
+                }
               </select>
             </div>
           </div>
@@ -551,26 +642,36 @@ const Correlation: React.FC<CorrelationProps> = ({ profileData }) => {
                     <XAxis 
                       type="number" 
                       dataKey="x" 
-                      name={independentVar} 
+                      name={displayIndependentVar}
                       stroke="#94a3b8" 
                       fontSize={11} 
                       tickLine={false} 
                       axisLine={false} 
                       domain={['dataMin', 'auto']}
                     >
-                      <Label value={independentVar} offset={-25} position="insideBottom" style={{ fill: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '10px' }} />
+                      <Label 
+                        value={displayIndependentVar}
+                        offset={-25} 
+                        position="insideBottom" 
+                        style={{ fill: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '10px' }} 
+                      />
                     </XAxis>
                     <YAxis 
                       type="number" 
                       dataKey="y" 
-                      name={dependentVar} 
+                      name={displayDependentVar}
                       stroke="#94a3b8" 
                       fontSize={11} 
                       tickLine={false} 
                       axisLine={false} 
                       domain={['dataMin', 'auto']}
                     >
-                      <Label value={dependentVar} angle={-90} position="insideLeft" style={{ fill: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '10px', textAnchor: 'middle' }} />
+                      <Label 
+                        value={displayDependentVar}
+                        angle={-90} 
+                        position="insideLeft" 
+                        style={{ fill: '#64748b', fontWeight: 600, textTransform: 'uppercase', fontSize: '10px', textAnchor: 'middle' }} 
+                      />
                     </YAxis>
                     <Tooltip 
                       cursor={{ strokeDasharray: '3 3' }} 

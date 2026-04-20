@@ -467,7 +467,7 @@ export const GroupMngScreen: React.FC = () => {
                         </p>
                       </div>
                       <p className="text-xs text-slate-500 italic ml-6">
-                        "Did symptomatic nausea related a food item, change depending on time period, for everyone?"
+                        "Did symptomatic nausea related to a food item, change depending on time period, for everyone?"
                       </p>
                     </div>
                   </div>

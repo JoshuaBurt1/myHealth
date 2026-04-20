@@ -9,28 +9,44 @@ interface InterventionGraphProps {
   metricKey: string;
   title: string;
   onPointClick?: (point: any) => void; 
+  isFoodItem?: boolean;
 }
 
 export const InterventionGraph: React.FC<InterventionGraphProps> = ({ 
   data, 
   metricKey, 
   title,
-  onPointClick 
+  onPointClick,
+  isFoodItem
 }) => {
 
   const plotData = useMemo(() => {
-    if (!data || !data[metricKey] || !Array.isArray(data[metricKey])) return [];
+    if (!data) return [];
     
-    return data[metricKey]
+    let sourceArray: any[] = [];
+    let getValue = (entry: any) => entry.value;
+
+    // Logic switch for Food Items vs standard metrics
+    if (isFoodItem) {
+      const history = data.user_data?.diet_history || data.diet_history || [];
+      sourceArray = history.filter((entry: any) => entry.mealName === metricKey);
+      getValue = (entry: any) => entry.macros?.calories;
+    } else {
+      if (!data[metricKey] || !Array.isArray(data[metricKey])) return [];
+      sourceArray = data[metricKey];
+    }
+    
+    return sourceArray
       .map((entry: any) => {
-        const val = typeof entry.value === 'string' ? parseFloat(entry.value) : entry.value;
+        const rawVal = getValue(entry);
+        const val = typeof rawVal === 'string' ? parseFloat(rawVal) : rawVal;
         const timeSource = entry.dateTime || entry.date || entry.timestamp;
         const ts = new Date(timeSource).getTime();
         return { value: val, timestamp: ts };
       })
       .filter((d: any) => !isNaN(d.value) && !isNaN(d.timestamp))
       .sort((a: any, b: any) => a.timestamp - b.timestamp);
-  }, [data, metricKey]);
+  }, [data, metricKey, isFoodItem]);
 
   if (plotData.length === 0) {
     return <div className="text-xs text-slate-400 italic p-4 text-center">No data available for this metric.</div>;
