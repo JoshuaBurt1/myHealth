@@ -425,20 +425,20 @@ export const SINGLE_GRAPHS = [
   { key: 'dbBicepCurl', title: 'DUMBBELL BICEP CURL', unit: 'kg', icon: <Dumbbell className="text-blue-400" />, color: '#60a5fa' },
   
   // Speed
-  { key: 'speed100m', title: '100M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-500" />, color: '#f97316' },
-  { key: 'speed400m', title: '400M SPRINT', unit: 'Seconds', icon: <Timer className="text-orange-600" />, color: '#ea580c' },
-  { key: 'speed1Mile', title: '1 MILE RUN', unit: 'Minutes', icon: <Timer className="text-orange-700" />, color: '#c2410c' },
-  { key: 'speed10k', title: '10K RUN', unit: 'Minutes', icon: <Activity className="text-orange-800" />, color: '#9a3412' },
-  { key: 'halfMarathon', title: 'HALF MARATHON', unit: 'Hours', icon: <Activity className="text-red-800" />, color: '#991b1b' },
-  { key: 'marathon', title: 'MARATHON', unit: 'Hours', icon: <Activity className="text-red-900" />, color: '#7f1d1d' },
+  { key: 'speed100m', title: '100M SPRINT', unit: 'sec', icon: <Timer className="text-orange-500" />, color: '#f97316' },
+  { key: 'speed400m', title: '400M SPRINT', unit: 'sec', icon: <Timer className="text-orange-600" />, color: '#ea580c' },
+  { key: 'speed1Mile', title: '1 MILE RUN', unit: 'sec', icon: <Timer className="text-orange-700" />, color: '#c2410c' },
+  { key: 'speed10k', title: '10K RUN', unit: 'sec', icon: <Activity className="text-orange-800" />, color: '#9a3412' },
+  { key: 'halfMarathon', title: 'HALF MARATHON', unit: 'sec', icon: <Activity className="text-red-800" />, color: '#991b1b' },
+  { key: 'marathon', title: 'MARATHON', unit: 'sec', icon: <Activity className="text-red-900" />, color: '#7f1d1d' },
   
   // Cycling
-  { key: 'bike400m', title: 'BIKE 400M', unit: 'Seconds', icon: <Zap className="text-lime-500" />, color: '#84cc16' },
-  { key: 'bike1Mile', title: 'BIKE 1 MILE', unit: 'Seconds', icon: <Zap className="text-lime-600" />, color: '#65a30d' },
+  { key: 'bike400m', title: 'BIKE 400M', unit: 'sec', icon: <Zap className="text-lime-500" />, color: '#84cc16' },
+  { key: 'bike1Mile', title: 'BIKE 1 MILE', unit: 'sec', icon: <Zap className="text-lime-600" />, color: '#65a30d' },
   
   // Rowing
-  { key: 'row400m', title: 'ROW 400M', unit: 'Seconds', icon: <Anchor className="text-blue-500" />, color: '#3b82f6' },
-  { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'Seconds', icon: <Anchor className="text-blue-600" />, color: '#2563eb' },
+  { key: 'row400m', title: 'ROW 400M', unit: 'sec', icon: <Anchor className="text-blue-500" />, color: '#3b82f6' },
+  { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'sec', icon: <Anchor className="text-blue-600" />, color: '#2563eb' },
 
   // Plyometrics
   { key: 'boxJump', title: 'BOX JUMP', unit: 'cm', icon: <ChevronUp className="text-amber-400" />, color: '#fbbf24' },
@@ -452,26 +452,26 @@ export const SINGLE_GRAPHS = [
   { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
   { key: 'pistolSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
-  { key: 'plank', title: 'PLANK', unit: 'Seconds', icon: <Timer className="text-slate-600" />, color: '#475569' },
-  { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'Seconds', icon: <Target className="text-rose-700" />, color: '#be123c' },
+  { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
+  { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
 
   // Yoga
-  { key: 'downwardDog', title: 'DOWNWARD DOG', unit: 'Seconds', icon: <Sun className="text-violet-500" />, color: '#8b5cf6' },
-  { key: 'warrior1', title: 'WARRIOR I', unit: 'Seconds', icon: <Sword className="text-violet-600" />, color: '#7c3aed' },
-  { key: 'warrior2', title: 'WARRIOR II', unit: 'Seconds', icon: <Sword className="text-violet-700" />, color: '#6d28d2' },
-  { key: 'cobraPose', title: 'COBRA POSE', unit: 'Seconds', icon: <Zap className="text-purple-500" />, color: '#a855f7' },
-  { key: 'childsPose', title: 'CHILDS POSE', unit: 'Seconds', icon: <Moon className="text-purple-400" />, color: '#c084fc' },
-  { key: 'treePose', title: 'TREE POSE', unit: 'Seconds', icon: <TreePine className="text-fuchsia-500" />, color: '#d946ef' },
-  { key: 'pigeonPose', title: 'PIGEON POSE', unit: 'Seconds', icon: <Bird className="text-fuchsia-600" />, color: '#c026d3' },
-  { key: 'trianglePose', title: 'TRIANGLE POSE', unit: 'Seconds', icon: <Triangle className="text-pink-500" />, color: '#ec4899' },
-  { key: 'crowPose', title: 'CROW POSE', unit: 'Seconds', icon: <Bird className="text-pink-600" />, color: '#db2777' },
-  { key: 'savasana', title: 'SAVASANA', unit: 'Minutes', icon: <Bed className="text-slate-400" />, color: '#94a3b8' },
+  { key: 'downwardDog', title: 'DOWNWARD DOG', unit: 'sec', icon: <Sun className="text-violet-500" />, color: '#8b5cf6' },
+  { key: 'warrior1', title: 'WARRIOR I', unit: 'sec', icon: <Sword className="text-violet-600" />, color: '#7c3aed' },
+  { key: 'warrior2', title: 'WARRIOR II', unit: 'sec', icon: <Sword className="text-violet-700" />, color: '#6d28d2' },
+  { key: 'cobraPose', title: 'COBRA POSE', unit: 'sec', icon: <Zap className="text-purple-500" />, color: '#a855f7' },
+  { key: 'childsPose', title: 'CHILDS POSE', unit: 'sec', icon: <Moon className="text-purple-400" />, color: '#c084fc' },
+  { key: 'treePose', title: 'TREE POSE', unit: 'sec', icon: <TreePine className="text-fuchsia-500" />, color: '#d946ef' },
+  { key: 'pigeonPose', title: 'PIGEON POSE', unit: 'sec', icon: <Bird className="text-fuchsia-600" />, color: '#c026d3' },
+  { key: 'trianglePose', title: 'TRIANGLE POSE', unit: 'sec', icon: <Triangle className="text-pink-500" />, color: '#ec4899' },
+  { key: 'crowPose', title: 'CROW POSE', unit: 'sec', icon: <Bird className="text-pink-600" />, color: '#db2777' },
+  { key: 'savasana', title: 'SAVASANA', unit: 'sec', icon: <Bed className="text-slate-400" />, color: '#94a3b8' },
 
   // Mobility
   { key: 'worldsGreatestStretch', title: "WORLD'S GREATEST STRETCH", unit: 'Reps', icon: <Globe className="text-emerald-600" />, color: '#059669' },
   { key: 'hip9090Switch', title: '90/90 HIP SWITCH', unit: 'Reps', icon: <RefreshCw className="text-emerald-700" />, color: '#047857' },
   { key: 'tSpineRotation', title: 'THORACIC ROTATIONS', unit: 'Reps', icon: <RotateCcw className="text-teal-600" />, color: '#0d9488' },
-  { key: 'deepSquatHold', title: 'DEEP SQUAT HOLD', unit: 'Minutes', icon: <ArrowDown className="text-teal-700" />, color: '#0f766e' },
+  { key: 'deepSquatHold', title: 'DEEP SQUAT HOLD', unit: 'sec', icon: <ArrowDown className="text-teal-700" />, color: '#0f766e' },
   { key: 'ankleDorsiflexion', title: 'ANKLE DORSIFLEXION', unit: 'cm', icon: <MoveDown className="text-lime-600" />, color: '#65a30d' },
   { key: 'cossackSquat', title: 'COSSACK SQUAT', unit: 'Reps', icon: <Split className="text-lime-700" />, color: '#4d7c0f' },
   { key: 'inchworms', title: 'INCHWORMS', unit: 'Reps', icon: <Bug className="text-green-600" />, color: '#16a34a' },
@@ -480,7 +480,7 @@ export const SINGLE_GRAPHS = [
   // Physiotherapy
   { key: 'shoulderExtRot', title: 'SHOULDER EXT. ROTATION', unit: 'Reps', icon: <Activity className="text-cyan-600" />, color: '#0891b2' },
   { key: 'tibialisRaise', title: 'TIBIALIS RAISE', unit: 'Reps', icon: <ChevronUp className="text-cyan-600" />, color: '#0891b2' },
-  { key: 'copenhagenPlank', title: 'COPENHAGEN PLANK', unit: 'Seconds', icon: <Shield className="text-cyan-700" />, color: '#0e7490' },
+  { key: 'copenhagenPlank', title: 'COPENHAGEN PLANK', unit: 'sec', icon: <Shield className="text-cyan-700" />, color: '#0e7490' },
   { key: 'assistedPistolSquat', title: 'ASSISTED PISTOL SQUAT', unit: 'Reps', icon: <Accessibility className="text-cyan-700" />, color: '#0e7490' },
   { key: 'singleLegRdl', title: 'SINGLE-LEG RDL', unit: 'Reps', icon: <Anchor className="text-cyan-800" />, color: '#155e75' },
   { key: 'towelScrunches', title: 'TOWEL SCRUNCHES', unit: 'Reps', icon: <Fingerprint className="text-blue-600" />, color: '#2563eb' },
