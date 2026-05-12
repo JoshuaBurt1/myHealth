@@ -475,227 +475,230 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2 uppercase tracking-wider">
               <Dumbbell size={16}/> Active Exercise Fields
             </h3>
-            
-            {(trackedExercises.length === 0 && entries.length === 0) ? (
-              <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
-                <AlertCircle size={32} className="mx-auto mb-2 opacity-50"/>
-                <p className="font-medium">No exercises tracked yet. Add one above to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {CATEGORIES.map(category => {
-                  const categoryType = category.toLowerCase();
-                  
-                  const existingInCat = trackedExercises.filter(ex => ex.type === categoryType || (category === 'Custom' && ex.isCustom));
-                  const newInCat = entries.filter(e => (e.type === categoryType || (category === 'Custom' && e.isCustom)) && !trackedExercises.some(ex => ex.name === e.name));
+            {(() => {
+              // Only process the category currently selected by the tab
+              const category = selectedCategory;
+              const categoryType = category.toLowerCase();
+              
+              const existingInCat = trackedExercises.filter(ex => 
+                ex.type === categoryType || (category === 'Custom' && ex.isCustom)
+              );
+              const newInCat = entries.filter(e => 
+                (e.type === categoryType || (category === 'Custom' && e.isCustom)) && 
+                !trackedExercises.some(ex => ex.name === e.name)
+              );
 
-                  if (existingInCat.length === 0 && newInCat.length === 0) return null;
+              // If the active tab has no exercises, show the empty state for that specific category
+              if (existingInCat.length === 0 && newInCat.length === 0) {
+                return (
+                  <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
+                    <AlertCircle size={32} className="mx-auto mb-2 opacity-50"/>
+                    <p className="font-medium">No {category} exercises tracked yet. Add one above to get started.</p>
+                  </div>
+                );
+              }
 
-                  // Helper to toggle units for every exercise in this category at once
-                  const toggleCategoryUnits = () => {
-                    if (category === 'Strength') {
-                      const currentUnit = strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg';
-                      const nextUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
-                      const updatedUnits = { ...strengthUnits };
-                      [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
-                      setStrengthUnits(updatedUnits);
-                    } else if (category === 'Speed') {
-                      const currentUnit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
-                      const nextUnit = currentUnit === 'sec' ? 'mm:ss' : 'sec';
-                      const updatedUnits = { ...speedUnits };
-                      [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
-                      setSpeedUnits(updatedUnits);
-                    }
-                  };
+              // Helper to toggle units
+              const toggleCategoryUnits = () => {
+                if (category === 'Strength') {
+                  const currentUnit = strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg';
+                  const nextUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
+                  const updatedUnits = { ...strengthUnits };
+                  [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
+                  setStrengthUnits(updatedUnits);
+                } else if (category === 'Speed') {
+                  const currentUnit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
+                  const nextUnit = currentUnit === 'sec' ? 'mm:ss' : 'sec';
+                  const updatedUnits = { ...speedUnits };
+                  [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
+                  setSpeedUnits(updatedUnits);
+                }
+              };
 
-                  // Determine the label for the category-level toggle
-                  const getCategoryUnitLabel = () => {
-                    if (category === 'Strength') return (strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg').toUpperCase();
-                    if (category === 'Speed') {
-                      const unit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
-                      return unit === 'mm:ss' ? 'MM:SS' : 'SEC';
-                    }
-                    return null;
-                  };
+              const getCategoryUnitLabel = () => {
+                if (category === 'Strength') return (strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg').toUpperCase();
+                if (category === 'Speed') {
+                  const unit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
+                  return unit === 'mm:ss' ? 'MM:SS' : 'SEC';
+                }
+                return null;
+              };
 
-                  return (
-                    <div key={category} className="w-full">
-                      {/* Category Header with Integrated Toggle */}
-                      <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
-                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                          {category}
-                        </h4>
-                        {(category === 'Strength' || category === 'Speed') && (
-                          <button
-                            onClick={toggleCategoryUnits}
-                            className="flex items-center gap-2 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group"
-                            type="button"
-                          >
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Set Unit:</span>
-                            <span className="text-[10px] font-black text-indigo-600 group-hover:scale-110 transition-transform">
-                              {getCategoryUnitLabel()}
+              return (
+                <div key={category} className="w-full">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                      {category}
+                    </h4>
+                    {(category === 'Strength' || category === 'Speed') && (
+                      <button
+                        onClick={toggleCategoryUnits}
+                        className="flex items-center gap-2 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group"
+                        type="button"
+                      >
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Set Unit:</span>
+                        <span className="text-[10px] font-black text-indigo-600 group-hover:scale-110 transition-transform">
+                          {getCategoryUnitLabel()}
+                        </span>
+                        <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {/* Existing exercises mapping */}
+                    {existingInCat.map((ex, idx) => {
+                      const isStrength = isStrengthExercise(ex.name);
+                      const isSpeed = isSpeedExercise(ex.name);
+                      const stUnit = strengthUnits[ex.name] || 'kg';
+                      const spUnit = speedUnits[ex.name] || 'sec';
+
+                      return (
+                        <PrivacyWrapper 
+                          key={`exist-${ex.name}-${idx}`} 
+                          fieldKey={ex.name} 
+                          isMe={isMe} 
+                          hiddenOther={hiddenOther} 
+                          toggleVisibilityOther={toggleVisibilityOther} 
+                          onDelete={async () => {
+                            await handleDeleteField(ex.label, ex.name, 'exercise');
+                            try {
+                              const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+                              await updateDoc(profileRef, { [`change_${ex.name}`]: deleteField() });
+                            } catch (err) {
+                              console.error("Failed to delete matching change field", err);
+                            }
+                          }}
+                        >
+                          <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
+                            <span className="text-xs font-bold text-slate-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                              {ex.label}
                             </span>
-                            <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {/* Existing exercises for this category */}
-                        {existingInCat.map((ex, idx) => {
-                          const isStrength = isStrengthExercise(ex.name);
-                          const isSpeed = isSpeedExercise(ex.name);
-                          const stUnit = strengthUnits[ex.name] || 'kg';
-                          const spUnit = speedUnits[ex.name] || 'sec';
-
-                          return (
-                            <PrivacyWrapper 
-                              key={`exist-${ex.name}-${idx}`} 
-                              fieldKey={ex.name} 
-                              isMe={isMe} 
-                              hiddenOther={hiddenOther} 
-                              toggleVisibilityOther={toggleVisibilityOther} 
-                              onDelete={async () => {
-                                await handleDeleteField(ex.label, ex.name, 'exercise');
-                                try {
-                                  const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
-                                  await updateDoc(profileRef, { [`change_${ex.name}`]: deleteField() });
-                                } catch (err) {
-                                  console.error("Failed to delete matching change field", err);
-                                }
-                              }}
-                            >
-                              <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
-                                <span className="text-xs font-bold text-slate-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                                  {ex.label}
-                                </span>
-                                {isStrength ? (
-                                  <div className="flex gap-2 w-full">
-                                    <div className="flex-1">
-                                      <InputField 
-                                        label={`Weight (${stUnit})`} type="number" 
-                                        value={exerciseInputs[`${ex.name}_weight`] || ''} 
-                                        onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_weight`]: v }))}
-                                        disabled={!isMe} icon={<Dumbbell size={14} className="text-indigo-400"/>} 
-                                      />
-                                    </div>
-                                    <div className="flex-1">
-                                      <InputField 
-                                        label="Reps" type="number" 
-                                        value={exerciseInputs[`${ex.name}_reps`] || ''} 
-                                        onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_reps`]: v }))}
-                                        disabled={!isMe} icon={<RefreshCw size={14} className="text-indigo-400"/>} 
-                                      />
-                                    </div>
-                                  </div>
-                                ) : isSpeed ? (
-                                  <div className="w-full">
-                                    <InputField 
-                                      label={`Value (${spUnit})`} 
-                                      type={spUnit === 'mm:ss' ? 'text' : 'number'}
-                                      value={exerciseInputs[ex.name] || ''} 
-                                      onChange={(v: string) => {
-                                        if (!isMe) return;
-                                        if (spUnit === 'mm:ss') {
-                                          if (/^[\d:]*$/.test(v)) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
-                                        } else {
-                                          if (!v.includes('-')) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
-                                        }
-                                      }}
-                                      disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
-                                    />
-                                  </div>
-                                ) : (
+                            {isStrength ? (
+                              <div className="flex gap-2 w-full">
+                                <div className="flex-1">
                                   <InputField 
-                                    label={`Value ${ex.unit ? `(${ex.unit})` : ''}`.trim()} 
-                                    type="number" 
-                                    value={exerciseInputs[ex.name] || ''} 
-                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
-                                    disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
+                                    label={`Weight (${stUnit})`} type="number" 
+                                    value={exerciseInputs[`${ex.name}_weight`] || ''} 
+                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_weight`]: v }))}
+                                    disabled={!isMe} icon={<Dumbbell size={14} className="text-indigo-400"/>} 
                                   />
-                                )}
-                              </div>
-                            </PrivacyWrapper>
-                          );
-                        })}
-
-                        {/* New exercises for this category */}
-                        {newInCat.map((entry) => {
-                          const isStrength = isStrengthExercise(entry.name);
-                          const isSpeed = isSpeedExercise(entry.name);
-                          const stUnit = strengthUnits[entry.name] || 'kg';
-                          const spUnit = speedUnits[entry.name] || 'sec';
-
-                          return (
-                            <PrivacyWrapper 
-                              key={`new-${entry.name}`} 
-                              fieldKey={entry.name} 
-                              isMe={isMe} 
-                              hiddenOther={hiddenOther} 
-                              toggleVisibilityOther={toggleVisibilityOther} 
-                              onDelete={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
-                            >
-                              <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-2 relative shadow-sm flex flex-col justify-center">
-                                <button 
-                                  onClick={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
-                                  className="absolute -top-2 -right-2 text-indigo-400 hover:text-indigo-600 bg-white border border-indigo-100 rounded-full z-20 p-1.5 shadow-sm transition-colors"
-                                >
-                                  <X size={14} strokeWidth={3}/>
-                                </button>
-                                <span className="text-xs font-bold text-indigo-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
-                                  {entry.label} (NEW)
-                                </span>
-                                {isStrength ? (
-                                  <div className="flex gap-2 w-full">
-                                    <div className="flex-1">
-                                      <InputField 
-                                        label={`Weight (${stUnit})`} type="number" value={entry.weight || ''} 
-                                        onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, weight: v } : e))} 
-                                        icon={<Dumbbell size={14} className="text-indigo-500"/>} 
-                                      />
-                                    </div>
-                                    <div className="flex-1">
-                                      <InputField 
-                                        label="Reps" type="number" value={entry.reps || ''} 
-                                        onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, reps: v } : e))} 
-                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
-                                      />
-                                    </div>
-                                  </div>
-                                ) : isSpeed ? (
-                                  <div className="w-full">
-                                    <InputField 
-                                      label={`Value (${spUnit})`} 
-                                      type={spUnit === 'mm:ss' ? 'text' : 'number'} 
-                                      value={entry.value} 
-                                      onChange={(v: string) => {
-                                        if (spUnit === 'mm:ss') {
-                                          if (/^[\d:]*$/.test(v)) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
-                                        } else {
-                                          if (!v.includes('-')) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
-                                        }
-                                      }}
-                                      icon={<PlusCircle size={16} className="text-indigo-500"/>} 
-                                    />
-                                  </div>
-                                ) : (
+                                </div>
+                                <div className="flex-1">
                                   <InputField 
-                                    label={`Value ${entry.unit ? `(${entry.unit})` : ''}`} 
-                                    type="number" value={entry.value} 
-                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
-                                    icon={<PlusCircle size={16} className="text-indigo-500"/>} 
+                                    label="Reps" type="number" 
+                                    value={exerciseInputs[`${ex.name}_reps`] || ''} 
+                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_reps`]: v }))}
+                                    disabled={!isMe} icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                   />
-                                )}
+                                </div>
                               </div>
-                            </PrivacyWrapper>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                            ) : isSpeed ? (
+                              <div className="w-full">
+                                <InputField 
+                                  label={`Value (${spUnit})`} 
+                                  type={spUnit === 'mm:ss' ? 'text' : 'number'}
+                                  value={exerciseInputs[ex.name] || ''} 
+                                  onChange={(v: string) => {
+                                    if (!isMe) return;
+                                    if (spUnit === 'mm:ss') {
+                                      if (/^[\d:]*$/.test(v)) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
+                                    } else {
+                                      if (!v.includes('-')) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
+                                    }
+                                  }}
+                                  disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
+                                />
+                              </div>
+                            ) : (
+                              <InputField 
+                                label={`Value ${ex.unit ? `(${ex.unit})` : ''}`.trim()} 
+                                type="number" 
+                                value={exerciseInputs[ex.name] || ''} 
+                                onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
+                                disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
+                              />
+                            )}
+                          </div>
+                        </PrivacyWrapper>
+                      );
+                    })}
+
+                    {/* New exercises mapping */}
+                    {newInCat.map((entry) => {
+                      const isStrength = isStrengthExercise(entry.name);
+                      const isSpeed = isSpeedExercise(entry.name);
+                      const stUnit = strengthUnits[entry.name] || 'kg';
+                      const spUnit = speedUnits[entry.name] || 'sec';
+
+                      return (
+                        <PrivacyWrapper 
+                          key={`new-${entry.name}`} 
+                          fieldKey={entry.name} 
+                          isMe={isMe} 
+                          hiddenOther={hiddenOther} 
+                          toggleVisibilityOther={toggleVisibilityOther} 
+                          onDelete={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
+                        >
+                          <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-2 relative shadow-sm flex flex-col justify-center">
+                            <button 
+                              onClick={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
+                              className="absolute -top-2 -right-2 text-indigo-400 hover:text-indigo-600 bg-white border border-indigo-100 rounded-full z-20 p-1.5 shadow-sm transition-colors"
+                            >
+                              <X size={14} strokeWidth={3}/>
+                            </button>
+                            <span className="text-xs font-bold text-indigo-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
+                              {entry.label} (NEW)
+                            </span>
+                            {isStrength ? (
+                              <div className="flex gap-2 w-full">
+                                <div className="flex-1">
+                                  <InputField 
+                                    label={`Weight (${stUnit})`} type="number" value={entry.weight || ''} 
+                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, weight: v } : e))} 
+                                    icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <InputField 
+                                    label="Reps" type="number" value={entry.reps || ''} 
+                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, reps: v } : e))} 
+                                    icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                  />
+                                </div>
+                              </div>
+                            ) : isSpeed ? (
+                              <div className="w-full">
+                                <InputField 
+                                  label={`Value (${spUnit})`} 
+                                  type={spUnit === 'mm:ss' ? 'text' : 'number'} 
+                                  value={entry.value} 
+                                  onChange={(v: string) => {
+                                    if (spUnit === 'mm:ss') {
+                                      if (/^[\d:]*$/.test(v)) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
+                                    } else {
+                                      if (!v.includes('-')) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
+                                    }
+                                  }}
+                                  icon={<PlusCircle size={16} className="text-indigo-500"/>} 
+                                />
+                              </div>
+                            ) : (
+                              <InputField 
+                                label={`Value ${entry.unit ? `(${entry.unit})` : ''}`} 
+                                type="number" value={entry.value} 
+                                onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
+                                icon={<PlusCircle size={16} className="text-indigo-500"/>} 
+                              />
+                            )}
+                          </div>
+                        </PrivacyWrapper>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

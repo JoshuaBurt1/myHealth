@@ -869,7 +869,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {CATEGORIES.map(category => {
+                  {[selectedCategory].map(category => { 
                     const categoryType = category.toLowerCase();
                     
                     const existingInCat = trackedDiet.filter(dt => dt.type === categoryType || (category === 'Custom' && dt.isCustom));

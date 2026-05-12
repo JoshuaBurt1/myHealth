@@ -1,14 +1,14 @@
 // MetricChartRenderer.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { SPEED_KEY_MAP, BP_THRESHOLDS, DIET_TYPES_MAP, type MetricThresholds } from '../profileConstants';
+import { STRENGTH_LIST, SPEED_LIST, BP_THRESHOLDS, DIET_TYPES_MAP, type MetricThresholds } from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
-export const MetricGraph = ({ title, unit, icon, children, percentageDisplay, alertType, isAggregated, customLabel, fractionsDisplay }: any) => {
+export const MetricGraph = ({ title, unit, unitToggle, icon, children, percentageDisplay, alertType, isAggregated, customLabel, fractionsDisplay }: any) => {
   const bgClass = alertType === 'critical' 
     ? 'bg-red-50/50 border-red-100' 
     : alertType === 'warning' 
@@ -30,7 +30,13 @@ export const MetricGraph = ({ title, unit, icon, children, percentageDisplay, al
             </div>
             <div className="flex items-start justify-between mt-1">
               <div className="flex flex-col">
-                <p className="text-[10px] text-slate-400 font-bold uppercase">{unit}</p>
+                <div className="flex items-center">
+                  {unitToggle ? (
+                    unitToggle
+                  ) : (
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">{unit}</p>
+                  )}
+                </div>
                 {fractionsDisplay}
               </div>
               {isAggregated && (
@@ -72,7 +78,37 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   tdeeResult,
   selectedDiet
 }) => {
+  const [isConverted, setIsConverted] = useState(false);
+
   if (!graph) return null;
+
+  const dataKey = graph.type === 'standard' ? graph.config.key : graph.type === 'custom' ? graph.m.key : null;
+  const rawUnit = (graph.type === 'standard' ? graph.config.unit : graph.type === 'custom' ? graph.m.unit : '') || '';
+
+  // 1. Normalize unit once
+  const unitClean = rawUnit.toLowerCase();
+
+  // 2. Use the pre-existing lists from constants for O(1) or direct array checks
+  const isSpeed = SPEED_LIST.includes(dataKey) || unitClean === 'sec' || unitClean === 's';
+  const isStrength = STRENGTH_LIST.includes(dataKey) || unitClean === 'kg';
+
+  const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : rawUnit;
+
+  const formatValue = (val: any) => {
+    if (val == null) return val;
+    const num = Number(val);
+    if (isNaN(num)) return val;
+
+    if (isSpeed && isConverted) {
+      const m = Math.floor(num / 60);
+      const s = Math.floor(num % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    if (isStrength && isConverted) {
+      return (num * 2.20462).toFixed(1);
+    }
+    return Number.isInteger(num) ? num.toString() : num.toFixed(1);
+  };
 
   const getAlertType = (key: string) => {
     const relevantAlerts = activeAlerts.filter(a => a.metricKeys?.includes(key));
@@ -169,11 +205,11 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     );
   };
 
-  const getTrendDetails = (val: number, isSpeed: boolean) => {
+  const getTrendDetails = (val: number, checkSpeed: boolean) => {
     if (val === 0) return { Icon: TrendingUp, color: "text-slate-400" };
     const isPositiveChange = val > 0;
     const Icon = isPositiveChange ? TrendingUp : TrendingDown;
-    const color = isSpeed 
+    const color = checkSpeed 
       ? (isPositiveChange ? "text-red-500" : "text-emerald-500")
       : (isPositiveChange ? "text-emerald-500" : "text-red-500");
 
@@ -186,10 +222,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     
     const lastChange = data[0];
     const totalChange = data[1];
-
-    const isSpeed = SPEED_KEY_MAP && (
-      Array.isArray(SPEED_KEY_MAP) ? SPEED_KEY_MAP.includes(key) : Object.keys(SPEED_KEY_MAP).includes(key)
-    );
 
     const lastTrend = getTrendDetails(lastChange, isSpeed);
     const totalTrend = getTrendDetails(totalChange, isSpeed);
@@ -286,6 +318,27 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     onClick: (props: any) => onPointClick(props.payload, key, key)
   });
 
+  const renderToggle = () => {
+    if (!isSpeed && !isStrength) return null;
+    
+    const label1 = isSpeed ? 'SEC' : 'KG';
+    const label2 = isSpeed ? 'MM:SS' : 'LBS';
+    
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setIsConverted(!isConverted); }}
+        className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto"
+      >
+        <span className={`px-2 py-0.5 rounded-full transition-all ${!isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+          {label1}
+        </span>
+        <span className={`px-2 py-0.5 rounded-full transition-all ${isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+          {label2}
+        </span>
+      </button>
+    );
+  };
+
   if (graph.type === 'bp') {
     const bpAlert = getAlertType('bpSyst') || getAlertType('bpDias');
     return (
@@ -354,7 +407,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     const currentAmount = todayData.reduce((sum, d) => sum + Number(d[config.key]), 0);
     const currentDisplay = Number.isInteger(currentAmount) ? currentAmount : Number(currentAmount.toFixed(1));
 
-    // Dynamic Diet Threshold Logic
     let dietThresholds: { min?: number; max?: number } | null = null;
     const isMacro = ['carbs', 'protein', 'fat'].includes(config.key);
     const isMicro = ['sodium', 'potassium', 'phosphorus'].includes(config.key);
@@ -362,18 +414,12 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     if (selectedDiet && DIET_TYPES_MAP[selectedDiet]) {
       const diet = DIET_TYPES_MAP[selectedDiet];
 
-      // Map % values to grams using the TDEE (Carbs/Protein = 4 kcal/g, Fat = 9 kcal/g)
       if (isMacro && tdeeResult && diet[config.key]) {
         const calPerGram = config.key === 'fat' ? 9 : 4;
         dietThresholds = {
           min: (tdeeResult * diet[config.key].min) / calPerGram,
           max: (tdeeResult * diet[config.key].max) / calPerGram
         };
-
-        if (config.key === 'carbs') console.log(`Carbs - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
-        if (config.key === 'protein') console.log(`Protein - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
-        if (config.key === 'fat') console.log(`Fat - Min: ${dietThresholds.min}g, Max: ${dietThresholds.max}g`);
-
       } else if (isMicro && diet[config.key]) {
         dietThresholds = {
           max: diet[config.key].max,
@@ -465,7 +511,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       <MetricGraph 
         key={config.key} 
         title={config.title} 
-        unit={config.unit} 
+        unit={displayUnit} 
+        unitToggle={renderToggle()}
         icon={config.icon}
         alertType={alertType}
         percentageDisplay={renderPercentage(config.key)}
@@ -475,16 +522,15 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
-          <YAxis domain={domain} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          <YAxis domain={domain} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           <Tooltip 
             cursor={false} 
             wrapperStyle={{ pointerEvents: 'none' }} 
             labelFormatter={(val) => new Date(val).toLocaleString()}
-            formatter={(value: any) => [`${value ?? ''} ${config.unit}`, config.title]} 
+            formatter={(value: any) => [`${formatValue(value)} ${displayUnit}`, config.title]} 
           />
           {renderThresholdLines(config.thresholds)}
           
-          {/* Diet Threshold Lines */}
           {dietThresholds?.max && (
             <ReferenceLine 
               y={dietThresholds.max} 
@@ -522,7 +568,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             />
           )}
 
-          {/* TDEE MAINTENANCE LINE */}
           {config.key === 'calories' && tdeeResult && tdeeResult > 0 && (
             <ReferenceLine 
               y={tdeeResult} 
@@ -565,7 +610,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       <MetricGraph 
         key={m.key} 
         title={m.name.toUpperCase()} 
-        unit={m.unit} 
+        unit={displayUnit}
+        unitToggle={renderToggle()}
         icon={<PlusCircle style={{ color: customColor }} />}
         alertType={alertType}
         percentageDisplay={renderPercentage(m.key)}
@@ -573,12 +619,12 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
-          <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           <Tooltip 
             cursor={false} 
             wrapperStyle={{ pointerEvents: 'none' }} 
             labelFormatter={(val) => new Date(val).toLocaleString()}
-            formatter={(value: any) => [`${value ?? ''} ${m.unit}`, m.name.toUpperCase()]} 
+            formatter={(value: any) => [`${formatValue(value)} ${displayUnit}`, m.name.toUpperCase()]} 
           />
           <Line 
             type="monotone" 

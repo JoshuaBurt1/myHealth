@@ -229,7 +229,10 @@ export const PHYSIO_KEY_MAP: Record<string, string> = {
 };
 
 export const VITAL_LIST = Object.keys(VITAL_KEY_MAP);
+export const BLOODTEST_LIST = Object.keys(BLOODTEST_KEY_MAP);
+export const SYMPTOM_LIST = Object.keys(SYMPTOM_KEY_MAP);
 export const DIET_LIST = Object.keys(DIET_KEY_MAP);
+export const MICRONUTRIENT_LIST = Object.keys(MICRONUTRIENT_KEY_MAP);
 export const STRENGTH_LIST = Object.keys(STRENGTH_KEY_MAP);
 export const SPEED_LIST = Object.keys(SPEED_KEY_MAP);
 export const PLYO_LIST = Object.keys(PLYO_KEY_MAP);

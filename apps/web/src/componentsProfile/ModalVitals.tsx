@@ -357,148 +357,151 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
           {/* Vitals currently being tracked */}
           <div>
             <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2 uppercase tracking-wider">
-              <Activity size={16}/> Active Health Metric Fields
+              <Activity size={16}/> Active {selectedCategory} Fields
             </h3>
 
-            {(trackedVitals.length === 0 && entries.length === 0) ? (
-              <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
-                <AlertCircle size={32} className="mx-auto mb-2 opacity-50"/>
-                <p className="font-medium">No metrics tracked yet. Add one above to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-8">
+            {(() => {
+              // Only process the category that is currently selected via the tab
+              const category = selectedCategory;
+              const categoryType = category.toLowerCase();
 
-                {CATEGORIES.map(category => {
-                  const categoryType = category.toLowerCase();
-                  const existingInCat = trackedVitals.filter(vital => {
-                    if (category === 'Custom') return vital.isCustom;
-                    const map = CATEGORY_MAPS[category];
-                    return map && Object.values(map).includes(vital.key);
-                  });
-                  // Filter entries of this category
-                  const newInCat = entries.filter(entry => {
-                    const isDuplicate = existingInCat.some(exist => exist.key === entry.key);
-                    if (isDuplicate) return false; 
+              // Filter existing vitals for the selected category
+              const existingInCat = trackedVitals.filter(vital => {
+                if (category === 'Custom') return vital.isCustom;
+                const map = CATEGORY_MAPS[category];
+                return map && Object.values(map).includes(vital.key);
+              });
 
-                    if (category === 'Custom') return entry.isCustom;
-                    return entry.type === categoryType;
-                  });
-                  if (existingInCat.length === 0 && newInCat.length === 0) return null;
-                  return (
-                    <div key={category} className="w-full">
-                      <h4 className="text-xs font-black text-slate-400 mb-3 uppercase tracking-widest border-b border-slate-100 pb-1">
-                        {category}
-                      </h4>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 sm:gap-4 gap-2">
-                        {/* 1. Existing Vitals */}
-                        {existingInCat.map((vital, idx) => {
-                          const isPain = vital.key === 'pain';
-                          const isLastBm = vital.key === 'lastBm';
-                          return (
-                            <PrivacyWrapper
-                              key={`exist-${vital.key}-${idx}`}
-                              fieldKey={vital.key}
-                              isMe={isMe}
-                              hiddenOther={hiddenOther}
-                              toggleVisibilityOther={toggleVisibilityOther}
-                              onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}
-                            >
-                              <div className="h-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col gap-2">
-                                <InputField
-                                  label={`${vital.label} ${vital.unit && !isPain ? `(${vital.unit})` : ''}${isPain ? ' (/10)' : ''}`.trim()}
-                                  type={isLastBm ? "datetime-local" : "number"}
-                                  value={trackedVitalsInputs[vital.key] || ''}
-                                  onChange={(v: string) => {
-                                    if (isValidVitalEntry(vital.key, v)) {
-                                      setTrackedVitalsInputs(prev => ({...prev, [vital.key]: v}));
-                                    }
-                                  }}
+              // Filter new session entries for the selected category
+              const newInCat = entries.filter(entry => {
+                const isDuplicate = existingInCat.some(exist => exist.key === entry.key);
+                if (isDuplicate) return false; 
+                if (category === 'Custom') return entry.isCustom;
+                return entry.type === categoryType;
+              });
+
+              // If this specific tab has no data, show an empty state for this category
+              if (existingInCat.length === 0 && newInCat.length === 0) {
+                return (
+                  <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
+                    <AlertCircle size={32} className="mx-auto mb-2 opacity-50"/>
+                    <p className="font-medium">No {category.toLowerCase()} tracked yet. Add one above to get started.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="w-full">
+                  {/* We can remove the redundant <h4> header here since the tab already indicates the category */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 sm:gap-4 gap-2">
+                    {/* 1. Existing Vitals */}
+                    {existingInCat.map((vital, idx) => {
+                      const isPain = vital.key === 'pain';
+                      const isLastBm = vital.key === 'lastBm';
+                      return (
+                        <PrivacyWrapper
+                          key={`exist-${vital.key}-${idx}`}
+                          fieldKey={vital.key}
+                          isMe={isMe}
+                          hiddenOther={hiddenOther}
+                          toggleVisibilityOther={toggleVisibilityOther}
+                          onDelete={() => handleDeleteField(vital.label, vital.key, 'vital')}
+                        >
+                          <div className="h-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col gap-2">
+                            <InputField
+                              label={`${vital.label} ${vital.unit && !isPain ? `(${vital.unit})` : ''}${isPain ? ' (/10)' : ''}`.trim()}
+                              type={isLastBm ? "datetime-local" : "number"}
+                              value={trackedVitalsInputs[vital.key] || ''}
+                              onChange={(v: string) => {
+                                if (isValidVitalEntry(vital.key, v)) {
+                                  setTrackedVitalsInputs(prev => ({...prev, [vital.key]: v}));
+                                }
+                              }}
+                              disabled={!isMe}
+                              icon={<Activity size={16} className="text-rose-400"/>}
+                            />
+                            {isPain && (
+                              <div className="flex flex-col gap-1.5 mt-1">
+                                <select
+                                  className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-rose-400 disabled:bg-slate-50"
+                                  value={existingPainMetadata.location}
+                                  onChange={(e) => setExistingPainMetadata(prev => ({...prev, location: e.target.value}))}
                                   disabled={!isMe}
-                                  icon={<Activity size={16} className="text-rose-400"/>}
-                                />
-                                {isPain && (
-                                  <div className="flex flex-col gap-1.5 mt-1">
-                                    <select
-                                      className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-rose-400 disabled:bg-slate-50"
-                                      value={existingPainMetadata.location}
-                                      onChange={(e) => setExistingPainMetadata(prev => ({...prev, location: e.target.value}))}
-                                      disabled={!isMe}
-                                    >
-                                      <option value="">Location</option>
-                                      {PAIN_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                                    </select>
-                                    <select
-                                      className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-rose-400 disabled:bg-slate-50"
-                                      value={existingPainMetadata.description}
-                                      onChange={(e) => setExistingPainMetadata(prev => ({...prev, description: e.target.value}))}
-                                      disabled={!isMe}
-                                    >
-                                      <option value="">Description</option>
-                                      {PAIN_DESCRIPTIONS.map(desc => <option key={desc} value={desc}>{desc}</option>)}
-                                    </select>
-                                  </div>
-                                )}
-                              </div>
-                            </PrivacyWrapper>
-                          );
-                        })}
-                        {/* 2. New Vitals */}
-                        {newInCat.map((entry) => {
-                          const isPain = entry.key === 'pain';
-                          const isLastBm = entry.key === 'lastBm';
-                          return (
-                            <PrivacyWrapper
-                              key={`new-${entry.key}`}
-                              fieldKey={entry.key}
-                              isMe={isMe}
-                              hiddenOther={hiddenOther}
-                              toggleVisibilityOther={toggleVisibilityOther}
-                              onDelete={() => removeNewEntry(entry.key)}
-                            >
-                              <div className="h-full bg-rose-50 rounded-2xl border-2 border-rose-200 p-2 relative shadow-sm flex flex-col gap-2">
-                                <button
-                                  onClick={() => removeNewEntry(entry.key)}
-                                  className="absolute -top-1 -right-1 text-rose-400 hover:text-rose-600 bg-white border border-rose-100 rounded-full z-20 p-1"
                                 >
-                                  <X size={12} strokeWidth={3}/>
-                                </button>
-                                <InputField
-                                  label={`${entry.label} ${entry.unit && !isPain ? `(${entry.unit})` : ''}${isPain ? ' (/10)' : ''} (NEW)`}
-                                  type={isLastBm ? "datetime-local" : "number"}
-                                  value={entry.value}
-                                  onChange={(v: string) => updateNewEntryValue(entry.key, v)}
-                                  icon={<PlusCircle size={16} className="text-rose-500"/>}
-                                />
-                                {isPain && (
-                                  <div className="flex flex-col gap-1.5 mt-1">
-                                    <select
-                                      className="w-full p-2 text-xs bg-white border border-rose-200 rounded-lg text-slate-700"
-                                      value={entry.location || ''}
-                                      onChange={(e) => updateNewEntryMeta(entry.key, 'location', e.target.value)}
-                                    >
-                                      <option value="">Location</option>
-                                      {PAIN_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                                    </select>
-                                    <select
-                                      className="w-full p-2 text-xs bg-white border border-rose-200 rounded-lg text-slate-700"
-                                      value={entry.description || ''}
-                                      onChange={(e) => updateNewEntryMeta(entry.key, 'description', e.target.value)}
-                                    >
-                                      <option value="">Description</option>
-                                      {PAIN_DESCRIPTIONS.map(desc => <option key={desc} value={desc}>{desc}</option>)}
-                                    </select>
-                                  </div>
-                                )}
+                                  <option value="">Location</option>
+                                  {PAIN_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                </select>
+                                <select
+                                  className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-rose-400 disabled:bg-slate-50"
+                                  value={existingPainMetadata.description}
+                                  onChange={(e) => setExistingPainMetadata(prev => ({...prev, description: e.target.value}))}
+                                  disabled={!isMe}
+                                >
+                                  <option value="">Description</option>
+                                  {PAIN_DESCRIPTIONS.map(desc => <option key={desc} value={desc}>{desc}</option>)}
+                                </select>
                               </div>
-                            </PrivacyWrapper>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                            )}
+                          </div>
+                        </PrivacyWrapper>
+                      );
+                    })}
+
+                    {/* 2. New Vitals */}
+                    {newInCat.map((entry) => {
+                      const isPain = entry.key === 'pain';
+                      const isLastBm = entry.key === 'lastBm';
+                      return (
+                        <PrivacyWrapper
+                          key={`new-${entry.key}`}
+                          fieldKey={entry.key}
+                          isMe={isMe}
+                          hiddenOther={hiddenOther}
+                          toggleVisibilityOther={toggleVisibilityOther}
+                          onDelete={() => removeNewEntry(entry.key)}
+                        >
+                          <div className="h-full bg-rose-50 rounded-2xl border-2 border-rose-200 p-2 relative shadow-sm flex flex-col gap-2">
+                            <button
+                              onClick={() => removeNewEntry(entry.key)}
+                              className="absolute -top-1 -right-1 text-rose-400 hover:text-rose-600 bg-white border border-rose-100 rounded-full z-20 p-1"
+                            >
+                              <X size={12} strokeWidth={3}/>
+                            </button>
+                            <InputField
+                              label={`${entry.label} ${entry.unit && !isPain ? `(${entry.unit})` : ''}${isPain ? ' (/10)' : ''} (NEW)`}
+                              type={isLastBm ? "datetime-local" : "number"}
+                              value={entry.value}
+                              onChange={(v: string) => updateNewEntryValue(entry.key, v)}
+                              icon={<PlusCircle size={16} className="text-rose-500"/>}
+                            />
+                            {isPain && (
+                              <div className="flex flex-col gap-1.5 mt-1">
+                                <select
+                                  className="w-full p-2 text-xs bg-white border border-rose-200 rounded-lg text-slate-700"
+                                  value={entry.location || ''}
+                                  onChange={(e) => updateNewEntryMeta(entry.key, 'location', e.target.value)}
+                                >
+                                  <option value="">Location</option>
+                                  {PAIN_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                </select>
+                                <select
+                                  className="w-full p-2 text-xs bg-white border border-rose-200 rounded-lg text-slate-700"
+                                  value={entry.description || ''}
+                                  onChange={(e) => updateNewEntryMeta(entry.key, 'description', e.target.value)}
+                                >
+                                  <option value="">Description</option>
+                                  {PAIN_DESCRIPTIONS.map(desc => <option key={desc} value={desc}>{desc}</option>)}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </PrivacyWrapper>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         <div className="p-5 border-t border-slate-100 bg-white">

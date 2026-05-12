@@ -7,8 +7,10 @@ import {
 } from 'lucide-react';
 import { SINGLE_GRAPHS } from '../componentsProfile/profileConstants';
 import { MetricChartRenderer } from './componentsDataScreen/MetricChartRenderer';
+import { ModalEditDelete } from './ModalEditDelete';
 import { ActiveAlerts } from './componentsDataScreen/ActiveAlerts';
 import { userActiveAlerts } from './userActiveAlerts';
+
 
 type TimeRange = '24H' | '7D' | '1M' | '3M' | 'YTD' | '1Y' | 'Max';
 
@@ -419,36 +421,43 @@ const DataScreen: React.FC<DataScreenProps> = ({
     }
   };
 
-  const handleAction = async (action: 'delete' | 'update') => {
+  const handleUpdateValue = async (newValue: number) => {
     if (!selectedPoint || !auth.currentUser) return;
     const user = auth.currentUser;
     const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
 
     try {
-      if (action === 'delete') {
-        await updateDoc(profileRef, {
-          [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
-        });
-      } else if (action === 'update') {
-        const newValue = prompt("Enter new value:", selectedPoint.val);
-        
-        if (newValue !== null && newValue !== "") {
-          await updateDoc(profileRef, {
-            [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
-          });
+      // 1. Remove old object
+      await updateDoc(profileRef, {
+        [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+      });
 
-          await updateDoc(profileRef, {
-            [selectedPoint.fieldName]: arrayUnion({
-              ...selectedPoint.rawObject,
-              value: String(newValue)
-            })
-          });
-        }
-      }
+      // 2. Add updated object
+      await updateDoc(profileRef, {
+        [selectedPoint.fieldName]: arrayUnion({
+          ...selectedPoint.rawObject,
+          value: String(newValue)
+        })
+      });
 
       setSelectedPoint(null);
     } catch (err) {
       console.error("Firebase Sync Error:", err);
+    }
+  };
+
+  const handleDeleteValue = async () => {
+    if (!selectedPoint || !auth.currentUser) return;
+    const user = auth.currentUser;
+    const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
+
+    try {
+      await updateDoc(profileRef, {
+        [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+      });
+      setSelectedPoint(null);
+    } catch (err) {
+      console.error("Firebase Delete Error:", err);
     }
   };
 
@@ -612,39 +621,16 @@ const DataScreen: React.FC<DataScreenProps> = ({
       )}
 
       {selectedPoint && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
-          <div className="absolute inset-0" onClick={() => setSelectedPoint(null)} />
-          <div className="relative bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full border border-slate-100 animate-in fade-in zoom-in duration-200">
-            <p className="text-slate-500 text-sm mb-6 font-medium">
-              Recorded on {new Date(selectedPoint.ts).toLocaleString()}
-            </p>
-            <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">
-              Manage {getModalTitle(selectedPoint.fieldName)}
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => setSelectedPoint(null)}
-                className="py-4 px-6 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => handleAction('delete')}
-                className="py-4 px-6 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-
-            <button 
-              onClick={() => handleAction('update')}
-              className="w-full mt-4 py-4 px-6 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 active:scale-[0.98] transition-all"
-            >
-              Edit Value
-            </button>
-          </div>
-        </div>
+        <ModalEditDelete
+          isOpen={!!selectedPoint}
+          onClose={() => setSelectedPoint(null)}
+          onDelete={handleDeleteValue}
+          onUpdate={handleUpdateValue}
+          initialValue={selectedPoint.val}
+          title={getModalTitle(selectedPoint.fieldName)}
+          recordedDate={selectedPoint.ts}
+          metricKey={selectedPoint.fieldName}
+        />
       )}
 
       {showDatePicker && (
