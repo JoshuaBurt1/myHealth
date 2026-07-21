@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "MyHealth",
+    "slug": "my-health-mobile",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "version": "1.0.0",
+    "plugins": [
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
+      "expo-asset"
+    ],
+    "android": {
+      "package": "com.squarehexagon.myhealth",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.squarehexagon.myhealth",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "We need access to your health data to sync steps and heart rate.",
+        "NSHealthUpdateUsageDescription": "We need access to your health data to sync steps and heart rate.",
+        "NSLocationWhenInUseUsageDescription": "We need your location to show local health alerts and forum posts near you."
+      }
+    }
+  }
+}

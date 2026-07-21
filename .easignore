@@ -1,0 +1,15 @@
+# Ignore dependency folders
+node_modules/
+**/node_modules/
+
+# Ignore local build folders
+android/
+ios/
+dist/
+build/
+
+# Ignore large git history and IDE files
+.git/
+.expo/
+.vscode/
+*.log
