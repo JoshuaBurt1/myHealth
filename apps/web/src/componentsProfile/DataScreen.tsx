@@ -1,6 +1,6 @@
 // DataScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
-import { doc, getDoc, onSnapshot, updateDoc, arrayRemove, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { 
   RefreshCw, Calendar, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
@@ -109,7 +109,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   selectedDiet
 }) => {
   const [dataOwnerId, setDataOwnerId] = useState<string | null>(null);
-  const [vitalsData, setVitalsData] = useState<any[]>([]);
+  const [entryData, setEntryData] = useState<any[]>([]);
   const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
   const [reportData, setReportData] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
@@ -125,7 +125,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   const [currentGraphIndex, setCurrentGraphIndex] = useState(0);
 
   // notifications
-  const notifications = userActiveAlerts(vitalsData);
+  const notifications = userActiveAlerts(entryData);
   const [lastProcessedAlertId, setLastProcessedAlertId] = useState<string | null>(null);
 
   // Derive the highest severity level (disease alert notification color)
@@ -178,7 +178,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   useEffect(() => {
     if (!userId) return;
 
-    setVitalsData([]);
+    setEntryData([]);
     setDataOwnerId(null);
     setLastProcessedAlertId(null);
 
@@ -234,14 +234,20 @@ const DataScreen: React.FC<DataScreenProps> = ({
         setCustomMetrics(dynamicMetrics);
 
         const timelineMap: { [key: number]: any } = {};
-        const processVital = (array: any[], key: string) => {
+        const processEntry = (array: any[], key: string) => {
           (array || []).forEach((entry) => {
             if (!entry.dateTime) return;
             const ts = parseDate(entry.dateTime).getTime();
             if (!timelineMap[ts]) timelineMap[ts] = { timestamp: ts };
+            
             let val = parseFloat(entry.value);
             if (isNaN(val)) return;
+            
             timelineMap[ts][key] = val;
+            
+            if (entry.totalLoad !== undefined && entry.totalLoad !== null) {
+              timelineMap[ts][`${key}_totalLoad`] = parseFloat(entry.totalLoad);
+            }            
             timelineMap[ts][`${key}_raw`] = entry; 
           });
         };
@@ -255,15 +261,15 @@ const DataScreen: React.FC<DataScreenProps> = ({
         allKeys.forEach(targetKey => {
           const actualKey = Object.keys(p).find(k => k.toLowerCase() === targetKey.toLowerCase());
           if (actualKey && p[actualKey]) {
-            processVital(p[actualKey], targetKey);
+            processEntry(p[actualKey], targetKey);
           }
         });
 
         const history = Object.values(timelineMap).sort((a: any, b: any) => a.timestamp - b.timestamp);
-        setVitalsData(history);
+        setEntryData(history);
         setDataOwnerId(userId);
       } else {
-        setVitalsData([]);
+        setEntryData([]);
       }
       
       setLoading(false);
@@ -278,7 +284,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   }, [userId, onExportAlertLastMs]);
 
   const hasData = (key: string) => {
-    return vitalsData.some(d => d[key] !== undefined && d[key] !== null);
+    return entryData.some(d => d[key] !== undefined && d[key] !== null);
   };
 
   const visibleGraphs = useMemo(() => {
@@ -346,7 +352,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     });
 
     return graphs;
-  }, [vitalsData, isMe, hiddenOther, customMetrics]);
+  }, [entryData, isMe, hiddenOther, customMetrics]);
 
   useEffect(() => {
     if (visibleGraphs.length > 0 && currentGraphIndex >= visibleGraphs.length) {
@@ -356,7 +362,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
   // Data sent to ActiveAlerts.tsx 
   const filteredData = useMemo(() => {
-    let result = [...vitalsData];
+    let result = [...entryData];
     const now = new Date();
     let threshold = 0;
 
@@ -461,7 +467,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     // Merge the buckets and the last point
     return [...bucketedResults, lastActualPoint].sort((a, b) => a.timestamp - b.timestamp);
 
-  }, [vitalsData, timeRange, customStart, customEnd, reductionFactor, dietKeys]);
+  }, [entryData, timeRange, customStart, customEnd, reductionFactor, dietKeys]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -475,9 +481,13 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
     const raw = point[`${dataKey}_raw`];      
     if (raw) {
+      const rawTs = raw.dateTime?.toDate 
+        ? raw.dateTime.toDate().getTime() 
+        : new Date(raw.dateTime).getTime();
+
       setSelectedPoint({ 
-        ts: point.timestamp, 
-        val: point[dataKey], 
+        ts: rawTs,
+        val: raw.value !== undefined ? raw.value : point[dataKey],
         fieldName: fieldName,
         rawObject: raw
       });

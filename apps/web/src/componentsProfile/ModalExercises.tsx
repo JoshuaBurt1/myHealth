@@ -1,7 +1,5 @@
-// ModalExercises.tsx
-
-import React, { useState, useEffect, useMemo, useRef} from 'react';
-import { X, Dumbbell, PlusCircle, RefreshCw, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { X, Dumbbell, PlusCircle, RefreshCw, AlertCircle, ChevronDown, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { STRENGTH_KEY_MAP, SPEED_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, YOGA_KEY_MAP, MOBILITY_KEY_MAP, PHYSIO_KEY_MAP, getStandardUnit } from './profileConstants';
@@ -21,19 +19,23 @@ const CATEGORY_MAPS: Record<string, Record<string, string>> = {
 type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Endurance' | 'Yoga' | 'Mobility' | 'Physio' | 'Custom';
 const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Endurance', 'Yoga', 'Mobility', 'Physio', 'Custom'];
 
-// identify if an exercise requires 1RM Epley Formula
 const STRENGTH_VALUES = Object.values(STRENGTH_KEY_MAP);
 const isStrengthExercise = (key: string) => STRENGTH_VALUES.includes(key);
 
-// identify if an exercise is a speed tracking metric
 const SPEED_VALUES = Object.values(SPEED_KEY_MAP);
 const isSpeedExercise = (key: string) => SPEED_VALUES.includes(key);
 
-// calculates percentage changes
 const calculatePercentChange = (oldValue: number, newValue: number): number => {
   if (oldValue === 0) return newValue > 0 ? 100 : 0;
   return Number((((newValue - oldValue) / oldValue) * 100).toFixed(2));
 };
+
+interface SetEntry {
+  id: string;
+  weight: string;
+  reps: string;
+  time: string;
+}
 
 interface ModalExercisesProps {
   isOpen: boolean;
@@ -55,8 +57,7 @@ interface ExerciseEntry {
   unit: string;
   type: string;
   value: string;
-  weight?: string;
-  reps?: string;
+  sets: SetEntry[];
   isCustom: boolean;
 }
 
@@ -73,11 +74,27 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
   const [saving, setSaving] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
+  // Dynamic sets mapping for existing tracked strength exercises
+  const [trackedSets, setTrackedSets] = useState<Record<string, SetEntry[]>>({});
+
   // Toggle states for units
   const [strengthUnits, setStrengthUnits] = useState<Record<string, 'kg' | 'lbs'>>({});
   const [speedUnits, setSpeedUnits] = useState<Record<string, 'sec' | 'mm:ss'>>({});
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Initialize/Reset strength sets on modal open
+  useEffect(() => {
+    if (isOpen) {
+      const initialTrackedSets: Record<string, SetEntry[]> = {};
+      trackedExercises.forEach((ex) => {
+        if (isStrengthExercise(ex.name) || isSpeedExercise(ex.name)) {
+          initialTrackedSets[ex.name] = [{ id: '1', weight: '', reps: '', time: '' }];
+        }
+      });
+      setTrackedSets(initialTrackedSets);
+    }
+  }, [isOpen, trackedExercises]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -125,13 +142,11 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         unit: getStandardUnit(key) || (selectedCategory === 'Strength' ? 'kg' : 'sec'),
         type: selectedCategory.toLowerCase(),
         value: '',
-        weight: '',
-        reps: '',
+        sets: [{ id: '1', weight: '', reps: '', time: '' }],
         isCustom: false
       }]);
     } else {
       if (!customName.trim()) return alert('Please enter a custom exercise name.');
-
       if (currentCustomCount >= 10) return alert('Maximum of 10 custom exercises allowed.');
 
       const sanitizedKey = `custom_ex_${customName.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
@@ -143,6 +158,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         unit: customUnit.trim() || 'reps',
         type: 'custom',
         value: '',
+        sets: [{ id: '1', weight: '', reps: '', time: '' }],
         isCustom: true
       }]);
       setCustomName('');
@@ -156,7 +172,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (parts.length === 2) {
       return (Number(parts[0]) * 60) + Number(parts[1]);
     } else if (parts.length === 1) {
-       return Number(parts[0]);
+      return Number(parts[0]);
     }
     return NaN;
   };
@@ -165,75 +181,265 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     return unit === 'lbs' ? weight * 0.45359237 : weight;
   };
 
-  const handleSaveExercises = async () => {
-    const preparedNew: (ExerciseEntry & { finalValue: number })[] = [];
-    const preparedExist: (typeof trackedExercises[0] & { finalValue: number })[] = [];
-    let bonusGems = 0;
+  // Set management functions
+  const addSetToTracked = (exerciseName: string) => {
+    setTrackedSets(prev => {
+      const current = prev[exerciseName] || [];
+      if (current.length >= 10) {
+        alert('Maximum of 10 sets allowed per exercise.');
+        return prev;
+      }
+      return {
+        ...prev,
+        [exerciseName]: [...current, { id: Date.now().toString(), weight: '', reps: '', time: ''}]
+      };
+    });
+  };
 
-    // Process new entries
-    for (const e of entries) {
-      if (isStrengthExercise(e.name)) {
-        if ((e.weight && !e.reps) || (!e.weight && e.reps)) {
-          return alert(`Missing data: Please enter both weight and reps for ${e.label} to calculate your 1-Rep Max.`);
+  const removeSetFromTracked = (exerciseName: string, setId: string) => {
+    setTrackedSets(prev => {
+      const current = prev[exerciseName] || [];
+      if (current.length <= 1) return prev;
+      return {
+        ...prev,
+        [exerciseName]: current.filter(s => s.id !== setId)
+      };
+    });
+  };
+
+  const updateTrackedSet = (exerciseName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => {
+    if (val.includes('-')) return;
+    setTrackedSets(prev => ({
+      ...prev,
+      [exerciseName]: (prev[exerciseName] || []).map(s => s.id === setId ? { ...s, [field]: val } : s)
+    }));
+  };
+
+  const addSetToEntry = (entryName: string) => {
+    setEntries(prev => prev.map(e => {
+      if (e.name === entryName) {
+        if (e.sets.length >= 10) {
+          alert('Maximum of 10 sets allowed per exercise.');
+          return e;
         }
-        if (e.weight && e.reps) {
-          const unit = strengthUnits[e.name] || 'kg';
-          let w = Number(e.weight);
-          w = convertWeightToKg(w, unit);
-          const r = Number(e.reps);
-          if (isNaN(w) || isNaN(r)) continue;
-          // Epley Formula: 1RM = Weight * (1 + Reps/30)
-          const oneRepMax = Math.round(w * (1 + r / 30));
-          preparedNew.push({ ...e, finalValue: oneRepMax, unit: 'kg' });
-        }
-      } else if (isSpeedExercise(e.name)) {
-        if (e.value.trim() !== '') {
-          const unit = speedUnits[e.name] || 'sec';
-          const parsedVal = parseSpeedValue(e.value, unit);
-          if (!isNaN(parsedVal)) {
-             preparedNew.push({ ...e, finalValue: parsedVal, unit: 'sec' });
-          }
-        }
-      } else {
-        if (e.value.trim() !== '' && !isNaN(Number(e.value))) {
-          preparedNew.push({ ...e, finalValue: Number(e.value) });
+        return {
+          ...e,
+          sets: [...e.sets, { id: Date.now().toString(), weight: '', reps: '', time: '' }]
+        };
+      }
+      return e;
+    }));
+  };
+
+  const removeSetFromEntry = (entryName: string, setId: string) => {
+    setEntries(prev => prev.map(e => {
+      if (e.name === entryName && e.sets.length > 1) {
+        return {
+          ...e,
+          sets: e.sets.filter(s => s.id !== setId)
+        };
+      }
+      return e;
+    }));
+  };
+
+  const updateEntrySet = (entryName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => {
+    if (val.includes('-')) return;
+    setEntries(prev => prev.map(e => {
+      if (e.name === entryName) {
+        return {
+          ...e,
+          sets: e.sets.map(s => s.id === setId ? { ...s, [field]: val } : s)
+        };
+      }
+      return e;
+    }));
+  };
+
+  // Helper to compute strength set analytics according to rules
+  const evaluateStrengthSets = (setsList: SetEntry[], unit: 'kg' | 'lbs', label: string) => {
+    const validSets: { weightKg: number; reps: number }[] = [];
+
+    for (const s of setsList) {
+      if ((s.weight && !s.reps) || (!s.weight && s.reps)) {
+        throw new Error(`Missing data: Please complete weight and reps for all filled sets in ${label}.`);
+      }
+      if (s.weight && s.reps) {
+        const w = Number(s.weight);
+        const r = Number(s.reps);
+        if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
+          validSets.push({
+            weightKg: convertWeightToKg(w, unit),
+            reps: r
+          });
         }
       }
     }
 
-    // Process existing tracked exercises
-    for (const ex of trackedExercises) {
-      if (isStrengthExercise(ex.name)) {
-        const wStr = exerciseInputs[`${ex.name}_weight`];
-        const rStr = exerciseInputs[`${ex.name}_reps`];
-        if ((wStr && !rStr) || (!wStr && rStr)) {
-          return alert(`Missing data: Please enter both weight and reps for ${ex.label} to calculate your 1-Rep Max.`);
-        }
-        if (wStr && rStr) {
-          const unit = strengthUnits[ex.name] || 'kg';
-          let w = Number(wStr);
-          w = convertWeightToKg(w, unit);
-          const r = Number(rStr);
-          if (isNaN(w) || isNaN(r)) continue;
-          // Epley Formula
-          const oneRepMax = Math.round(w * (1 + r / 30));
-          preparedExist.push({ ...ex, finalValue: oneRepMax, unit: 'kg' });
-        }
-      } else if (isSpeedExercise(ex.name)) {
-        const valStr = exerciseInputs[ex.name];
-        if (valStr?.trim() !== '') {
-          const unit = speedUnits[ex.name] || 'sec';
-          const parsedVal = parseSpeedValue(valStr, unit);
-          if (!isNaN(parsedVal)) {
-            preparedExist.push({ ...ex, finalValue: parsedVal, unit: 'sec' });
-          }
-        }
-      } else {
-        const val = exerciseInputs[ex.name];
-        if (val?.trim() !== '' && !isNaN(Number(val))) {
-          preparedExist.push({ ...ex, finalValue: Number(val) });
+    if (validSets.length === 0) return null;
+
+    // Order sets primarily by highest weight (kg), secondarily by reps
+    const sortedSets = [...validSets].sort((a, b) => {
+      if (b.weightKg !== a.weightKg) {
+        return b.weightKg - a.weightKg;
+      }
+      return b.reps - a.reps;
+    });
+
+    const bestSet = sortedSets[0];
+    const oneRepMax = Math.round(bestSet.weightKg * (1 + bestSet.reps / 30));
+    const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.weightKg * s.reps), 0));
+
+    const detailedSets = validSets.map(s => ({
+      weightKg: Math.round(s.weightKg * 100) / 100,
+      reps: s.reps,
+      unit: unit
+    }));
+
+    return {
+      oneRepMax,
+      totalLoad,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
+  const evaluateSpeedSets = (setsList: SetEntry[], unit: 'sec' | 'mm:ss', label: string) => {
+    const validSets: { timeSec: number; reps: number }[] = [];
+
+    for (const s of setsList) {
+      if ((s.time && !s.reps) || (!s.time && s.reps)) {
+        throw new Error(`Missing data: Please complete time and reps for all filled sets in ${label}.`);
+      }
+      if (s.time && s.reps) {
+        const t = parseSpeedValue(s.time, unit);
+        const r = Number(s.reps);
+        if (!isNaN(t) && !isNaN(r) && t > 0 && r > 0) {
+          validSets.push({
+            timeSec: t,
+            reps: r
+          });
         }
       }
+    }
+
+    if (validSets.length === 0) return null;
+
+    // Order sets primarily by fastest time (lowest seconds)
+    const sortedSets = [...validSets].sort((a, b) => a.timeSec - b.timeSec);
+
+    const bestSet = sortedSets[0];
+    const fastestTime = bestSet.timeSec;
+    const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
+
+    const detailedSets = validSets.map(s => ({
+      timeSec: s.timeSec,
+      reps: s.reps,
+      unit: 'sec' // Standardized to DB
+    }));
+
+    return {
+      value: fastestTime,
+      totalLoad,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
+  const handleSaveExercises = async () => {
+    const preparedNew: (ExerciseEntry & { finalData: any })[] = [];
+    const preparedExist: (typeof trackedExercises[0] & { finalData: any })[] = [];
+    let bonusGems = 0;
+
+    try {
+      // Process new dynamic entries
+      for (const e of entries) {
+        if (isStrengthExercise(e.name)) {
+          const unit = strengthUnits[e.name] || 'kg';
+          const evalResult = evaluateStrengthSets(e.sets, unit, e.label);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.oneRepMax,
+                totalLoad: evalResult.totalLoad,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'kg'
+              }
+            });
+          }
+        } else if (isSpeedExercise(e.name)) {
+          const unit = speedUnits[e.name] || 'sec';
+          const evalResult = evaluateSpeedSets(e.sets, unit, e.label);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'sec'
+              }
+            });
+          }
+        } else {
+          if (e.value.trim() !== '' && !isNaN(Number(e.value))) {
+            preparedNew.push({
+              ...e,
+              finalData: { value: Number(e.value), unit: e.unit }
+            });
+          }
+        }
+      }
+
+      // Process existing active exercises
+      for (const ex of trackedExercises) {
+        if (isStrengthExercise(ex.name)) {
+          const unit = strengthUnits[ex.name] || 'kg';
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluateStrengthSets(setsList, unit, ex.label);
+          if (evalResult) {
+            preparedExist.push({
+              ...ex,
+              finalData: {
+                value: evalResult.oneRepMax,
+                totalLoad: evalResult.totalLoad,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'kg'
+              }
+            });
+          }
+        } else if (isSpeedExercise(ex.name)) {
+          const unit = speedUnits[ex.name] || 'sec';
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluateSpeedSets(setsList, unit, ex.label);
+          if (evalResult) {
+            preparedExist.push({
+              ...ex,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'sec'
+              }
+            });
+          }
+        } else {
+          const val = exerciseInputs[ex.name];
+          if (val?.trim() !== '' && !isNaN(Number(val))) {
+            preparedExist.push({
+              ...ex,
+              finalData: { value: Number(val), unit: ex.unit || '' }
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      return alert(err.message || 'Error processing exercise entries.');
     }
 
     if (!preparedNew.length && !preparedExist.length) return alert('Enter a value first.');
@@ -252,7 +458,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       const rootData = rootSnap.data() || {};
       const profileData = profileSnap.data() || {};
       
-      // STREAK LOGIC
       const lastUpdate = rootData.last_exercises_update?.toDate()?.getTime() || 0;
       const diffMs = Date.now() - lastUpdate;
       
@@ -264,13 +469,11 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       let streakIncremented = false;
       let streakBonus = 0;
 
-      // 1: Break streak if > 1 week since last exercise entry (resets to 0, then increments to 1)
       if (lastUpdate === 0 || diffMs > ONE_WEEK_MS) {
         newStreak = 1;
         streakIncremented = true;
         streakBonus = newStreak;
       } 
-      // 2: Increment streak if within 1 week AND at least 24 hours have passed
       else if (diffMs >= ONE_DAY_MS) {
         newStreak += 1;
         streakIncremented = true;
@@ -280,7 +483,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       const updateData: any = {};
       const newDefs: any[] = [];
 
-      // Calculate and set the percent changes (viewable in MetricChartRenderer.tsx)
       const processEntryChanges = (name: string, finalValue: number) => {
         const history = profileData[name] || [];
         let last_percent = 0;
@@ -305,14 +507,16 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       };
 
       preparedNew.forEach(e => {
-        updateData[e.name] = arrayUnion({ value: e.finalValue, dateTime: nowISO, unit: e.unit });
+        const record = { ...e.finalData, dateTime: nowISO };
+        updateData[e.name] = arrayUnion(record);
         newDefs.push({ name: e.label, key: e.name, unit: e.unit, type: e.type, isCustom: e.isCustom });
-        processEntryChanges(e.name, e.finalValue);
+        processEntryChanges(e.name, e.finalData.value);
       });
 
       preparedExist.forEach(ex => {
-        updateData[ex.name] = arrayUnion({ value: ex.finalValue, dateTime: nowISO, unit: ex.unit });
-        processEntryChanges(ex.name, ex.finalValue);
+        const record = { ...ex.finalData, dateTime: nowISO };
+        updateData[ex.name] = arrayUnion(record);
+        processEntryChanges(ex.name, ex.finalData.value);
       });
 
       if (newDefs.length > 0) updateData.customWorkoutsDefinitions = arrayUnion(...newDefs);
@@ -320,7 +524,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       const batch = writeBatch(db);
       batch.set(profileRef, updateData, { merge: true });
       
-      // Only award base gems, bonus gems, and create the timestamp if the streak criteria was met
       if (streakIncremented) {
         const totalAward = 10 + bonusGems + streakBonus;
         batch.update(userRootRef, { 
@@ -335,12 +538,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       setEntries([]); 
       const updatedInputs = { ...exerciseInputs };
       preparedExist.forEach(ex => {
-        if (isStrengthExercise(ex.name)) {
-          delete updatedInputs[`${ex.name}_weight`];
-          delete updatedInputs[`${ex.name}_reps`];
-        } else {
-          delete updatedInputs[ex.name];
-        }
+        delete updatedInputs[ex.name];
       });
       setExerciseInputs(updatedInputs);
 
@@ -379,7 +577,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {/* New exercise dropdown (inputs) */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full">
             <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase tracking-tight">
               <PlusCircle size={16}/> TRACK A NEW EXERCISE
@@ -417,7 +614,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                     <ChevronDown size={18} className={`text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Custom dropdown list */}
                   {isDropdownOpen && availableExercises.length > 0 && (
                     <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
                       <div className="max-h-80 overflow-y-auto">
@@ -477,24 +673,20 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             </h3>
 
             {(() => {
-              // Only process the category currently selected by the tab
               const category = selectedCategory;
               const categoryType = category.toLowerCase();
               const currentMap = CATEGORY_MAPS[category];
 
-              // 1. Create an O(1) index lookup map for the currently selected exercise category tab
               const keyOrderLookup = new Map<string, number>();
               if (currentMap) {
                 Object.values(currentMap).forEach((key, idx) => keyOrderLookup.set(key, idx));
               }
               const getPos = (key: string) => keyOrderLookup.get(key) ?? Infinity;
 
-              // 2. Filter existing tracked exercises
               const existingInCat = trackedExercises
                 .filter(ex => ex.type === categoryType || (category === 'Custom' && ex.isCustom))
                 .sort((a, b) => getPos(a.name) - getPos(b.name));
 
-              // 3. Filter new entries added in current session
               const newInCat = entries
                 .filter(e => 
                   (e.type === categoryType || (category === 'Custom' && e.isCustom)) && 
@@ -502,7 +694,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 )
                 .sort((a, b) => getPos(a.name) - getPos(b.name));
 
-              // If the active tab has no exercises, show the empty state for that specific category
               if (existingInCat.length === 0 && newInCat.length === 0) {
                 return (
                   <div className="text-center p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-400">
@@ -512,7 +703,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 );
               }
 
-              // Helper to toggle units
               const toggleCategoryUnits = () => {
                 if (category === 'Strength') {
                   const currentUnit = strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg';
@@ -560,12 +750,13 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {/* Existing exercises mapping */}
+                    {/* EXISTING TRACKED EXERCISES */}
                     {existingInCat.map((ex, idx) => {
                       const isStrength = isStrengthExercise(ex.name);
                       const isSpeed = isSpeedExercise(ex.name);
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
+                      const setsList = trackedSets[ex.name] || [{ id: '1', weight: '', reps: '' }];
 
                       return (
                         <PrivacyWrapper 
@@ -584,45 +775,74 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                             }
                           }}
                         >
-                          <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-2 flex flex-col justify-center">
+                          <div className="h-full w-full bg-slate-50/50 rounded-2xl border border-slate-100 p-3 flex flex-col justify-between">
                             <span className="text-xs font-bold text-slate-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
                               {ex.label}
                             </span>
-                            {isStrength ? (
-                              <div className="flex gap-2 w-full">
-                                <div className="flex-1">
-                                  <InputField 
-                                    label={`Weight (${stUnit})`} type="number" 
-                                    value={exerciseInputs[`${ex.name}_weight`] || ''} 
-                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_weight`]: v }))}
-                                    disabled={!isMe} icon={<Dumbbell size={14} className="text-indigo-400"/>} 
-                                  />
-                                </div>
-                                <div className="flex-1">
-                                  <InputField 
-                                    label="Reps" type="number" 
-                                    value={exerciseInputs[`${ex.name}_reps`] || ''} 
-                                    onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [`${ex.name}_reps`]: v }))}
-                                    disabled={!isMe} icon={<RefreshCw size={14} className="text-indigo-400"/>} 
-                                  />
-                                </div>
-                              </div>
-                            ) : isSpeed ? (
-                              <div className="w-full">
-                                <InputField 
-                                  label={`Value (${spUnit})`} 
-                                  type={spUnit === 'mm:ss' ? 'text' : 'number'}
-                                  value={exerciseInputs[ex.name] || ''} 
-                                  onChange={(v: string) => {
-                                    if (!isMe) return;
-                                    if (spUnit === 'mm:ss') {
-                                      if (/^[\d:]*$/.test(v)) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
-                                    } else {
-                                      if (!v.includes('-')) setExerciseInputs(p => ({ ...p, [ex.name]: v }));
-                                    }
-                                  }}
-                                  disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
-                                />
+                            
+                            {isStrength || isSpeed ? (
+                              <div className="space-y-2">
+                                {setsList.map((set, setIdx) => (
+                                  <div key={set.id} className="flex gap-2 items-center w-full">
+                                    <span className="text-[10px] font-bold text-slate-400 w-4">{setIdx + 1}.</span>
+                                    
+                                    {isStrength ? (
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label={`Weight (${stUnit})`} 
+                                          type="number" 
+                                          value={set.weight} 
+                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'weight', v)}
+                                          disabled={!isMe} 
+                                          icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label={`Time (${spUnit})`} 
+                                          type="text" 
+                                          value={set.time || ''} 
+                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                          disabled={!isMe} 
+                                          icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Reps" 
+                                        type="number" 
+                                        value={set.reps} 
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'reps', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                    
+                                    {setsList.length > 1 && isMe && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => removeSetFromTracked(ex.name, set.id)}
+                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                        title="Remove set"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                
+                                {setsList.length < 10 && isMe && (
+                                  <button
+                                    type="button"
+                                    onClick={() => addSetToTracked(ex.name)}
+                                    className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-500 hover:bg-indigo-50 rounded-xl transition-colors border border-dashed border-indigo-200"
+                                  >
+                                    <Plus size={14} /> ADD SET
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <InputField 
@@ -630,7 +850,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                                 type="number" 
                                 value={exerciseInputs[ex.name] || ''} 
                                 onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
-                                disabled={!isMe} icon={<Dumbbell size={16} className="text-indigo-400"/>} 
+                                disabled={!isMe} 
+                                icon={<Dumbbell size={16} className="text-indigo-400"/>} 
                               />
                             )}
                           </div>
@@ -638,7 +859,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                       );
                     })}
 
-                    {/* New exercises mapping */}
+                    {/* NEW UNCOMMITTED EXERCISES */}
                     {newInCat.map((entry) => {
                       const isStrength = isStrengthExercise(entry.name);
                       const isSpeed = isSpeedExercise(entry.name);
@@ -654,7 +875,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                           toggleVisibilityOther={toggleVisibilityOther} 
                           onDelete={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
                         >
-                          <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-2 relative shadow-sm flex flex-col justify-center">
+                          <div className="h-full w-full bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-3 relative shadow-sm flex flex-col justify-between">
                             <button 
                               onClick={() => setEntries(prev => prev.filter(e => e.name !== entry.name))} 
                               className="absolute -top-2 -right-2 text-indigo-400 hover:text-indigo-600 bg-white border border-indigo-100 rounded-full z-20 p-1.5 shadow-sm transition-colors"
@@ -664,45 +885,78 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                             <span className="text-xs font-bold text-indigo-500 mb-2 truncate block w-full px-1 uppercase tracking-tight">
                               {entry.label} (NEW)
                             </span>
-                            {isStrength ? (
-                              <div className="flex gap-2 w-full">
-                                <div className="flex-1">
-                                  <InputField 
-                                    label={`Weight (${stUnit})`} type="number" value={entry.weight || ''} 
-                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, weight: v } : e))} 
-                                    icon={<Dumbbell size={14} className="text-indigo-500"/>} 
-                                  />
-                                </div>
-                                <div className="flex-1">
-                                  <InputField 
-                                    label="Reps" type="number" value={entry.reps || ''} 
-                                    onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, reps: v } : e))} 
-                                    icon={<RefreshCw size={14} className="text-indigo-500"/>} 
-                                  />
-                                </div>
-                              </div>
-                            ) : isSpeed ? (
-                              <div className="w-full">
-                                <InputField 
-                                  label={`Value (${spUnit})`} 
-                                  type={spUnit === 'mm:ss' ? 'text' : 'number'} 
-                                  value={entry.value} 
-                                  onChange={(v: string) => {
-                                    if (spUnit === 'mm:ss') {
-                                      if (/^[\d:]*$/.test(v)) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
-                                    } else {
-                                      if (!v.includes('-')) setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e));
-                                    }
-                                  }}
-                                  icon={<PlusCircle size={16} className="text-indigo-500"/>} 
-                                />
+
+                              {isStrength || isSpeed ? (
+                              <div className="space-y-2">
+                                {entry.sets.map((set, setIdx) => (
+                                  <div key={set.id} className="flex gap-2 items-center w-full">
+                                    <span className="text-[10px] font-bold text-indigo-400 w-4">{setIdx + 1}.</span>
+                                    
+                                    {isStrength ? (
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label={`Weight (${stUnit})`} 
+                                          type="number" 
+                                          value={set.weight} 
+                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'weight', v)}
+                                          disabled={!isMe} 
+                                          icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label={`Time (${spUnit})`} 
+                                          type="text" 
+                                          value={set.time || ''} 
+                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                          disabled={!isMe} 
+                                          icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Reps" 
+                                        type="number" 
+                                        value={set.reps} 
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'reps', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                    
+                                    {entry.sets.length > 1 && isMe && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => removeSetFromEntry(entry.name, set.id)}
+                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                        title="Remove set"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                
+                                {entry.sets.length < 10 && isMe && (
+                                  <button
+                                    type="button"
+                                    onClick={() => addSetToEntry(entry.name)}
+                                    className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-100/50 rounded-xl transition-colors border border-dashed border-indigo-200"
+                                  >
+                                    <Plus size={14} /> ADD SET
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <InputField 
-                                label={`Value ${entry.unit ? `(${entry.unit})` : ''}`} 
-                                type="number" value={entry.value} 
+                                label={`Value ${entry.unit ? `(${entry.unit})` : ''}`.trim()} 
+                                type="number" 
+                                value={entry.value} 
                                 onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
-                                icon={<PlusCircle size={16} className="text-indigo-500"/>} 
+                                icon={<Dumbbell size={16} className="text-indigo-500"/>} 
                               />
                             )}
                           </div>
@@ -716,16 +970,20 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           </div>
         </div>
 
-        <div className="p-5 border-t border-slate-100 bg-white">
+        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
           <button 
-            onClick={handleSaveExercises}
-            disabled={saving}
-            className={`w-full py-4 rounded-xl font-black text-white shadow-lg flex justify-center items-center gap-2 transition-all text-lg ${
-              saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.98]'
-            }`}
+            onClick={onClose} 
+            className="px-6 py-3 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-colors"
           >
-            {saving ? <RefreshCw className="animate-spin" size={20}/> : <CheckCircle size={20}/>}
-            {saving ? 'SAVING DATA...' : 'SAVE EXERCISE LOG'}
+            Cancel
+          </button>
+          <button 
+            onClick={handleSaveExercises} 
+            disabled={saving}
+            className="px-8 py-3 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-200"
+          >
+            {saving ? <RefreshCw className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
+            SAVE EXERCISE LOG
           </button>
         </div>
       </div>

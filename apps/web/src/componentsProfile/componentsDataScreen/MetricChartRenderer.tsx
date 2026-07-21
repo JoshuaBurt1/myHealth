@@ -1,4 +1,3 @@
-// MetricChartRenderer.tsx
 import React, { useState } from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
@@ -28,9 +27,10 @@ export const MetricGraph = ({ title, unit, unitToggle, icon, children, percentag
                 {percentageDisplay}
               </div>
             </div>
-            <div className="flex items-start justify-between mt-1">
-              <div className="flex flex-col">
-                <div className="flex items-center">
+
+            <div className="flex items-center justify-between mt-1 w-full">
+              <div className="flex flex-col w-full">
+                <div className="flex items-center w-full">
                   {unitToggle ? (
                     unitToggle
                   ) : (
@@ -40,7 +40,7 @@ export const MetricGraph = ({ title, unit, unitToggle, icon, children, percentag
                 {fractionsDisplay}
               </div>
               {isAggregated && (
-                <span className="text-[9px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter h-fit">
+                <span className="text-[9px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter h-fit shrink-0 ml-2">
                   Aggregated by day
                 </span>
               )}
@@ -79,6 +79,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   selectedDiet
 }) => {
   const [isConverted, setIsConverted] = useState(false);
+  const [viewMode, setViewMode] = useState<'1rm' | 'load' | 'both'>('both');
 
   if (!graph) return null;
 
@@ -91,6 +92,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   // 2. Use the pre-existing lists from constants for O(1) or direct array checks
   const isSpeed = SPEED_LIST.includes(dataKey) || unitClean === 'sec' || unitClean === 's';
   const isStrength = STRENGTH_LIST.includes(dataKey) || unitClean === 'kg';
+
+  // 3. Check for presence of totalLoad
+  const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
 
   const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : rawUnit;
 
@@ -120,7 +124,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const renderThresholdLines = (
     thresholds?: MetricThresholds, 
     labelPrefix: string = '', 
-    opacity: number = 0.7
+    opacity: number = 0.7,
+    yAxisId: string = "left"
   ) => {
     if (!thresholds) return null;
     
@@ -131,6 +136,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       <>
         {thresholds.criticalHigh && (
           <ReferenceLine 
+            yAxisId={yAxisId}
             y={thresholds.criticalHigh} 
             stroke={CRIT_COLOR} 
             strokeDasharray="4 4" 
@@ -149,6 +155,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         )}
         {thresholds.warningHigh && (
           <ReferenceLine 
+            yAxisId={yAxisId}
             y={thresholds.warningHigh} 
             stroke={WARN_COLOR} 
             strokeDasharray="4 4" 
@@ -167,6 +174,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         )}
         {thresholds.warningLow && (
           <ReferenceLine 
+            yAxisId={yAxisId}
             y={thresholds.warningLow} 
             stroke={WARN_COLOR} 
             strokeDasharray="4 4" 
@@ -185,6 +193,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         )}
         {thresholds.criticalLow && (
           <ReferenceLine 
+            yAxisId={yAxisId}
             y={thresholds.criticalLow} 
             stroke={CRIT_COLOR} 
             strokeDasharray="4 4" 
@@ -217,6 +226,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   };
 
   const renderPercentage = (key: string) => {
+    // Total and Last values are only supposed to show for exercises
+    if (!isStrength && !isSpeed) return null;
+
     const data = reportData[key];
     if (!data || data.length < 2) return null;
     
@@ -319,23 +331,52 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   });
 
   const renderToggle = () => {
-    if (!isSpeed && !isStrength) return null;
+    if (!isSpeed && !isStrength && !hasTotalLoad) return null;
     
     const label1 = isSpeed ? 'SEC' : 'KG';
     const label2 = isSpeed ? 'MM:SS' : 'LBS';
     
     return (
-      <button
-        onClick={(e) => { e.stopPropagation(); setIsConverted(!isConverted); }}
-        className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto"
-      >
-        <span className={`px-2 py-0.5 rounded-full transition-all ${!isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
-          {label1}
-        </span>
-        <span className={`px-2 py-0.5 rounded-full transition-all ${isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
-          {label2}
-        </span>
-      </button>
+      <div className="flex items-center justify-between w-full grow">
+        {/* Far Left: Unit Toggle */}
+        {(isSpeed || isStrength) ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsConverted(!isConverted); }}
+            className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto shrink-0"
+          >
+            <span className={`px-2 py-0.5 rounded-full transition-all ${!isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+              {label1}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full transition-all ${isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+              {label2}
+            </span>
+          </button>
+        ) : <div />}
+
+        {/* Far Right: Mode Toggle */}
+        {hasTotalLoad && (
+          <div className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 pointer-events-auto shrink-0 ml-auto">
+            <button
+              onClick={(e) => { e.stopPropagation(); setViewMode('1rm'); }}
+              className={`px-2 py-0.5 rounded-full transition-all ${viewMode === '1rm' ? 'bg-white shadow-sm text-slate-900' : 'hover:text-slate-700 cursor-pointer'}`}
+            >
+              1RM
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setViewMode('load'); }}
+              className={`px-2 py-0.5 rounded-full transition-all ${viewMode === 'load' ? 'bg-white shadow-sm text-slate-900' : 'hover:text-slate-700 cursor-pointer'}`}
+            >
+              LOAD
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setViewMode('both'); }}
+              className={`px-2 py-0.5 rounded-full transition-all ${viewMode === 'both' ? 'bg-white shadow-sm text-slate-900' : 'hover:text-slate-700 cursor-pointer'}`}
+            >
+              BOTH
+            </button>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -352,7 +393,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
-          <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          <YAxis yAxisId="left" domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={(val) => Number.isInteger(val) ? val.toString() : val.toFixed(1)} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           <Tooltip 
             cursor={false} 
             wrapperStyle={{ pointerEvents: 'none' }} 
@@ -360,9 +401,10 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             formatter={(value: any, name: any) => [`${value} mmHg`, String(name || '')]}
             itemSorter={(item) => (item.dataKey === 'bpSyst' ? -1 : 1)}
           />
-          {renderThresholdLines(BP_THRESHOLDS.systolic, 'SYS ', 0.8)}
-          {renderThresholdLines(BP_THRESHOLDS.diastolic, 'DIA ', 0.25)}
+          {renderThresholdLines(BP_THRESHOLDS.systolic, 'SYS ', 0.8, "left")}
+          {renderThresholdLines(BP_THRESHOLDS.diastolic, 'DIA ', 0.25, "left")}
           <Line 
+            yAxisId="left"
             type="monotone" 
             dataKey="bpSyst" 
             name="Systolic" 
@@ -374,6 +416,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             activeDot={(props: any) => renderCustomActiveDot(props, "#8b5cf6", "bpSyst")}
           />
           <Line 
+            yAxisId="left"
             type="monotone" 
             dataKey="bpDias" 
             name="Diastolic" 
@@ -522,17 +565,28 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
-          <YAxis domain={domain} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          
+          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={domain} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          {hasTotalLoad && (
+            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          )}
+
           <Tooltip 
             cursor={false} 
             wrapperStyle={{ pointerEvents: 'none' }} 
             labelFormatter={(val) => new Date(val).toLocaleString()}
-            formatter={(value: any) => [`${formatValue(value)} ${displayUnit}`, config.title]} 
+            formatter={(value: any, name: any) => {
+              const nameStr = String(name || '');
+              const isLoad = nameStr.includes('totalLoad');
+              const label = isLoad ? 'Total Load' : config.title;
+              return [`${formatValue(value)} ${displayUnit}`, label];
+            }}
           />
-          {renderThresholdLines(config.thresholds)}
+          {renderThresholdLines(config.thresholds, '', 0.7, "left")}
           
           {dietThresholds?.max && (
             <ReferenceLine 
+              yAxisId="left"
               y={dietThresholds.max} 
               stroke="#3b82f6"
               strokeDasharray="4 4" 
@@ -551,6 +605,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
           )}
           {dietThresholds?.min && (
             <ReferenceLine 
+              yAxisId="left"
               y={dietThresholds.min} 
               stroke="#3b82f6"
               strokeDasharray="4 4" 
@@ -570,6 +625,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
 
           {config.key === 'calories' && tdeeResult && tdeeResult > 0 && (
             <ReferenceLine 
+              yAxisId="left"
               y={tdeeResult} 
               stroke={config.color}
               strokeDasharray="4 4" 
@@ -586,16 +642,35 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               }} 
             />
           )}
-          <Line 
-            type="monotone" 
-            dataKey={config.key} 
-            stroke={config.color} 
-            strokeWidth={3} 
-            connectNulls 
-            style={{ pointerEvents: 'none' }} 
-            dot={commonDotProps(config.color, config.key)}
-            activeDot={(props: any) => renderCustomActiveDot(props, config.color, config.key)}
-          />
+          
+          {(viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={config.key} 
+              stroke={config.color} 
+              strokeWidth={3} 
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps(config.color, config.key)}
+              activeDot={(props: any) => renderCustomActiveDot(props, config.color, config.key)}
+            />
+          )}
+
+          {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
+            <Line 
+              yAxisId="right"
+              type="monotone" 
+              dataKey={`${config.key}_totalLoad`} 
+              stroke="#94a3b8" 
+              strokeWidth={3}
+              strokeDasharray="4 4"
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps("#94a3b8", `${config.key}_totalLoad`)}
+              activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${config.key}_totalLoad`)}
+            />
+          )}
         </LineChart>
       </MetricGraph>
     );
@@ -619,23 +694,52 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
-          <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          
+          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          {hasTotalLoad && (
+            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          )}
+
           <Tooltip 
             cursor={false} 
             wrapperStyle={{ pointerEvents: 'none' }} 
             labelFormatter={(val) => new Date(val).toLocaleString()}
-            formatter={(value: any) => [`${formatValue(value)} ${displayUnit}`, m.name.toUpperCase()]} 
+            formatter={(value: any, name: any) => {
+              const nameStr = String(name || '');
+              const isLoad = nameStr.includes('totalLoad');
+              const label = isLoad ? 'Total Load' : m.name.toUpperCase();
+              return [`${formatValue(value)} ${displayUnit}`, label];
+            }}
           />
-          <Line 
-            type="monotone" 
-            dataKey={m.key} 
-            stroke={customColor} 
-            strokeWidth={3} 
-            connectNulls 
-            style={{ pointerEvents: 'none' }} 
-            dot={commonDotProps(customColor, m.key)}
-            activeDot={(props: any) => renderCustomActiveDot(props, customColor, m.key)}
-          />
+          
+          {(viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={m.key} 
+              stroke={customColor} 
+              strokeWidth={3} 
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps(customColor, m.key)}
+              activeDot={(props: any) => renderCustomActiveDot(props, customColor, m.key)}
+            />
+          )}
+
+          {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
+            <Line 
+              yAxisId="right"
+              type="monotone" 
+              dataKey={`${m.key}_totalLoad`} 
+              stroke="#94a3b8" 
+              strokeWidth={3} 
+              strokeDasharray="4 4"
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps("#94a3b8", `${m.key}_totalLoad`)}
+              activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${m.key}_totalLoad`)}
+            />
+          )}
         </LineChart>
       </MetricGraph>
     );
