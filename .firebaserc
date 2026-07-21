@@ -9,6 +9,13 @@
           "myhealth79"
         ]
       }
+    },
+    "portfolio-ede78": {
+      "hosting": {
+        "health-site": [
+          "myHealth79"
+        ]
+      }
     }
   },
   "etags": {}

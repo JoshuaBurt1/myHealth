@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Activity, PlusCircle, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, getStandardUnit } from './profileConstants';
+import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, getStandardUnit, getMetricCategoryPosition } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
 
@@ -366,19 +366,23 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
               const categoryType = category.toLowerCase();
 
               // Filter existing vitals for the selected category
-              const existingInCat = trackedVitals.filter(vital => {
-                if (category === 'Custom') return vital.isCustom;
-                const map = CATEGORY_MAPS[category];
-                return map && Object.values(map).includes(vital.key);
-              });
+              const existingInCat = trackedVitals
+                .filter(vital => {
+                  if (category === 'Custom') return vital.isCustom;
+                  const map = CATEGORY_MAPS[category];
+                  return map && Object.values(map).includes(vital.key);
+                })
+                .sort((a, b) => getMetricCategoryPosition(a.key) - getMetricCategoryPosition(b.key));
 
-              // Filter new session entries for the selected category
-              const newInCat = entries.filter(entry => {
-                const isDuplicate = existingInCat.some(exist => exist.key === entry.key);
-                if (isDuplicate) return false; 
-                if (category === 'Custom') return entry.isCustom;
-                return entry.type === categoryType;
-              });
+              // 2. Filter and sort new session entries for the selected category
+              const newInCat = entries
+                .filter(entry => {
+                  const isDuplicate = existingInCat.some(exist => exist.key === entry.key);
+                  if (isDuplicate) return false; 
+                  if (category === 'Custom') return entry.isCustom;
+                  return entry.type === categoryType;
+                })
+                .sort((a, b) => getMetricCategoryPosition(a.key) - getMetricCategoryPosition(b.key));
 
               // If this specific tab has no data, show an empty state for this category
               if (existingInCat.length === 0 && newInCat.length === 0) {

@@ -5,7 +5,7 @@ import { db, auth } from '../firebase';
 import { 
   RefreshCw, Calendar, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
 } from 'lucide-react';
-import { SINGLE_GRAPHS } from '../componentsProfile/profileConstants';
+import { SINGLE_GRAPHS, getMetricCategoryPosition, ALL_CATEGORY_MAPS } from '../componentsProfile/profileConstants';
 import { MetricChartRenderer } from './componentsDataScreen/MetricChartRenderer';
 import { ModalEditDelete } from './ModalEditDelete';
 import { ActiveAlerts } from './componentsDataScreen/ActiveAlerts';
@@ -263,8 +263,8 @@ const DataScreen: React.FC<DataScreenProps> = ({
     return vitalsData.some(d => d[key] !== undefined && d[key] !== null);
   };
 
-  const visibleGraphs = useMemo(() => {
-    const graphs = [];
+const visibleGraphs = useMemo(() => {
+    const graphs: any[] = [];
 
     if ((hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias')))) {
       graphs.push({ type: 'bp', id: 'bp' });
@@ -280,6 +280,51 @@ const DataScreen: React.FC<DataScreenProps> = ({
       if (hasData(m.key) && (isMe || !hiddenOther.includes(m.key))) {
         graphs.push({ type: 'custom', id: m.key, m, index });
       }
+    });
+
+    // Safely extract keys in order, handling arrays, objects, and missing properties
+    const orderedKeys: string[] = [];
+    ALL_CATEGORY_MAPS.forEach((categoryMap: any) => {
+      if (!categoryMap) return;
+
+      if (Array.isArray(categoryMap)) {
+        categoryMap.forEach((item: any) => {
+          if (!item) return;
+          const k = typeof item === 'string' ? item : (item.key || item.dataKey || item.id || '');
+          if (k) orderedKeys.push(String(k).toLowerCase());
+        });
+      } else if (typeof categoryMap === 'object') {
+        // Extract dictionary values ('bpSyst', 'hr', etc.) rather than display labels
+        Object.values(categoryMap).forEach((val: any) => {
+          if (val && typeof val === 'string') {
+            orderedKeys.push(val.toLowerCase());
+          }
+        });
+      }
+    });
+
+    // Helper to safely resolve a target key for graph sorting
+    const getGraphKey = (g: any): string => {
+      if (!g) return '';
+      if (g.id === 'bp' || g.type === 'bp') return 'bpsyst';
+      return String(g.config?.key || g.m?.key || g.id || g.key || '').toLowerCase();
+    };
+
+    // Sort graphs strictly based on their positional order in ALL_CATEGORY_MAPS
+    graphs.sort((a, b) => {
+      const aKey = getGraphKey(a);
+      const bKey = getGraphKey(b);
+
+      let aIndex = orderedKeys.indexOf(aKey);
+      if (aIndex === -1 && aKey === 'bpsyst') aIndex = orderedKeys.indexOf('bp');
+
+      let bIndex = orderedKeys.indexOf(bKey);
+      if (bIndex === -1 && bKey === 'bpsyst') bIndex = orderedKeys.indexOf('bp');
+
+      if (aIndex === -1) aIndex = Number.MAX_SAFE_INTEGER;
+      if (bIndex === -1) bIndex = Number.MAX_SAFE_INTEGER;
+
+      return aIndex - bIndex;
     });
 
     return graphs;

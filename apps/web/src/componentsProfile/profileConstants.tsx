@@ -15,6 +15,26 @@ export interface MetricThresholds {
   criticalLow?: number;
 }
 
+
+export const getCategoryIndex = (keyOrLabel: string, map: Record<string, string>): number => {
+  if (!keyOrLabel || !map) return -1;
+  let idx = Object.values(map).indexOf(keyOrLabel);
+  if (idx !== -1) return idx;
+  return Object.keys(map).indexOf(keyOrLabel);
+};
+
+export const getMetricCategoryPosition = (metricKey: string): number => {
+  if (!metricKey) return Infinity;
+  for (const map of ALL_CATEGORY_MAPS) {
+    const pos = getCategoryIndex(metricKey, map);
+    if (pos !== -1) return pos;
+  }
+  if (typeof DIET_TYPES_MAP !== 'undefined' && DIET_TYPES_MAP[metricKey]) {
+    return Object.keys(DIET_TYPES_MAP).indexOf(metricKey);
+  }
+  return Infinity; 
+};
+
 export const BP_THRESHOLDS = {
   systolic: { warningHigh: 130, warningLow: 90, criticalHigh: 180, criticalLow: 70 } as MetricThresholds,
   diastolic: { warningHigh: 84, warningLow: 60, criticalHigh: 120, criticalLow: 40 } as MetricThresholds
@@ -282,7 +302,31 @@ export const YOGA_LIST = Object.keys(YOGA_KEY_MAP);
 export const MOBILITY_LIST = Object.keys(MOBILITY_KEY_MAP);
 export const PHYSIO_LIST = Object.keys(PHYSIO_KEY_MAP);
 
-export const SINGLE_GRAPHS = [
+export const ALL_CATEGORY_MAPS = [
+  VITAL_KEY_MAP,
+  BLOODTEST_KEY_MAP,
+  SYMPTOM_KEY_MAP,
+  DIET_KEY_MAP,
+  MICRONUTRIENT_KEY_MAP,
+  STRENGTH_KEY_MAP,
+  SPEED_KEY_MAP,
+  PLYO_KEY_MAP,
+  ENDURANCE_KEY_MAP,
+  YOGA_KEY_MAP,
+  MOBILITY_KEY_MAP,
+  PHYSIO_KEY_MAP,
+];
+
+const CATEGORY_ORDER_LOOKUP = new Map<string, number>();
+let globalIndex = 0;
+
+ALL_CATEGORY_MAPS.forEach((categoryMap) => {
+  Object.values(categoryMap).forEach((metricKey) => {
+    CATEGORY_ORDER_LOOKUP.set(metricKey.toLowerCase(), globalIndex++);
+  });
+});
+
+const RAW_SINGLE_GRAPHS = [
   // Core Vitals
   { key: 'hr', title: 'HEART RATE', unit: 'BPM', icon: <Heart className="text-red-500" />, color: '#ef4444', thresholds: { warningHigh: 100, warningLow: 50, criticalHigh: 120, criticalLow: 40 } as MetricThresholds },
   { key: 'rr', title: 'RESPIRATION RATE', unit: 'Breaths/min', icon: <Wind className="text-blue-500" />, color: '#3b82f6', thresholds: { warningHigh: 22, warningLow: 12, criticalHigh: 26, criticalLow: 8 } as MetricThresholds },
@@ -558,13 +602,17 @@ export const SINGLE_GRAPHS = [
   { key: 'proneYtw', title: 'PRONE Y-T-W', unit: 'Reps', icon: <Move className="text-indigo-600" />, color: '#4f46e5' }
 ];
 
+export const SINGLE_GRAPHS = [...RAW_SINGLE_GRAPHS].sort((a, b) => {
+  const posA = CATEGORY_ORDER_LOOKUP.get(a.key.toLowerCase()) ?? Infinity;
+  const posB = CATEGORY_ORDER_LOOKUP.get(b.key.toLowerCase()) ?? Infinity;
+  return posA - posB;
+});
+
 export const getStandardUnit = (key: string): string => {
   if (key === 'bpSyst' || key === 'bpDias') return 'mmHg';
   const graph = SINGLE_GRAPHS.find(g => g.key === key);
   return graph ? graph.unit : '';
 };
-
-
 export const getThresholds = (key: string): MetricThresholds | undefined => {
   if (key === 'bpSyst') return BP_THRESHOLDS.systolic;
   if (key === 'bpDias') return BP_THRESHOLDS.diastolic;

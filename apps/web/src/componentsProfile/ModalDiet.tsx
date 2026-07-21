@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Apple, CheckCircle, Info, PlusCircle, AlertCircle, ChevronDown, Search, Database, Trash2 } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, getStandardUnit } from './profileConstants';
+import { DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, getStandardUnit, getMetricCategoryPosition } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
 
@@ -726,7 +726,9 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                         {isExpanded && (
                           <div className="px-2 pb-3 sm:px-3 sm:pb-3 border-t border-blue-100 bg-white">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1 pt-2">
-                              {Array.from(new Map([...trackedDiet, ...entries].map(m => [m.name, m])).values()).map((metric) => {
+                              {Array.from(new Map([...trackedDiet, ...entries].map(m => [m.name, m])).values())
+                              .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name))
+                              .map((metric) => {
                                 const itemValue = food.isCustomFood 
                                   ? (food.customValues?.[metric.name] || '')
                                   : getNutrientValue(food, metric.name, metric.label);
@@ -872,8 +874,24 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                   {[selectedCategory].map(category => { 
                     const categoryType = category.toLowerCase();
                     
-                    const existingInCat = trackedDiet.filter(dt => dt.type === categoryType || (category === 'Custom' && dt.isCustom));
-                    const newInCat = entries.filter(e => (e.type === categoryType || (category === 'Custom' && e.isCustom)) && !trackedDiet.some(dt => dt.name === e.name));
+                    // 1. Filter & sort tracked diet metrics for the selected category
+                    const existingInCat = trackedDiet
+                      .filter(item => {
+                        if (selectedCategory === 'Custom') return item.isCustom;
+                        const map = DIET_CATEGORIES[selectedCategory];
+                        return map && Object.values(map).includes(item.name);
+                      })
+                      .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
+
+                    // 2. Filter & sort newly added session entries for the selected category
+                    const newInCat = entries
+                      .filter(entry => {
+                        const isDuplicate = existingInCat.some(exist => exist.name === entry.name);
+                        if (isDuplicate) return false;
+                        if (selectedCategory === 'Custom') return entry.isCustom;
+                        return entry.type === selectedCategory.toLowerCase();
+                      })
+                      .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
 
                     if (existingInCat.length === 0 && newInCat.length === 0) return null;
 
