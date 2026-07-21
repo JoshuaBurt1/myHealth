@@ -5,7 +5,7 @@ import { db, auth } from '../firebase';
 import { 
   RefreshCw, Calendar, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
 } from 'lucide-react';
-import { SINGLE_GRAPHS, getMetricCategoryPosition, ALL_CATEGORY_MAPS } from '../componentsProfile/profileConstants';
+import { SINGLE_GRAPHS, ALL_CATEGORY_MAPS } from '../componentsProfile/profileConstants';
 import { MetricChartRenderer } from './componentsDataScreen/MetricChartRenderer';
 import { ModalEditDelete } from './ModalEditDelete';
 import { ActiveAlerts } from './componentsDataScreen/ActiveAlerts';

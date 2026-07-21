@@ -15,26 +15,6 @@ export interface MetricThresholds {
   criticalLow?: number;
 }
 
-
-export const getCategoryIndex = (keyOrLabel: string, map: Record<string, string>): number => {
-  if (!keyOrLabel || !map) return -1;
-  let idx = Object.values(map).indexOf(keyOrLabel);
-  if (idx !== -1) return idx;
-  return Object.keys(map).indexOf(keyOrLabel);
-};
-
-export const getMetricCategoryPosition = (metricKey: string): number => {
-  if (!metricKey) return Infinity;
-  for (const map of ALL_CATEGORY_MAPS) {
-    const pos = getCategoryIndex(metricKey, map);
-    if (pos !== -1) return pos;
-  }
-  if (typeof DIET_TYPES_MAP !== 'undefined' && DIET_TYPES_MAP[metricKey]) {
-    return Object.keys(DIET_TYPES_MAP).indexOf(metricKey);
-  }
-  return Infinity; 
-};
-
 export const BP_THRESHOLDS = {
   systolic: { warningHigh: 130, warningLow: 90, criticalHigh: 180, criticalLow: 70 } as MetricThresholds,
   diastolic: { warningHigh: 84, warningLow: 60, criticalHigh: 120, criticalLow: 40 } as MetricThresholds

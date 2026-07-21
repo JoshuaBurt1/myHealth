@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Apple, CheckCircle, Info, PlusCircle, AlertCircle, ChevronDown, Search, Database, Trash2 } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, getStandardUnit, getMetricCategoryPosition } from './profileConstants';
+import { DIET_KEY_MAP, MICRONUTRIENT_KEY_MAP, getStandardUnit } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
 
@@ -726,39 +726,48 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                         {isExpanded && (
                           <div className="px-2 pb-3 sm:px-3 sm:pb-3 border-t border-blue-100 bg-white">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1 pt-2">
-                              {Array.from(new Map([...trackedDiet, ...entries].map(m => [m.name, m])).values())
-                              .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name))
-                              .map((metric) => {
-                                const itemValue = food.isCustomFood 
-                                  ? (food.customValues?.[metric.name] || '')
-                                  : getNutrientValue(food, metric.name, metric.label);
+                            {(() => {
+                              const currentMap = DIET_CATEGORIES[selectedCategory];
+                              const keyOrderLookup = new Map<string, number>();
+                              if (currentMap) {
+                                Object.values(currentMap).forEach((key, idx) => keyOrderLookup.set(key, idx));
+                              }
+                              const getPos = (key: string) => keyOrderLookup.get(key) ?? Infinity;
 
-                                return (
-                                  <div key={metric.name} className="flex flex-col gap-1">
-                                    <label className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold">
-                                      {metric.label} {metric.unit ? `(${metric.unit})` : ''}
-                                    </label>
-                                    
-                                    {food.isCustomFood ? (
-                                      <input
-                                        type="number"
-                                        className="p-1.5 sm:p-2 border border-slate-200 rounded-lg text-slate-700 font-medium focus:border-blue-500 focus:outline-none text-xs sm:text-sm w-full"
-                                        placeholder="0"
-                                        value={itemValue}
-                                        onChange={(e) => {
-                                          if (!e.target.value.includes('-')) {
-                                            handleCustomValueChange(food.listId, metric.name, e.target.value);
-                                          }
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="p-1.5 sm:p-2 border border-slate-100 bg-slate-50/50 rounded-lg text-slate-700 font-medium text-xs sm:text-sm">
-                                        {itemValue || 0}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                              return Array.from(new Map([...trackedDiet, ...entries].map(m => [m.name, m])).values())
+                                .sort((a, b) => getPos(a.name) - getPos(b.name))
+                                .map((metric) => {
+                                  const itemValue = food.isCustomFood 
+                                    ? (food.customValues?.[metric.name] || '')
+                                    : getNutrientValue(food, metric.name, metric.label);
+
+                                  return (
+                                    <div key={metric.name} className="flex flex-col gap-1">
+                                      <label className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold">
+                                        {metric.label} {metric.unit ? `(${metric.unit})` : ''}
+                                      </label>
+                                      
+                                      {food.isCustomFood ? (
+                                        <input
+                                          type="number"
+                                          className="p-1.5 sm:p-2 border border-slate-200 rounded-lg text-slate-700 font-medium focus:border-blue-500 focus:outline-none text-xs sm:text-sm w-full"
+                                          placeholder="0"
+                                          value={itemValue}
+                                          onChange={(e) => {
+                                            if (!e.target.value.includes('-')) {
+                                              handleCustomValueChange(food.listId, metric.name, e.target.value);
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="p-1.5 sm:p-2 border border-slate-100 bg-slate-50/50 rounded-lg text-slate-700 font-medium text-xs sm:text-sm">
+                                          {itemValue || 0}
+                                        </div>
+                                      )}
+                                    </div>
+                                    );
+                                  });
+                              })()}
 
                               {[...trackedDiet, ...entries].length === 0 && (
                                 <span className="text-slate-400 font-normal col-span-full text-[10px] sm:text-xs">
@@ -872,8 +881,13 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
               ) : (
                 <div className="space-y-8">
                   {[selectedCategory].map(category => { 
-                    const categoryType = category.toLowerCase();
-                    
+                    const currentMap = DIET_CATEGORIES[selectedCategory];
+                    const keyOrderLookup = new Map<string, number>();
+                    if (currentMap) {
+                      Object.values(currentMap).forEach((key, idx) => keyOrderLookup.set(key, idx));
+                    }
+                    const getPos = (key: string) => keyOrderLookup.get(key) ?? Infinity;
+
                     // 1. Filter & sort tracked diet metrics for the selected category
                     const existingInCat = trackedDiet
                       .filter(item => {
@@ -881,7 +895,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                         const map = DIET_CATEGORIES[selectedCategory];
                         return map && Object.values(map).includes(item.name);
                       })
-                      .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
+                      .sort((a, b) => getPos(a.name) - getPos(b.name));
 
                     // 2. Filter & sort newly added session entries for the selected category
                     const newInCat = entries
@@ -891,7 +905,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                         if (selectedCategory === 'Custom') return entry.isCustom;
                         return entry.type === selectedCategory.toLowerCase();
                       })
-                      .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
+                      .sort((a, b) => getPos(a.name) - getPos(b.name));
 
                     if (existingInCat.length === 0 && newInCat.length === 0) return null;
 

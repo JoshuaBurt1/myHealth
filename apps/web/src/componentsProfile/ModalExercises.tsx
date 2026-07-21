@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef} from 'react';
 import { X, Dumbbell, PlusCircle, RefreshCw, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
-import { STRENGTH_KEY_MAP, SPEED_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, YOGA_KEY_MAP, MOBILITY_KEY_MAP, PHYSIO_KEY_MAP, getStandardUnit, getMetricCategoryPosition } from './profileConstants';
+import { STRENGTH_KEY_MAP, SPEED_KEY_MAP, PLYO_KEY_MAP, ENDURANCE_KEY_MAP, YOGA_KEY_MAP, MOBILITY_KEY_MAP, PHYSIO_KEY_MAP, getStandardUnit } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
 
@@ -475,25 +475,32 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2 uppercase tracking-wider">
               <Dumbbell size={16}/> Active Exercise Fields
             </h3>
+
             {(() => {
               // Only process the category currently selected by the tab
               const category = selectedCategory;
               const categoryType = category.toLowerCase();
-              
-              // 1. Filter existing tracked exercises
+              const currentMap = CATEGORY_MAPS[category];
+
+              // 1. Create an O(1) index lookup map for the currently selected exercise category tab
+              const keyOrderLookup = new Map<string, number>();
+              if (currentMap) {
+                Object.values(currentMap).forEach((key, idx) => keyOrderLookup.set(key, idx));
+              }
+              const getPos = (key: string) => keyOrderLookup.get(key) ?? Infinity;
+
+              // 2. Filter existing tracked exercises
               const existingInCat = trackedExercises
                 .filter(ex => ex.type === categoryType || (category === 'Custom' && ex.isCustom))
-                // SORT: Orders exercises by their constant position index
-                .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
+                .sort((a, b) => getPos(a.name) - getPos(b.name));
 
-              // 2. Filter new entries added in current session
+              // 3. Filter new entries added in current session
               const newInCat = entries
                 .filter(e => 
                   (e.type === categoryType || (category === 'Custom' && e.isCustom)) && 
                   !trackedExercises.some(ex => ex.name === e.name)
                 )
-                // SORT: Orders new entries as well
-                .sort((a, b) => getMetricCategoryPosition(a.name) - getMetricCategoryPosition(b.name));
+                .sort((a, b) => getPos(a.name) - getPos(b.name));
 
               // If the active tab has no exercises, show the empty state for that specific category
               if (existingInCat.length === 0 && newInCat.length === 0) {
