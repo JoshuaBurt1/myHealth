@@ -1,6 +1,6 @@
 // DataScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
-import { doc, onSnapshot, updateDoc, arrayRemove, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, arrayRemove, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { 
   RefreshCw, Calendar, ChevronLeft, ChevronRight, LayoutGrid, Maximize2
@@ -77,6 +77,24 @@ const aggregateDataByDay = (data: any[], metricsToAggregate: string[]) => {
   });
 
   return [...remainingData, ...Object.values(dailyAggregates)].sort((a, b) => a.timestamp - b.timestamp);
+};
+
+const calculatePercentChange = (oldValue: number, newValue: number): number => {
+  if (oldValue === 0) return newValue > 0 ? 100 : 0;
+  return Number((((newValue - oldValue) / oldValue) * 100).toFixed(2));
+};
+
+const computeChangePercentages = (history: any[]): [number, number] => {
+  if (!history || history.length < 2) return [0, 0];
+
+  const firstVal = Number(history[0].value);
+  const prevVal = Number(history[history.length - 2].value);
+  const lastVal = Number(history[history.length - 1].value);
+
+  const last_percent = calculatePercentChange(prevVal, lastVal);
+  const total_percent = calculatePercentChange(firstVal, lastVal);
+
+  return [last_percent, total_percent];
 };
 
 const DataScreen: React.FC<DataScreenProps> = ({ 
@@ -263,7 +281,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
     return vitalsData.some(d => d[key] !== undefined && d[key] !== null);
   };
 
-const visibleGraphs = useMemo(() => {
+  const visibleGraphs = useMemo(() => {
     const graphs: any[] = [];
 
     if ((hasData('bpSyst') || hasData('bpDias')) && (isMe || (!hiddenOther.includes('bpSyst') && !hiddenOther.includes('bpDias')))) {
@@ -466,40 +484,78 @@ const visibleGraphs = useMemo(() => {
     }
   };
 
+  // --- Cleaned up & Consolidated Handlers ---
   const handleUpdateValue = async (newValue: number) => {
-    if (!selectedPoint || !auth.currentUser) return;
-    const user = auth.currentUser;
-    const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
+    if (!selectedPoint || !userId) return;
+
+    const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+    const metricKey = selectedPoint.fieldName;
 
     try {
-      // 1. Remove old object
-      await updateDoc(profileRef, {
-        [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+      const profileSnap = await getDoc(profileRef);
+      if (!profileSnap.exists()) return;
+
+      const profileData = profileSnap.data();
+      const history: any[] = profileData[metricKey] || [];
+
+      // Replace updated entry matching selectedPoint timestamp
+      const updatedHistory = history.map((item) => {
+        const itemTs = item.dateTime?.toDate 
+          ? item.dateTime.toDate().getTime() 
+          : new Date(item.dateTime).getTime();
+
+        if (itemTs === selectedPoint.ts) {
+          return { ...item, value: newValue };
+        }
+        return item;
       });
 
-      // 2. Add updated object
+      // Recalculate change percentages
+      const newChanges = computeChangePercentages(updatedHistory);
+
+      // Save updated history and recalculated change array
       await updateDoc(profileRef, {
-        [selectedPoint.fieldName]: arrayUnion({
-          ...selectedPoint.rawObject,
-          value: String(newValue)
-        })
+        [metricKey]: updatedHistory,
+        [`change_${metricKey}`]: newChanges
       });
 
       setSelectedPoint(null);
     } catch (err) {
-      console.error("Firebase Sync Error:", err);
+      console.error("Firebase Update Error:", err);
     }
   };
 
   const handleDeleteValue = async () => {
-    if (!selectedPoint || !auth.currentUser) return;
-    const user = auth.currentUser;
-    const profileRef = doc(db, 'users', user.uid, 'profile', 'user_data');
+    if (!selectedPoint || !userId) return;
+
+    const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+    const metricKey = selectedPoint.fieldName;
 
     try {
-      await updateDoc(profileRef, {
-        [selectedPoint.fieldName]: arrayRemove(selectedPoint.rawObject)
+      const profileSnap = await getDoc(profileRef);
+      if (!profileSnap.exists()) return;
+
+      const profileData = profileSnap.data();
+      const history: any[] = profileData[metricKey] || [];
+
+      // Filter out entry matching selectedPoint timestamp
+      const updatedHistory = history.filter((item) => {
+        const itemTs = item.dateTime?.toDate 
+          ? item.dateTime.toDate().getTime() 
+          : new Date(item.dateTime).getTime();
+
+        return itemTs !== selectedPoint.ts;
       });
+
+      // Recalculate change percentages
+      const newChanges = computeChangePercentages(updatedHistory);
+
+      // Save updated history and recalculated change array
+      await updateDoc(profileRef, {
+        [metricKey]: updatedHistory,
+        [`change_${metricKey}`]: newChanges
+      });
+
       setSelectedPoint(null);
     } catch (err) {
       console.error("Firebase Delete Error:", err);
@@ -665,18 +721,18 @@ const visibleGraphs = useMemo(() => {
       </div>
       )}
 
-      {selectedPoint && (
-        <ModalEditDelete
-          isOpen={!!selectedPoint}
-          onClose={() => setSelectedPoint(null)}
-          onDelete={handleDeleteValue}
-          onUpdate={handleUpdateValue}
-          initialValue={selectedPoint.val}
-          title={getModalTitle(selectedPoint.fieldName)}
-          recordedDate={selectedPoint.ts}
-          metricKey={selectedPoint.fieldName}
-        />
-      )}
+        {selectedPoint && (
+          <ModalEditDelete
+            isOpen={!!selectedPoint}
+            onClose={() => setSelectedPoint(null)}
+            onDelete={handleDeleteValue}
+            onUpdate={handleUpdateValue}
+            initialValue={selectedPoint.val}
+            title={getModalTitle(selectedPoint.fieldName)}
+            recordedDate={selectedPoint.ts}
+            metricKey={selectedPoint.fieldName}
+          />
+        )}
 
       {showDatePicker && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
