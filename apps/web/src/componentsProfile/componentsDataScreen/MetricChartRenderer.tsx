@@ -389,7 +389,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   if (validValues.length > 0) {
     if (isStrength) {
       bestValue = Math.max(...validValues);
-      bestLabel = '1RM';
+      bestLabel = 'PR';
     } else if (isSpeed) {
       bestValue = Math.min(...validValues);
       bestLabel = 'PR';

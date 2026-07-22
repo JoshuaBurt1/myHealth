@@ -1,3 +1,4 @@
+// ModalEditDelete.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { STRENGTH_KEY_MAP, SPEED_KEY_MAP } from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
@@ -34,6 +35,21 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     // Check if the datapoint has sets array
     if (targetItem && Array.isArray(targetItem.sets) && targetItem.sets.length > 0) {
       setSets(targetItem.sets);
+      setHasSets(true);
+    } else if (isStrength || isSpeed) {
+      // Create a legacy fallback set with 1 rep and the original value
+      const legacySet: any = {
+        reps: 1,
+        unit: isStrength ? 'KG' : 'SEC',
+      };
+      
+      if (isStrength) {
+        legacySet.weightKg = Number(initialValue) || 0;
+      } else {
+        legacySet.timeSec = Number(initialValue) || 0;
+      }
+
+      setSets([legacySet]);
       setHasSets(true);
     } else {
       setHasSets(false);
