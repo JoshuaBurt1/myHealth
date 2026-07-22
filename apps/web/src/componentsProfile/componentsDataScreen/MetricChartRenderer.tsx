@@ -1,3 +1,4 @@
+// MetricChartRenderer.tsx
 import React, { useState } from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
@@ -380,6 +381,45 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     );
   };
 
+  // Calculate PR / 1RM
+  const validValues = dataKey ? filteredData.map(d => Number(d[dataKey])).filter(n => !isNaN(n) && n > 0) : [];
+  let bestValue: number | null = null;
+  let bestLabel = '';
+  
+  if (validValues.length > 0) {
+    if (isStrength) {
+      bestValue = Math.max(...validValues);
+      bestLabel = '1RM';
+    } else if (isSpeed) {
+      bestValue = Math.min(...validValues);
+      bestLabel = 'PR';
+    }
+  }
+
+  const renderBestValueLine = () => {
+    if (bestValue === null) return null;
+    const formattedBest = formatValue(bestValue);
+    return (
+      <ReferenceLine 
+        yAxisId="left"
+        y={bestValue} 
+        stroke="#8b5cf6" 
+        strokeDasharray="4 4" 
+        strokeWidth={1.5} 
+        strokeOpacity={0.8}
+        style={{ pointerEvents: 'none' }}
+        label={{ 
+          position: 'insideBottomLeft', 
+          value: `${bestLabel} = ${formattedBest} ${displayUnit}`,
+          fill: '#8b5cf6', 
+          fontSize: 10, 
+          fontWeight: 'bold',
+          fillOpacity: 0.8
+        }} 
+      />
+    );
+  };
+
   if (graph.type === 'bp') {
     const bpAlert = getAlertType('bpSyst') || getAlertType('bpDias');
     return (
@@ -642,21 +682,11 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               }} 
             />
           )}
-          
-          {(viewMode === '1rm' || viewMode === 'both') && (
-            <Line 
-              yAxisId="left"
-              type="monotone" 
-              dataKey={config.key} 
-              stroke={config.color} 
-              strokeWidth={3} 
-              connectNulls 
-              style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps(config.color, config.key)}
-              activeDot={(props: any) => renderCustomActiveDot(props, config.color, config.key)}
-            />
-          )}
 
+          {/* --- ADD BEST VALUE LINE HERE --- */}
+          {renderBestValueLine()}
+          
+          {/* --- SWAPPED ORDER: totalLoad rendered FIRST so it goes underneath --- */}
           {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
             <Line 
               yAxisId="right"
@@ -669,6 +699,21 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               style={{ pointerEvents: 'none' }} 
               dot={commonDotProps("#94a3b8", `${config.key}_totalLoad`)}
               activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${config.key}_totalLoad`)}
+            />
+          )}
+
+          {/* --- SWAPPED ORDER: main value rendered LAST so it sits on top --- */}
+          {(viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={config.key} 
+              stroke={config.color} 
+              strokeWidth={3} 
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps(config.color, config.key)}
+              activeDot={(props: any) => renderCustomActiveDot(props, config.color, config.key)}
             />
           )}
         </LineChart>
@@ -711,21 +756,11 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               return [`${formatValue(value)} ${displayUnit}`, label];
             }}
           />
-          
-          {(viewMode === '1rm' || viewMode === 'both') && (
-            <Line 
-              yAxisId="left"
-              type="monotone" 
-              dataKey={m.key} 
-              stroke={customColor} 
-              strokeWidth={3} 
-              connectNulls 
-              style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps(customColor, m.key)}
-              activeDot={(props: any) => renderCustomActiveDot(props, customColor, m.key)}
-            />
-          )}
 
+          {/* --- ADD BEST VALUE LINE HERE --- */}
+          {renderBestValueLine()}
+          
+          {/* --- SWAPPED ORDER: totalLoad rendered FIRST so it goes underneath --- */}
           {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
             <Line 
               yAxisId="right"
@@ -738,6 +773,21 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               style={{ pointerEvents: 'none' }} 
               dot={commonDotProps("#94a3b8", `${m.key}_totalLoad`)}
               activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${m.key}_totalLoad`)}
+            />
+          )}
+
+          {/* --- SWAPPED ORDER: main value rendered LAST so it sits on top --- */}
+          {(viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={m.key} 
+              stroke={customColor} 
+              strokeWidth={3} 
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={commonDotProps(customColor, m.key)}
+              activeDot={(props: any) => renderCustomActiveDot(props, customColor, m.key)}
             />
           )}
         </LineChart>

@@ -274,7 +274,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
             <div className="mb-4 max-h-60 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {sets.map((setObj, index) => (
                 <div key={index} className="flex gap-2 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <div className="flex flex-col w-[4.5rem]">
+                  <div className="flex flex-col w-18">
                     <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">Reps</label>
                     <input
                       type="number"
@@ -316,7 +316,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                   {/* Trash icon with red on hover */}
                   <button 
                     onClick={() => handleDeleteSet(index)}
-                    className="mt-[18px] p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 cursor-pointer"
+                    className="mt-4.5 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 cursor-pointer"
                     title="Delete Set"
                   >
                     <Trash2 size={18} />
