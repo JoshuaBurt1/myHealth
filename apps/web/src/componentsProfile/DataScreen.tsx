@@ -495,7 +495,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   };
 
   // --- Cleaned up & Consolidated Handlers ---
-  const handleUpdateValue = async (newValue: number) => {
+  const handleUpdateValue = async (updatedFields: any) => { // UPDATED param type
     if (!selectedPoint || !userId) return;
 
     const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
@@ -515,7 +515,9 @@ const DataScreen: React.FC<DataScreenProps> = ({
           : new Date(item.dateTime).getTime();
 
         if (itemTs === selectedPoint.ts) {
-          return { ...item, value: newValue };
+          // Spread operator here merges either the basic { value: X } update 
+          // or the complex { sets: [...], totalLoad: X, value: X } update
+          return { ...item, ...updatedFields };
         }
         return item;
       });
@@ -738,6 +740,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
             onDelete={handleDeleteValue}
             onUpdate={handleUpdateValue}
             initialValue={selectedPoint.val}
+            initialItem={selectedPoint.rawObject}
             title={getModalTitle(selectedPoint.fieldName)}
             recordedDate={selectedPoint.ts}
             metricKey={selectedPoint.fieldName}

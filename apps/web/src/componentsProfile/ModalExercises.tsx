@@ -1,3 +1,4 @@
+// ModalExercises.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Dumbbell, PlusCircle, RefreshCw, AlertCircle, ChevronDown, Plus, Trash2, CheckCircle } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion, updateDoc, deleteField } from 'firebase/firestore';
