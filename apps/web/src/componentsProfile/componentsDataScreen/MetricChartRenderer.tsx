@@ -635,7 +635,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               const nameStr = String(name || '');
               const isLoad = nameStr.includes('totalLoad');
               const isAvg = nameStr.includes('average');
-              const label = isLoad ? 'Total Load' : isAvg ? 'Average' : config.title;
+              const label = isLoad ? 'Total Load' : isAvg ? 'Average' : isSpeed ? 'Minimum' : isStrength ? 'Maximum' : config.title;
               return [`${formatValue(value)} ${displayUnit}`, label];
             }}
           />
