@@ -1,4 +1,3 @@
-// ModalEditDelete.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { STRENGTH_KEY_MAP, SPEED_KEY_MAP } from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
@@ -29,15 +28,12 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const [hasSets, setHasSets] = useState(false);
 
   useEffect(() => {
-    // Safely extract the target object, checking if the parent passed the selectedPoint wrapper
     const targetItem = initialItem?.rawObject || initialItem;
 
-    // Check if the datapoint has sets array
     if (targetItem && Array.isArray(targetItem.sets) && targetItem.sets.length > 0) {
       setSets(targetItem.sets);
       setHasSets(true);
     } else if (isStrength || isSpeed) {
-      // Create a legacy fallback set with 1 rep and the original value
       const legacySet: any = {
         reps: 1,
         unit: isStrength ? 'KG' : 'SEC',
@@ -67,7 +63,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   }, [initialValue, initialItem, isSpeed, isStrength]);
 
-  // Unit toggle handler for converting between KG/LBS or SEC/MM:SS
   const handleToggleUnit = () => {
     if (isStrength) {
       const nextUnit = unit === 'KG' ? 'LBS' : 'KG';
@@ -76,9 +71,8 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         const currentW = parseFloat(s.weightKg);
         if (isNaN(currentW)) return s;
         
-        // Updated logic using 0.45359237 ratio
         const converted = nextUnit === 'LBS' ? currentW / 0.45359237 : currentW * 0.45359237;
-        return { ...s, weightKg: Number(converted.toFixed(2)) };
+        return { ...s, weightKg: Number(converted.toFixed(1)) };
       });
       setSets(updatedSets);
       setUnit(nextUnit);
@@ -101,7 +95,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           } else {
             secVal = parseFloat(parts[0]) || 0;
           }
-          return { ...s, timeSec: isNaN(secVal) ? '' : Number(secVal.toFixed(2)) };
+          return { ...s, timeSec: isNaN(secVal) ? '' : Number(secVal.toFixed(1)) };
         }
       });
       setSets(updatedSets);
@@ -109,11 +103,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   };
 
-  // Compute live projected totalLoad and best value ALWAYS in base DB units (KG / SEC)
   const projectedMetrics = useMemo(() => {
-    if (!hasSets || sets.length === 0) return { totalLoad: 0, value: 0 };
+    if (!hasSets || sets.length === 0) return { totalLoad: 0, value: 0, average: 0 };
 
     let totalLoad = 0;
+    let totalReps = 0; // <--- ADDED
     let bestValue = isSpeed ? Infinity : 0;
 
     sets.forEach((s) => {
@@ -123,13 +117,12 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
       if (isStrength) {
         let weightKg = parseFloat(s.weightKg) || 0;
-        // Convert to KG if currently displayed in LBS
         if (unit === 'LBS') {
-          weightKg = weightKg * 0.45359237;
+          weightKg = Number((weightKg * 0.45359237).toFixed(1));
         }
         setLoad = weightKg * reps;
-        // Standard Epley 1RM formula
-        setVal = weightKg * (1 + reps / 30);
+
+        setVal = reps === 1 ? weightKg : weightKg * (1 + reps / 30);
         if (setVal > bestValue) bestValue = setVal;
       } else if (isSpeed) {
         let timeSec = 0;
@@ -149,19 +142,22 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       }
 
       totalLoad += setLoad;
+      totalReps += reps;
     });
 
     if (bestValue === Infinity) bestValue = 0;
 
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+
     return {
-      totalLoad: Number(totalLoad.toFixed(3)),
-      value: Number(bestValue.toFixed(3))
+      totalLoad: Number(totalLoad.toFixed(1)),
+      value: Number(bestValue.toFixed(1)),
+      average
     };
   }, [sets, hasSets, isStrength, isSpeed, unit]);
 
   if (!isOpen) return null;
 
-  // Handlers for modifying sets
   const handleSetChange = (index: number, field: string, val: string) => {
     const newSets = [...sets];
     newSets[index] = { ...newSets[index], [field]: val === '' ? '' : Number(val) || val };
@@ -173,7 +169,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     setSets(newSets);
   };
 
-  // Handler to append a new set
   const handleAddSet = () => {
     const fallbackUnit = isStrength ? (unit || 'KG') : isSpeed ? (unit || 'SEC') : '';
 
@@ -193,7 +188,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
   const handleUpdate = () => {
     if (hasSets) {
-      // Normalize sets back to DB base units (KG / SEC)
       const normalizedSets = sets.map((s) => {
         const newSet = { ...s };
         if (isStrength) {
@@ -201,7 +195,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           if (!isNaN(w) && unit === 'LBS') {
             w = w * 0.45359237;
           }
-          newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(3));
+          newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(1));
           newSet.unit = 'KG';
         } else if (isSpeed) {
           let t = 0;
@@ -215,21 +209,20 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           } else {
             t = parseFloat(s.timeSec) || 0;
           }
-          newSet.timeSec = isNaN(t) ? s.timeSec : Number(t.toFixed(3));
+          newSet.timeSec = isNaN(t) ? s.timeSec : Number(t.toFixed(1));
           newSet.unit = 'SEC';
         }
         return newSet;
       });
 
-      // Pass back updated fields using standard base unit metrics
       onUpdate({
         sets: normalizedSets,
         totalSets: sets.length,
         totalLoad: projectedMetrics.totalLoad,
+        average: projectedMetrics.average,
         value: projectedMetrics.value
       });
     } else {
-      // EXISTING LOGIC for datapoints without sets
       let finalValue = parseFloat(inputValue);
 
       if (isStrength && unit === 'LBS') {
@@ -242,13 +235,12 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       }
 
       if (!isNaN(finalValue)) {
-        const truncatedValue = Number(finalValue.toFixed(3));
+        const truncatedValue = Number(finalValue.toFixed(1));
         onUpdate({ value: truncatedValue });
       }
     }
   };
 
-  // Base unit name obtained from DB
   const dbUnitLabel = isStrength ? 'KG' : isSpeed ? 'SEC' : unit;
 
   return (
@@ -262,10 +254,8 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           Manage {title}
         </h3>
 
-        {/* CONDITIONALLY RENDER Sets OR Standard Input */}
         {hasSets ? (
           <>
-            {/* UNIT TOGGLE BUTTON ABOVE SETS */}
             {(isStrength || isSpeed) && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -329,7 +319,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                     </div>
                   )}
 
-                  {/* Trash icon with red on hover */}
                   <button 
                     onClick={() => handleDeleteSet(index)}
                     className="mt-4.5 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 cursor-pointer"
@@ -344,7 +333,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
               )}
             </div>
 
-            {/* ADD SET BUTTON */}
             <button
               type="button"
               onClick={handleAddSet}
@@ -353,7 +341,6 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
               + Add Set
             </button>
 
-            {/* UNMODIFIABLE PROJECTED METRICS DISPLAY */}
             <div className="grid grid-cols-2 gap-3 mb-6 p-3 bg-slate-50 border border-slate-100 rounded-2xl">
               <div className="flex flex-col">
                 <span className="text-[10px] text-slate-400 font-bold uppercase ml-1 mb-1">

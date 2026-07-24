@@ -94,8 +94,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const isSpeed = SPEED_LIST.includes(dataKey) || unitClean === 'sec' || unitClean === 's';
   const isStrength = STRENGTH_LIST.includes(dataKey) || unitClean === 'kg';
 
-  // 3. Check for presence of totalLoad
   const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
+  const hasAverage = dataKey && filteredData?.some(d => d[`${dataKey}_average`] != null);
 
   const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : rawUnit;
 
@@ -329,6 +329,22 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     fill: color,
     style: { cursor: 'pointer', pointerEvents: 'all' as const },
     onClick: (props: any) => onPointClick(props.payload, key, key)
+  });
+
+  const renderUnselectableActiveDot = (props: any, color: string, opacity: number = 1) => {
+    const { cx, cy, payload } = props;
+    return (
+      <g key={`unact-${payload.timestamp}`} style={{ pointerEvents: 'none', outline: 'none' }}>
+        <circle cx={cx} cy={cy} r={5} fill={color} fillOpacity={opacity} stroke="#fff" strokeWidth={2} />
+      </g>
+    );
+  };
+
+  const unselectableDotProps = (color: string, opacity: number = 1) => ({
+    r: 4,
+    fill: color,
+    fillOpacity: opacity,
+    style: { pointerEvents: 'none' as const }
   });
 
   const renderToggle = () => {
@@ -618,7 +634,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             formatter={(value: any, name: any) => {
               const nameStr = String(name || '');
               const isLoad = nameStr.includes('totalLoad');
-              const label = isLoad ? 'Total Load' : config.title;
+              const isAvg = nameStr.includes('average');
+              const label = isLoad ? 'Total Load' : isAvg ? 'Average' : config.title;
               return [`${formatValue(value)} ${displayUnit}`, label];
             }}
           />
@@ -686,7 +703,24 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
           {/* --- ADD BEST VALUE LINE HERE --- */}
           {renderBestValueLine()}
           
-          {/* --- SWAPPED ORDER: totalLoad rendered FIRST so it goes underneath --- */}
+          {/* --- AVERAGE LINE (BOTTOM) --- */}
+          {hasAverage && (viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={`${config.key}_average`} 
+              stroke={config.color} 
+              strokeOpacity={0.5}
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={unselectableDotProps(config.color, 0.5)}
+              activeDot={(props: any) => renderUnselectableActiveDot(props, config.color, 0.5)}
+            />
+          )}
+
+          {/* --- TOTALLOAD LINE (MIDDLE) --- */}
           {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
             <Line 
               yAxisId="right"
@@ -697,12 +731,12 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               strokeDasharray="4 4"
               connectNulls 
               style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps("#94a3b8", `${config.key}_totalLoad`)}
-              activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${config.key}_totalLoad`)}
+              dot={unselectableDotProps("#94a3b8", 1)}
+              activeDot={(props: any) => renderUnselectableActiveDot(props, "#94a3b8", 1)}
             />
           )}
 
-          {/* --- SWAPPED ORDER: main value rendered LAST so it sits on top --- */}
+          {/* --- MAIN VALUE LINE (TOP - SELECTABLE) --- */}
           {(viewMode === '1rm' || viewMode === 'both') && (
             <Line 
               yAxisId="left"
@@ -752,15 +786,32 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             formatter={(value: any, name: any) => {
               const nameStr = String(name || '');
               const isLoad = nameStr.includes('totalLoad');
-              const label = isLoad ? 'Total Load' : m.name.toUpperCase();
+              const isAvg = nameStr.includes('average');
+              const label = isLoad ? 'Total Load' : isAvg ? 'Average' : m.name.toUpperCase();
               return [`${formatValue(value)} ${displayUnit}`, label];
             }}
           />
 
-          {/* --- ADD BEST VALUE LINE HERE --- */}
           {renderBestValueLine()}
           
-          {/* --- SWAPPED ORDER: totalLoad rendered FIRST so it goes underneath --- */}
+          {/* --- AVERAGE LINE (BOTTOM) --- */}
+          {hasAverage && (viewMode === '1rm' || viewMode === 'both') && (
+            <Line 
+              yAxisId="left"
+              type="monotone" 
+              dataKey={`${m.key}_average`} 
+              stroke={customColor} 
+              strokeOpacity={0.5}
+              strokeWidth={2} 
+              strokeDasharray="4 4"
+              connectNulls 
+              style={{ pointerEvents: 'none' }} 
+              dot={unselectableDotProps(customColor, 0.5)}
+              activeDot={(props: any) => renderUnselectableActiveDot(props, customColor, 0.5)}
+            />
+          )}
+
+          {/* --- TOTALLOAD LINE (MIDDLE) --- */}
           {hasTotalLoad && (viewMode === 'load' || viewMode === 'both') && (
             <Line 
               yAxisId="right"
@@ -771,12 +822,12 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               strokeDasharray="4 4"
               connectNulls 
               style={{ pointerEvents: 'none' }} 
-              dot={commonDotProps("#94a3b8", `${m.key}_totalLoad`)}
-              activeDot={(props: any) => renderCustomActiveDot(props, "#94a3b8", `${m.key}_totalLoad`)}
+              dot={unselectableDotProps("#94a3b8", 1)}
+              activeDot={(props: any) => renderUnselectableActiveDot(props, "#94a3b8", 1)}
             />
           )}
 
-          {/* --- SWAPPED ORDER: main value rendered LAST so it sits on top --- */}
+          {/* --- MAIN VALUE LINE (TOP - SELECTABLE) --- */}
           {(viewMode === '1rm' || viewMode === 'both') && (
             <Line 
               yAxisId="left"

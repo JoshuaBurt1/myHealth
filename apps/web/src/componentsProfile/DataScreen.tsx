@@ -248,6 +248,11 @@ const DataScreen: React.FC<DataScreenProps> = ({
             if (entry.totalLoad !== undefined && entry.totalLoad !== null) {
               timelineMap[ts][`${key}_totalLoad`] = parseFloat(entry.totalLoad);
             }            
+
+            if (entry.average !== undefined && entry.average !== null) {
+              timelineMap[ts][`${key}_average`] = parseFloat(entry.average);
+            }
+
             timelineMap[ts][`${key}_raw`] = entry; 
           });
         };
@@ -515,8 +520,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
           : new Date(item.dateTime).getTime();
 
         if (itemTs === selectedPoint.ts) {
-          // Spread operator here merges either the basic { value: X } update 
-          // or the complex { sets: [...], totalLoad: X, value: X } update
           return { ...item, ...updatedFields };
         }
         return item;

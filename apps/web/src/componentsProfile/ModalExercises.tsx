@@ -269,8 +269,10 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         const w = Number(s.weight);
         const r = Number(s.reps);
         if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
+          // Standardize set weight rounding immediately
+          const normalizedKg = Number(convertWeightToKg(w, unit).toFixed(1));
           validSets.push({
-            weightKg: convertWeightToKg(w, unit),
+            weightKg: normalizedKg,
             reps: r
           });
         }
@@ -279,20 +281,23 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
     if (validSets.length === 0) return null;
 
-    // Order sets primarily by highest weight (kg), secondarily by reps
-    const sortedSets = [...validSets].sort((a, b) => {
-      if (b.weightKg !== a.weightKg) {
-        return b.weightKg - a.weightKg;
-      }
-      return b.reps - a.reps;
-    });
+    // Calculate 1RM using standardized set weights
+    const max1RM = Math.max(
+      ...validSets.map(s => (s.reps === 1 ? s.weightKg : s.weightKg * (1 + s.reps / 30)))
+    );
+    const oneRepMax = Number(max1RM.toFixed(1));
 
-    const bestSet = sortedSets[0];
-    const oneRepMax = Math.round(bestSet.weightKg * (1 + bestSet.reps / 30));
-    const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.weightKg * s.reps), 0));
+    // Compute total load using exact set weights
+    const totalLoad = Number(
+      validSets.reduce((sum, s) => sum + (s.weightKg * s.reps), 0).toFixed(1)
+    );
+
+    // Calculate average weight per rep
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
 
     const detailedSets = validSets.map(s => ({
-      weightKg: Math.round(s.weightKg * 100) / 100,
+      weightKg: s.weightKg,
       reps: s.reps,
       unit: unit
     }));
@@ -300,6 +305,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     return {
       oneRepMax,
       totalLoad,
+      average,
       totalSets: validSets.length,
       sets: detailedSets
     };
@@ -333,15 +339,20 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     const fastestTime = bestSet.timeSec;
     const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
 
+    // Calculate average speed/time per rep
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+
     const detailedSets = validSets.map(s => ({
       timeSec: s.timeSec,
       reps: s.reps,
-      unit: 'sec' // Standardized to DB
+      unit: 'sec'
     }));
 
     return {
       value: fastestTime,
       totalLoad,
+      average,
       totalSets: validSets.length,
       sets: detailedSets
     };
@@ -364,6 +375,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               finalData: {
                 value: evalResult.oneRepMax,
                 totalLoad: evalResult.totalLoad,
+                average: evalResult.average, // <--- ADDED
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'kg'
@@ -379,6 +391,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               finalData: {
                 value: evalResult.value,
                 totalLoad: evalResult.totalLoad,
+                average: evalResult.average, // <--- ADDED
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'sec'
@@ -407,6 +420,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               finalData: {
                 value: evalResult.oneRepMax,
                 totalLoad: evalResult.totalLoad,
+                average: evalResult.average, // <--- ADDED
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'kg'
@@ -423,6 +437,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               finalData: {
                 value: evalResult.value,
                 totalLoad: evalResult.totalLoad,
+                average: evalResult.average, // <--- ADDED
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'sec'
