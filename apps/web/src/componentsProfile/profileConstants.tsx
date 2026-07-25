@@ -133,6 +133,7 @@ export const MICRONUTRIENT_KEY_MAP: Record<string, string> = {
   'Water': 'water_intake'
 };
 
+// All in kg
 export const STRENGTH_KEY_MAP: Record<string, string> = {
   // Olympic Lifts
   'Snatch': 'snatch',
@@ -190,11 +191,9 @@ export const STRENGTH_KEY_MAP: Record<string, string> = {
   'Dumbbell Hammer Curl': 'dbHammerCurl',
   'Barbell Tricep Extension': 'bbTriExt',
   'Dumbbell Tricep Extension': 'dbTriExt',
-
-  // Carries
-  'Farmers Carry': 'farmersCarry',
 };
 
+// All in sec
 export const SPEED_KEY_MAP: Record<string, string> = {
   '100m': 'speed100m',
   '400m': 'speed400m',
@@ -213,6 +212,8 @@ export const SPEED_KEY_MAP: Record<string, string> = {
   'Rowing machine Marathon': 'rowMarathon',
 };
 
+// These should be kg (because you could add a weighted vest)
+// And what matters more is the amount of mass moved per movement
 export const PLYO_KEY_MAP: Record<string, string> = {
   'Box Jump': 'boxJump',
   'Broad Jump': 'broadJump',
@@ -229,8 +230,10 @@ export const ENDURANCE_KEY_MAP: Record<string, string> = {
   'Plank': 'plank',
   'Bear Crawl': 'bearCrawl',
   'Hollow Body Hold': 'hollowHold',
+  'Farmers Carry': 'farmersCarry',
 };
 
+// These should be sec (with maximum being better)
 export const YOGA_KEY_MAP: Record<string, string> = {
   'Downward Dog': 'downwardDog',
   'Warrior I': 'warrior1',
@@ -305,6 +308,48 @@ ALL_CATEGORY_MAPS.forEach((categoryMap) => {
     CATEGORY_ORDER_LOOKUP.set(metricKey.toLowerCase(), globalIndex++);
   });
 });
+
+export const METRIC_CATEGORY_MAP = new Map<string, string>();
+
+const CATEGORY_DEFINITIONS = [
+  { category: 'vital', map: VITAL_KEY_MAP },
+  { category: 'bloodtest', map: BLOODTEST_KEY_MAP },
+  { category: 'symptom', map: SYMPTOM_KEY_MAP },
+  { category: 'diet', map: DIET_KEY_MAP },
+  { category: 'micronutrient', map: MICRONUTRIENT_KEY_MAP },
+  { category: 'strength', map: STRENGTH_KEY_MAP },
+  { category: 'speed', map: SPEED_KEY_MAP },
+  { category: 'plyometrics', map: PLYO_KEY_MAP },
+  { category: 'endurance', map: ENDURANCE_KEY_MAP },
+  { category: 'yoga', map: YOGA_KEY_MAP },
+  { category: 'mobility', map: MOBILITY_KEY_MAP },
+  { category: 'physio', map: PHYSIO_KEY_MAP },
+];
+
+// Populate once at runtime initialization
+CATEGORY_DEFINITIONS.forEach(({ category, map }) => {
+  Object.values(map).forEach((metricKey) => {
+    METRIC_CATEGORY_MAP.set(metricKey.toLowerCase(), category);
+  });
+});
+
+// Centralized Category Definitions & Helpers
+export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Endurance' | 'Yoga' | 'Mobility' | 'Physio' | 'Custom';
+export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Endurance', 'Yoga', 'Mobility', 'Physio', 'Custom'];
+
+export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
+  Strength: STRENGTH_KEY_MAP,
+  Speed: SPEED_KEY_MAP,
+  Plyometrics: PLYO_KEY_MAP,
+  Endurance: ENDURANCE_KEY_MAP,  
+  Yoga: YOGA_KEY_MAP,
+  Mobility: MOBILITY_KEY_MAP,
+  Physio: PHYSIO_KEY_MAP,
+};
+
+export const isStrengthExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'strength';
+export const isSpeedExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'speed';
+export const isYogaExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga';
 
 const RAW_SINGLE_GRAPHS = [
   // Core Vitals
@@ -461,7 +506,7 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'height', title: 'HEIGHT', unit: 'cm', icon: <Ruler className="text-blue-400" />, color: '#60a5fa' },
   { key: 'weight', title: 'WEIGHT', unit: 'kg', icon: <Scale className="text-emerald-400" />, color: '#34d399' },
   
-  // Strength
+  // STRENGTH
   { key: 'benchPress', title: 'BENCH PRESS', unit: 'kg', icon: <Dumbbell className="text-indigo-600" />, color: '#4f46e5' },
   { key: 'inclinePress', title: 'INCLINE PRESS', unit: 'kg', icon: <Dumbbell className="text-indigo-600" />, color: '#4338ca' },
   { key: 'overheadPress', title: 'OVERHEAD PRESS', unit: 'kg', icon: <Dumbbell className="text-indigo-600" />, color: '#3730a3' },
@@ -509,9 +554,8 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'dbTriExt', title: 'DUMBBELL TRICEP EXTENSION', unit: 'kg', icon: <Dumbbell className="text-blue-400" />, color: '#60a5fa' },
   { key: 'dbBicepCurl', title: 'DUMBBELL BICEP CURL', unit: 'kg', icon: <Dumbbell className="text-blue-400" />, color: '#93c5fd' },
   { key: 'dbHammerCurl', title: 'DUMBBELL HAMMER CURL', unit: 'kg', icon: <Dumbbell className="text-sky-400" />, color: '#38bdf8' },
-  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
 
-  // Speed
+  // SPEED
   { key: 'speed100m', title: '100M SPRINT', unit: 'sec', icon: <Timer className="text-orange-500" />, color: '#f97316' },
   { key: 'speed400m', title: '400M SPRINT', unit: 'sec', icon: <Timer className="text-orange-600" />, color: '#ea580c' },
   { key: 'speed1Mile', title: '1 MILE RUN', unit: 'sec', icon: <Timer className="text-orange-700" />, color: '#c2410c' },
@@ -537,6 +581,7 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'broadJump', title: 'BROAD JUMP', unit: 'cm', icon: <ArrowLeftRight className="text-amber-500" />, color: '#f59e0b' },
   { key: 'verticalLeap', title: 'VERTICAL LEAP', unit: 'cm', icon: <Zap className="text-amber-300" />, color: '#fcd34d' },
   { key: 'burpees', title: 'BURPEES', unit: 'Reps', icon: <Activity className="text-amber-600" />, color: '#d97706' },
+  { key: 'depthJump', title: 'DEPTH JUMP', unit: 'Reps', icon: <Activity className="text-emerald-500" />, color: '#10b981' },
   { key: 'clapPushUp', title: 'CLAP PUSH-UP', unit: 'Reps', icon: <Zap className="text-amber-500" />, color: '#f59e0b' },
 
   // ENDURANCE
@@ -546,6 +591,7 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
   { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
   { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
+  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
 
   // Yoga
   { key: 'downwardDog', title: 'DOWNWARD DOG', unit: 'sec', icon: <Sun className="text-violet-500" />, color: '#8b5cf6' },

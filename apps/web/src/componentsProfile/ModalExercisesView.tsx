@@ -1,4 +1,3 @@
-// ModalExercisesView.tsx
 import React from 'react';
 import { 
   X, Dumbbell, PlusCircle, RefreshCw, AlertCircle, 
@@ -7,30 +6,16 @@ import {
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
-  STRENGTH_KEY_MAP, SPEED_KEY_MAP, PLYO_KEY_MAP, 
-  ENDURANCE_KEY_MAP, YOGA_KEY_MAP, MOBILITY_KEY_MAP, PHYSIO_KEY_MAP 
+  METRIC_CATEGORY_MAP,
+  CATEGORIES,
+  CATEGORY_MAPS,
+  type ExerciseCategory,
+  isStrengthExercise,
+  isSpeedExercise,
+  isYogaExercise
 } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
-
-export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Endurance' | 'Yoga' | 'Mobility' | 'Physio' | 'Custom';
-export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Endurance', 'Yoga', 'Mobility', 'Physio', 'Custom'];
-
-export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
-  Strength: STRENGTH_KEY_MAP,
-  Speed: SPEED_KEY_MAP,
-  Plyometrics: PLYO_KEY_MAP,
-  Endurance: ENDURANCE_KEY_MAP,  
-  Yoga: YOGA_KEY_MAP,
-  Mobility: MOBILITY_KEY_MAP,
-  Physio: PHYSIO_KEY_MAP,
-};
-
-const STRENGTH_VALUES = Object.values(STRENGTH_KEY_MAP);
-export const isStrengthExercise = (key: string) => STRENGTH_VALUES.includes(key);
-
-const SPEED_VALUES = Object.values(SPEED_KEY_MAP);
-export const isSpeedExercise = (key: string) => SPEED_VALUES.includes(key);
 
 export interface ModalExercisesViewProps {
   onClose: () => void;
@@ -236,12 +221,12 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
               const getPos = (key: string) => keyOrderLookup.get(key) ?? Infinity;
 
               const existingInCat = trackedExercises
-                .filter(ex => ex.type === categoryType || (category === 'Custom' && ex.isCustom))
+                .filter(ex => METRIC_CATEGORY_MAP.get(ex.name.toLowerCase()) === categoryType || (category === 'Custom' && ex.isCustom))
                 .sort((a, b) => getPos(a.name) - getPos(b.name));
 
               const newInCat = entries
                 .filter(e => 
-                  (e.type === categoryType || (category === 'Custom' && e.isCustom)) && 
+                  (METRIC_CATEGORY_MAP.get(e.name.toLowerCase()) === categoryType || (category === 'Custom' && e.isCustom)) && 
                   !trackedExercises.some(ex => ex.name === e.name)
                 )
                 .sort((a, b) => getPos(a.name) - getPos(b.name));
@@ -306,6 +291,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                     {existingInCat.map((ex, idx) => {
                       const isStrength = isStrengthExercise(ex.name);
                       const isSpeed = isSpeedExercise(ex.name);
+                      const isYoga = isYogaExercise(ex.name);
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
                       const setsList = trackedSets[ex.name] || [{ id: '1', weight: '', reps: '' }];
@@ -332,7 +318,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                               {ex.label}
                             </span>
                             
-                            {isStrength || isSpeed ? (
+                            {isStrength || isSpeed || isYoga ? (
                               <div className="space-y-2">
                                 {setsList.map((set, setIdx) => (
                                   <div key={set.id} className="flex gap-2 items-center w-full">
@@ -415,6 +401,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                     {newInCat.map((entry) => {
                       const isStrength = isStrengthExercise(entry.name);
                       const isSpeed = isSpeedExercise(entry.name);
+                      const isYoga = isYogaExercise(entry.name);
                       const stUnit = strengthUnits[entry.name] || 'kg';
                       const spUnit = speedUnits[entry.name] || 'sec';
 
@@ -438,7 +425,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                               {entry.label} (NEW)
                             </span>
 
-                            {isStrength || isSpeed ? (
+                            {isStrength || isSpeed || isYoga ? (
                               <div className="space-y-2">
                                 {entry.sets.map((set: any, setIdx: number) => (
                                   <div key={set.id} className="flex gap-2 items-center w-full">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { STRENGTH_KEY_MAP, SPEED_KEY_MAP } from './profileConstants';
+import { STRENGTH_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP } from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalEditDeleteProps {
@@ -19,6 +19,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 }) => {
   const isStrength = Object.values(STRENGTH_KEY_MAP).includes(metricKey);
   const isSpeed = Object.values(SPEED_KEY_MAP).includes(metricKey);
+  const isYoga = Object.values(YOGA_KEY_MAP).includes(metricKey);
 
   const [inputValue, setInputValue] = useState('');
   const [unit, setUnit] = useState('');
@@ -33,7 +34,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     if (targetItem && Array.isArray(targetItem.sets) && targetItem.sets.length > 0) {
       setSets(targetItem.sets);
       setHasSets(true);
-    } else if (isStrength || isSpeed) {
+    } else if (isStrength || isSpeed || isYoga) {
       const legacySet: any = {
         reps: 1,
         unit: isStrength ? 'KG' : 'SEC',
@@ -52,7 +53,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       setSets([]);
     }
 
-    if (isSpeed) {
+    if (isSpeed || isYoga) {
       setUnit('SEC');
       setInputValue(String(initialValue));
     } else if (isStrength) {
@@ -61,7 +62,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     } else {
       setInputValue(String(initialValue));
     }
-  }, [initialValue, initialItem, isSpeed, isStrength]);
+  }, [initialValue, initialItem, isSpeed, isStrength, isYoga]);
 
   const handleToggleUnit = () => {
     if (isStrength) {
@@ -76,7 +77,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       });
       setSets(updatedSets);
       setUnit(nextUnit);
-    } else if (isSpeed) {
+    } else if (isSpeed || isYoga) {
       const nextUnit = unit === 'SEC' ? 'MM:SS' : 'SEC';
       const updatedSets = sets.map((s) => {
         if (!s.timeSec) return s;
@@ -107,7 +108,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     if (!hasSets || sets.length === 0) return { totalLoad: 0, value: 0, average: 0 };
 
     let totalLoad = 0;
-    let totalReps = 0; // <--- ADDED
+    let totalReps = 0;
     let bestValue = isSpeed ? Infinity : 0;
 
     sets.forEach((s) => {
@@ -140,6 +141,22 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         setVal = timeSec;
         if (setVal > 0 && setVal < bestValue) bestValue = setVal;
       }
+      else if (isYoga) {
+        let timeSec = 0;
+        if (unit === 'MM:SS') {
+          const parts = String(s.timeSec || '').split(':');
+          if (parts.length === 2) {
+            timeSec = (parseFloat(parts[0]) * 60) + parseFloat(parts[1]);
+          } else {
+            timeSec = parseFloat(parts[0]) || 0;
+          }
+        } else {
+          timeSec = parseFloat(s.timeSec) || 0;
+        }
+        setLoad = timeSec * reps;
+        setVal = timeSec;
+        if (setVal > 0 && setVal > bestValue) bestValue = setVal;
+      }
 
       totalLoad += setLoad;
       totalReps += reps;
@@ -154,7 +171,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       value: Number(bestValue.toFixed(1)),
       average
     };
-  }, [sets, hasSets, isStrength, isSpeed, unit]);
+  }, [sets, hasSets, isStrength, isSpeed, isYoga, unit]);
 
   if (!isOpen) return null;
 
@@ -170,7 +187,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   };
 
   const handleAddSet = () => {
-    const fallbackUnit = isStrength ? (unit || 'KG') : isSpeed ? (unit || 'SEC') : '';
+    const fallbackUnit = isStrength ? (unit || 'KG') : (isSpeed || isYoga) ? (unit || 'SEC') : '';
 
     const newSet: any = {
       reps: '',
@@ -179,7 +196,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
     if (isStrength) {
       newSet.weightKg = '';
-    } else if (isSpeed) {
+    } else if (isSpeed || isYoga) {
       newSet.timeSec = '';
     }
 
@@ -197,7 +214,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           }
           newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(1));
           newSet.unit = 'KG';
-        } else if (isSpeed) {
+        } else if (isSpeed || isYoga) {
           let t = 0;
           if (unit === 'MM:SS') {
             const parts = String(s.timeSec || '').split(':');
@@ -227,7 +244,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
       if (isStrength && unit === 'LBS') {
         finalValue = finalValue * 0.45359237; 
-      } else if (isSpeed && unit === 'MM:SS') {
+      } else if ((isSpeed || isYoga) && unit === 'MM:SS') {
         const parts = inputValue.split(':');
         if (parts.length === 2) {
           finalValue = (parseInt(parts[0]) * 60) + parseFloat(parts[1]);
@@ -241,7 +258,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   };
 
-  const dbUnitLabel = isStrength ? 'KG' : isSpeed ? 'SEC' : unit;
+  const dbUnitLabel = isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : unit;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
@@ -256,7 +273,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
         {hasSets ? (
           <>
-            {(isStrength || isSpeed) && (
+            {(isStrength || isSpeed || isYoga) && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Sets Log
@@ -304,7 +321,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                     </div>
                   )}
 
-                  {isSpeed && (
+                  {(isSpeed || isYoga) && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
                         Time ({unit})
@@ -375,11 +392,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder={isSpeed && unit === 'MM:SS' ? "00:00" : "Value"}
+                placeholder={(isSpeed || isYoga) && unit === 'MM:SS' ? "00:00" : "Value"}
                 className="flex-1 min-w-0 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
               
-              {(isStrength || isSpeed) && (
+              {(isStrength || isSpeed || isYoga) && (
                 <select 
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}

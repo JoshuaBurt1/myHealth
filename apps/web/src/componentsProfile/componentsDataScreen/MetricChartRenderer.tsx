@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { STRENGTH_LIST, SPEED_LIST, BP_THRESHOLDS, DIET_TYPES_MAP, type MetricThresholds } from '../profileConstants';
+import { STRENGTH_LIST, SPEED_LIST, YOGA_LIST, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
@@ -215,11 +215,12 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     );
   };
 
-  const getTrendDetails = (val: number, checkSpeed: boolean) => {
+  const getTrendDetails = (val: number, category?: string) => {
     if (val === 0) return { Icon: TrendingUp, color: "text-slate-400" };
     const isPositiveChange = val > 0;
     const Icon = isPositiveChange ? TrendingUp : TrendingDown;
-    const color = checkSpeed 
+    
+    const color = (category === 'speed' || category === 'symptom')
       ? (isPositiveChange ? "text-red-500" : "text-emerald-500")
       : (isPositiveChange ? "text-emerald-500" : "text-red-500");
 
@@ -227,8 +228,16 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   };
 
   const renderPercentage = (key: string) => {
-    // Total and Last values are only supposed to show for exercises
-    if (!isStrength && !isSpeed) return null;
+    const keyLower = key.toLowerCase();
+    const category = METRIC_CATEGORY_MAP.get(keyLower);
+
+    // Hide percentage for specific categories and weight
+    if (
+      keyLower === 'weight' || 
+      (category && ['vital', 'bloodtest', 'diet', 'micronutrient'].includes(category))
+    ) {
+      return null;
+    }
 
     const data = reportData[key];
     if (!data || data.length < 2) return null;
@@ -236,8 +245,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     const lastChange = data[0];
     const totalChange = data[1];
 
-    const lastTrend = getTrendDetails(lastChange, isSpeed);
-    const totalTrend = getTrendDetails(totalChange, isSpeed);
+    const lastTrend = getTrendDetails(lastChange, category);
+    const totalTrend = getTrendDetails(totalChange, category);
 
     return (
       <div className="flex flex-col items-end">
@@ -253,39 +262,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             LAST {lastChange > 0 ? '+' : ''}{lastChange}%
           </span>
         </div>
-      </div>
-    );
-  };
-
-  const renderBPPercentages = () => {
-    const syst = reportData['bpSyst'];
-    const dias = reportData['bpDias'];
-    
-    const renderBPGroup = (data: number[], label: string) => {
-      if (!data || data.length < 2) return null;
-      const last = getTrendDetails(data[0], true); 
-      const total = getTrendDetails(data[1], true);
-
-      return (
-        <div className="flex flex-col items-end border-l border-slate-100 pl-3 first:border-0 first:pl-0">
-          <div className={`flex items-center gap-1 ${total.color}`}>
-            <total.Icon size={10} />
-            <span className="text-[9px] font-black tracking-tighter">{label} TOTAL {data[1] > 0 ? '+' : ''}{data[1]}%</span>
-          </div>
-          <div className={`flex items-center gap-1 ${last.color}`}>
-            <last.Icon size={10} />
-            <span className="text-[9px] font-black tracking-tighter">{label} LAST {data[0] > 0 ? '+' : ''}{data[0]}%</span>
-          </div>
-        </div>
-      );
-    };
-    
-    if ((!syst || syst.length < 2) && (!dias || dias.length < 2)) return null;
-    
-    return (
-      <div className="flex items-center gap-3">
-        {syst && renderBPGroup(syst, 'SYS')}
-        {dias && renderBPGroup(dias, 'DIA')}
       </div>
     );
   };
@@ -398,12 +374,17 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   };
 
   // Calculate PR / 1RM
+  // Calculate PR / 1RM
   const validValues = dataKey ? filteredData.map(d => Number(d[dataKey])).filter(n => !isNaN(n) && n > 0) : [];
   let bestValue: number | null = null;
   let bestLabel = '';
   
-  if (validValues.length > 0) {
-    if (isStrength) {
+  if (validValues.length > 0 && dataKey?.toLowerCase() !== 'weight') {
+    const keyLower = dataKey.toLowerCase();
+    const metricCategory = METRIC_CATEGORY_MAP.get(keyLower);
+    const isYoga = YOGA_LIST?.includes(dataKey) || metricCategory === 'yoga';
+
+    if (isStrength || isYoga) {
       bestValue = Math.max(...validValues);
       bestLabel = 'PR';
     } else if (isSpeed) {
@@ -445,7 +426,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         unit="mmHg" 
         icon={<Gauge className="text-violet-500" />}
         alertType={bpAlert}
-        percentageDisplay={renderBPPercentages()}
       >
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />

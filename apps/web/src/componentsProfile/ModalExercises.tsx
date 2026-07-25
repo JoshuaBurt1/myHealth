@@ -1,9 +1,8 @@
-// ModalExercises.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { SPEED_KEY_MAP, getStandardUnit } from './profileConstants';
-import { ModalExercisesView, ExerciseCategory, CATEGORY_MAPS, isStrengthExercise, isSpeedExercise } from './ModalExercisesView';
+import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, isStrengthExercise, isSpeedExercise, isYogaExercise, getStandardUnit } from './profileConstants';
+import { ModalExercisesView } from './ModalExercisesView';
 
 const calculatePercentChange = (oldValue: number, newValue: number): number => {
   if (oldValue === 0) return newValue > 0 ? 100 : 0;
@@ -64,7 +63,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (isOpen) {
       const initialTrackedSets: Record<string, SetEntry[]> = {};
       trackedExercises.forEach((ex) => {
-        if (isStrengthExercise(ex.name) || isSpeedExercise(ex.name)) {
+        if (isStrengthExercise(ex.name) || isSpeedExercise(ex.name) || isYogaExercise(ex.name)) {
           initialTrackedSets[ex.name] = [{ id: '1', weight: '', reps: '', time: '' }];
         }
       });
@@ -286,7 +285,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     };
   };
 
-  const evaluateSpeedSets = (setsList: SetEntry[], unit: 'sec' | 'mm:ss', label: string) => {
+  const evaluateSpeedSets = (setsList: SetEntry[], unit: 'sec' | 'mm:ss', label: string, isYoga = false) => {
     const validSets: { timeSec: number; reps: number }[] = [];
 
     for (const s of setsList) {
@@ -308,10 +307,12 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (validSets.length === 0) return null;
 
     // Order sets primarily by fastest time (lowest seconds)
-    const sortedSets = [...validSets].sort((a, b) => a.timeSec - b.timeSec);
+    const sortedSets = [...validSets].sort((a, b) => 
+      isYoga ? b.timeSec - a.timeSec : a.timeSec - b.timeSec
+    );
 
     const bestSet = sortedSets[0];
-    const fastestTime = bestSet.timeSec;
+    const bestTime = bestSet.timeSec;
     const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
 
     // Calculate average speed/time per rep
@@ -325,7 +326,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }));
 
     return {
-      value: fastestTime,
+      value: bestTime,
       totalLoad,
       average,
       totalSets: validSets.length,
@@ -350,23 +351,23 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               finalData: {
                 value: evalResult.oneRepMax,
                 totalLoad: evalResult.totalLoad,
-                average: evalResult.average, // <--- ADDED
+                average: evalResult.average,
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'kg'
               }
             });
           }
-        } else if (isSpeedExercise(e.name)) {
+        } else if (isSpeedExercise(e.name) || isYogaExercise(e.name)) {
           const unit = speedUnits[e.name] || 'sec';
-          const evalResult = evaluateSpeedSets(e.sets, unit, e.label);
+          const evalResult = evaluateSpeedSets(e.sets, unit, e.label, isYogaExercise(e.name));
           if (evalResult) {
             preparedNew.push({
               ...e,
               finalData: {
                 value: evalResult.value,
                 totalLoad: evalResult.totalLoad,
-                average: evalResult.average, // <--- ADDED
+                average: evalResult.average,
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'sec'
@@ -402,10 +403,10 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else if (isSpeedExercise(ex.name)) {
+        } else if (isSpeedExercise(ex.name) || isYogaExercise(ex.name)) {
           const unit = speedUnits[ex.name] || 'sec';
           const setsList = trackedSets[ex.name] || [];
-          const evalResult = evaluateSpeedSets(setsList, unit, ex.label);
+          const evalResult = evaluateSpeedSets(setsList, unit, ex.label, isYogaExercise(ex.name));
           if (evalResult) {
             preparedExist.push({
               ...ex,
@@ -485,7 +486,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           last_percent = calculatePercentChange(lastVal, finalValue);
           total_percent = calculatePercentChange(history[0].value, finalValue);
 
-          const isSpeedEx = Object.values(SPEED_KEY_MAP).includes(name);
+          const isSpeedEx = METRIC_CATEGORY_MAP.get(name.toLowerCase()) === 'speed';
 
           if (isSpeedEx) {
             if (last_percent < 0) bonusGems += 1;
