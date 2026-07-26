@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { STRENGTH_LIST, SPEED_LIST, YOGA_LIST, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
+import { isStrengthExercise, isSpeedExercise, isYogaExercise, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
@@ -86,13 +86,16 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
 
   const dataKey = graph.type === 'standard' ? graph.config.key : graph.type === 'custom' ? graph.m.key : null;
   const rawUnit = (graph.type === 'standard' ? graph.config.unit : graph.type === 'custom' ? graph.m.unit : '') || '';
-
-  // 1. Normalize unit once
   const unitClean = rawUnit.toLowerCase();
 
-  // 2. Use the pre-existing lists from constants for O(1) or direct array checks
-  const isSpeed = SPEED_LIST.includes(dataKey) || unitClean === 'sec' || unitClean === 's';
-  const isStrength = STRENGTH_LIST.includes(dataKey) || unitClean === 'kg';
+  // Explicit exercise helpers
+  const isYoga = Boolean(dataKey && isYogaExercise(dataKey));
+  const isStrengthEx = Boolean(dataKey && isStrengthExercise(dataKey));
+  const isSpeedEx = Boolean(dataKey && isSpeedExercise(dataKey));
+
+  // Combined classification flags (including unit fallbacks)
+  const isSpeed = isSpeedEx || unitClean === 'sec' || unitClean === 's';
+  const isStrength = isStrengthEx || unitClean === 'kg';
 
   const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
   const hasAverage = dataKey && filteredData?.some(d => d[`${dataKey}_average`] != null);
@@ -231,9 +234,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     const keyLower = key.toLowerCase();
     const category = METRIC_CATEGORY_MAP.get(keyLower);
 
-    // Hide percentage for specific categories and weight
     if (
-      keyLower === 'weight' || 
+      keyLower === 'weight' || keyLower === 'height' ||
       (category && ['vital', 'bloodtest', 'diet', 'micronutrient'].includes(category))
     ) {
       return null;
@@ -374,22 +376,34 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   };
 
   // Calculate PR / 1RM
-  // Calculate PR / 1RM
   const validValues = dataKey ? filteredData.map(d => Number(d[dataKey])).filter(n => !isNaN(n) && n > 0) : [];
   let bestValue: number | null = null;
   let bestLabel = '';
-  
-  if (validValues.length > 0 && dataKey?.toLowerCase() !== 'weight') {
-    const keyLower = dataKey.toLowerCase();
-    const metricCategory = METRIC_CATEGORY_MAP.get(keyLower);
-    const isYoga = YOGA_LIST?.includes(dataKey) || metricCategory === 'yoga';
 
-    if (isStrength || isYoga) {
-      bestValue = Math.max(...validValues);
-      bestLabel = 'PR';
+  if (validValues.length > 0 && dataKey && dataKey.toLowerCase() !== 'weight') {
+    let prType: 'MAX' | 'MIN' | 'NONE' = 'NONE';
+
+    if (isYoga || isStrengthEx) {
+      prType = 'MAX';
     } else if (isSpeed) {
-      bestValue = Math.min(...validValues);
-      bestLabel = 'PR';
+      prType = 'MIN';
+    } else if (isStrength) {
+      prType = 'MAX';
+    }
+
+    switch (prType) {
+      case 'MAX':
+        bestValue = Math.max(...validValues);
+        bestLabel = 'PR';
+        break;
+      case 'MIN':
+        bestValue = Math.min(...validValues);
+        bestLabel = 'PR';
+        break;
+      case 'NONE':
+      default:
+        bestValue = null;
+        break;
     }
   }
 

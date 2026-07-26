@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { STRENGTH_KEY_MAP, SPEED_KEY_MAP, YOGA_KEY_MAP } from './profileConstants';
+import { isStrengthExercise, isSpeedExercise, isYogaExercise } from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalEditDeleteProps {
@@ -17,9 +17,10 @@ interface ModalEditDeleteProps {
 export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   isOpen, onClose, onDelete, onUpdate, initialValue, initialItem, title, recordedDate, metricKey
 }) => {
-  const isStrength = Object.values(STRENGTH_KEY_MAP).includes(metricKey);
-  const isSpeed = Object.values(SPEED_KEY_MAP).includes(metricKey);
-  const isYoga = Object.values(YOGA_KEY_MAP).includes(metricKey);
+  // Use O(1) Map lookups
+  const isStrength = isStrengthExercise(metricKey);
+  const isSpeed = isSpeedExercise(metricKey);
+  const isYoga = isYogaExercise(metricKey);
 
   const [inputValue, setInputValue] = useState('');
   const [unit, setUnit] = useState('');

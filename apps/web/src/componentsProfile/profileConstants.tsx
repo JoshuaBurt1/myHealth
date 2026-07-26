@@ -347,9 +347,9 @@ export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
   Physio: PHYSIO_KEY_MAP,
 };
 
-export const isStrengthExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'strength';
-export const isSpeedExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'speed';
-export const isYogaExercise = (key: string) => METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga';
+export const isStrengthExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'strength' : false;
+export const isSpeedExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'speed' : false;
+export const isYogaExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga' : false;
 
 const RAW_SINGLE_GRAPHS = [
   // Core Vitals
@@ -634,14 +634,15 @@ export const SINGLE_GRAPHS = [...RAW_SINGLE_GRAPHS].sort((a, b) => {
   return posA - posB;
 });
 
+export const SINGLE_GRAPHS_MAP = new Map(SINGLE_GRAPHS.map(g => [g.key, g]));
+
 export const getStandardUnit = (key: string): string => {
   if (key === 'bpSyst' || key === 'bpDias') return 'mmHg';
-  const graph = SINGLE_GRAPHS.find(g => g.key === key);
-  return graph ? graph.unit : '';
+  return SINGLE_GRAPHS_MAP.get(key)?.unit || '';
 };
+
 export const getThresholds = (key: string): MetricThresholds | undefined => {
   if (key === 'bpSyst') return BP_THRESHOLDS.systolic;
   if (key === 'bpDias') return BP_THRESHOLDS.diastolic;
-  const graph = SINGLE_GRAPHS.find(g => g.key === key);
-  return graph?.thresholds;
+  return SINGLE_GRAPHS_MAP.get(key)?.thresholds;
 };
