@@ -321,8 +321,8 @@ export const ALL_CATEGORY_MAPS = [
   STRENGTH_KEY_MAP,
   SPEED_KEY_MAP,
   PLYO_KEY_MAP,
-  ENDURANCE_KEY_MAP,
   YOGA_KEY_MAP,
+  ENDURANCE_KEY_MAP,
   MOBILITY_KEY_MAP,
   PHYSIO_KEY_MAP,
 ];
@@ -361,15 +361,15 @@ CATEGORY_DEFINITIONS.forEach(({ category, map }) => {
 });
 
 // Centralized Category Definitions & Helpers
-export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Endurance' | 'Yoga' | 'Mobility' | 'Physio' | 'Custom';
-export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Endurance', 'Yoga', 'Mobility', 'Physio', 'Custom'];
+export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Yoga' | 'Endurance' | 'Mobility' | 'Physio' | 'Custom';
+export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Yoga', 'Endurance', 'Mobility', 'Physio', 'Custom'];
 
 export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
   Strength: STRENGTH_KEY_MAP,
   Speed: SPEED_KEY_MAP,
   Plyometrics: PLYO_KEY_MAP,
-  Endurance: ENDURANCE_KEY_MAP,  
   Yoga: YOGA_KEY_MAP,
+  Endurance: ENDURANCE_KEY_MAP,  
   Mobility: MOBILITY_KEY_MAP,
   Physio: PHYSIO_KEY_MAP,
 };
@@ -382,6 +382,8 @@ export const isCmPlyometricsExercise = (key?: string) => {
   return isPlyometricExercise(key) && getStandardUnit(key) === 'cm';
 };
 export const isYogaExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga' : false;
+export const isDiet = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'diet' : false;
+
 
 const RAW_SINGLE_GRAPHS = [
   // Core Vitals
@@ -629,15 +631,6 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'depthJump', title: 'DEPTH JUMP', unit: 'Reps', icon: <Activity className="text-emerald-500" />, color: '#10b981' },
   { key: 'clapPushUp', title: 'CLAP PUSH-UP', unit: 'Reps', icon: <Zap className="text-amber-500" />, color: '#f59e0b' },
 
-  // ENDURANCE
-  { key: 'steps', title: 'Steps', unit: 'steps', icon: <Footprints className="text-cyan-500" />, color: '#0891b2' },
-  { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
-  { key: 'pistolSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
-  { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
-  { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
-  { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
-  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
-
   // Yoga
   { key: 'downwardDog', title: 'DOWNWARD DOG', unit: 'sec', icon: <Sun className="text-violet-500" />, color: '#8b5cf6' },
   { key: 'warrior1', title: 'WARRIOR I', unit: 'sec', icon: <Sword className="text-violet-600" />, color: '#7c3aed' },
@@ -649,6 +642,15 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'trianglePose', title: 'TRIANGLE POSE', unit: 'sec', icon: <Triangle className="text-pink-500" />, color: '#ec4899' },
   { key: 'crowPose', title: 'CROW POSE', unit: 'sec', icon: <Bird className="text-pink-600" />, color: '#db2777' },
   { key: 'savasana', title: 'SAVASANA', unit: 'sec', icon: <Bed className="text-slate-400" />, color: '#94a3b8' },
+
+  // ENDURANCE
+  { key: 'steps', title: 'Steps', unit: 'steps', icon: <Footprints className="text-cyan-500" />, color: '#0891b2' },
+  { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
+  { key: 'pistolSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
+  { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
+  { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
+  { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
+  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
 
   // Mobility
   { key: 'worldsGreatestStretch', title: "WORLD'S GREATEST STRETCH", unit: 'Reps', icon: <Globe className="text-emerald-600" />, color: '#059669' },

@@ -1,4 +1,3 @@
-// DataScreen.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -39,46 +38,6 @@ const toDateTimeLocal = (date: Date) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-const aggregateDataByDay = (data: any[], metricsToAggregate: string[]) => {
-  const dailyAggregates: Record<string, any> = {};
-  const remainingData: any[] = [];
-
-  data.forEach(point => {
-    const date = new Date(point.timestamp);
-    const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    
-    const pointWithoutAggregated = { ...point };
-    
-    metricsToAggregate.forEach(metric => {
-      if (point[metric] !== undefined) {
-        if (!dailyAggregates[dateKey]) {
-          dailyAggregates[dateKey] = {
-            timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(),
-          };
-        }
-        
-        // Sum the values for diet metrics (per day)
-        dailyAggregates[dateKey][metric] = (dailyAggregates[dateKey][metric] || 0) + Number(point[metric]);
-        
-        if (point[`${metric}_raw`]) {
-          dailyAggregates[dateKey][`${metric}_raw`] = point[`${metric}_raw`];
-        }
-
-        delete pointWithoutAggregated[metric];
-        delete pointWithoutAggregated[`${metric}_raw`];
-      }
-    });
-
-    // keep other metrics that do not require aggregation (like vitals and exercises)
-    const remainingKeys = Object.keys(pointWithoutAggregated).filter(k => k !== 'timestamp' && !k.endsWith('_raw'));
-    if (remainingKeys.length > 0) {
-      remainingData.push(pointWithoutAggregated);
-    }
-  });
-
-  return [...remainingData, ...Object.values(dailyAggregates)].sort((a, b) => a.timestamp - b.timestamp);
-};
-
 const calculatePercentChange = (oldValue: number, newValue: number): number => {
   if (oldValue === 0) return newValue > 0 ? 100 : 0;
   return Number((((newValue - oldValue) / oldValue) * 100).toFixed(2));
@@ -87,9 +46,9 @@ const calculatePercentChange = (oldValue: number, newValue: number): number => {
 const computeChangePercentages = (history: any[]): [number, number] => {
   if (!history || history.length < 2) return [0, 0];
 
-  const firstVal = Number(history[0].value);
-  const prevVal = Number(history[history.length - 2].value);
-  const lastVal = Number(history[history.length - 1].value);
+  const firstVal = Number(history[0].valueTotal !== undefined ? history[0].valueTotal : history[0].value);
+  const prevVal = Number(history[history.length - 2].valueTotal !== undefined ? history[history.length - 2].valueTotal : history[history.length - 2].value);
+  const lastVal = Number(history[history.length - 1].valueTotal !== undefined ? history[history.length - 1].valueTotal : history[history.length - 1].value);
 
   const last_percent = calculatePercentChange(prevVal, lastVal);
   const total_percent = calculatePercentChange(firstVal, lastVal);
@@ -128,7 +87,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
   const notifications = userActiveAlerts(entryData);
   const [lastProcessedAlertId, setLastProcessedAlertId] = useState<string | null>(null);
 
-  // Derive the highest severity level (disease alert notification color)
+  // Derive the highest severity level
   const maxAlertSeverity = useMemo(() => {
     if (notifications.length === 0) return 'info';
     return notifications.some(a => a.type === 'critical') ? 'critical' : 'info';
@@ -141,9 +100,9 @@ const DataScreen: React.FC<DataScreenProps> = ({
     if (onExportSeverity) {
       onExportSeverity(maxAlertSeverity);
     }
-  }, [notifications, maxAlertSeverity, onExportAlerts]);
+  }, [notifications, maxAlertSeverity, onExportAlerts, onExportSeverity]);
 
-  // effect to sync the alert timestamp to the DB
+  // Sync alert timestamp to DB
   useEffect(() => {
     if (!isMe || notifications.length === 0 || !userId || dataOwnerId !== userId) return;
 
@@ -240,14 +199,16 @@ const DataScreen: React.FC<DataScreenProps> = ({
             const ts = parseDate(entry.dateTime).getTime();
             if (!timelineMap[ts]) timelineMap[ts] = { timestamp: ts };
             
-            let val = parseFloat(entry.value);
+            // Prioritize valueTotal (precalculated aggregate), fallback to value
+            const rawVal = entry.valueTotal !== undefined ? entry.valueTotal : entry.value;
+            let val = parseFloat(rawVal);
             if (isNaN(val)) return;
             
             timelineMap[ts][key] = val;
             
             if (entry.totalLoad !== undefined && entry.totalLoad !== null) {
               timelineMap[ts][`${key}_totalLoad`] = parseFloat(entry.totalLoad);
-            }            
+            }           
 
             if (entry.average !== undefined && entry.average !== null) {
               timelineMap[ts][`${key}_average`] = parseFloat(entry.average);
@@ -311,7 +272,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
       }
     });
 
-    // Safely extract keys in order, handling arrays, objects, and missing properties
     const orderedKeys: string[] = [];
     ALL_CATEGORY_MAPS.forEach((categoryMap: any) => {
       if (!categoryMap) return;
@@ -323,7 +283,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
           if (k) orderedKeys.push(String(k).toLowerCase());
         });
       } else if (typeof categoryMap === 'object') {
-        // Extract dictionary values ('bpSyst', 'hr', etc.) rather than display labels
         Object.values(categoryMap).forEach((val: any) => {
           if (val && typeof val === 'string') {
             orderedKeys.push(val.toLowerCase());
@@ -332,14 +291,12 @@ const DataScreen: React.FC<DataScreenProps> = ({
       }
     });
 
-    // Helper to safely resolve a target key for graph sorting
     const getGraphKey = (g: any): string => {
       if (!g) return '';
       if (g.id === 'bp' || g.type === 'bp') return 'bpsyst';
       return String(g.config?.key || g.m?.key || g.id || g.key || '').toLowerCase();
     };
 
-    // Sort graphs strictly based on their positional order in ALL_CATEGORY_MAPS
     graphs.sort((a, b) => {
       const aKey = getGraphKey(a);
       const bKey = getGraphKey(b);
@@ -389,9 +346,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
       result = result.filter(d => d.timestamp >= threshold);
     }
 
-    // Aggregate diet metrics
-    result = aggregateDataByDay(result, dietKeys);
-
     const uniqueMap: { [key: number]: any } = {};
     result.forEach(point => {
       if (!uniqueMap[point.timestamp]) {
@@ -404,7 +358,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
     if (result.length <= 1 || reductionFactor <= 0.05) return result;
 
-    // Remove the last point from the reduction pool to guarantee its visibility
     const lastActualPoint = result[result.length - 1];
     const reductionPool = result.slice(0, -1);
 
@@ -414,7 +367,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
     const bucketsData: { [key: number]: any[] } = {};
     
-    // Bucket only the preceding points
     reductionPool.forEach(point => {
       const bucketKey = Math.floor(point.timestamp / adjustedInterval) * adjustedInterval;
       if (!bucketsData[bucketKey]) bucketsData[bucketKey] = [];
@@ -469,10 +421,9 @@ const DataScreen: React.FC<DataScreenProps> = ({
       return representativePoint;
     });
 
-    // Merge the buckets and the last point
     return [...bucketedResults, lastActualPoint].sort((a, b) => a.timestamp - b.timestamp);
 
-  }, [entryData, timeRange, customStart, customEnd, reductionFactor, dietKeys]);
+  }, [entryData, timeRange, customStart, customEnd, reductionFactor]);
 
   const [selectedPoint, setSelectedPoint] = useState<{ 
     ts: number; 
@@ -492,15 +443,14 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
       setSelectedPoint({ 
         ts: rawTs,
-        val: raw.value !== undefined ? raw.value : point[dataKey],
+        val: raw.valueTotal !== undefined ? raw.valueTotal : (raw.value !== undefined ? raw.value : point[dataKey]),
         fieldName: fieldName,
         rawObject: raw
       });
     }
   };
 
-  // --- Cleaned up & Consolidated Handlers ---
-  const handleUpdateValue = async (updatedFields: any) => { // UPDATED param type
+  const handleUpdateValue = async (updatedFields: any) => {
     if (!selectedPoint || !userId) return;
 
     const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
@@ -513,7 +463,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
       const profileData = profileSnap.data();
       const history: any[] = profileData[metricKey] || [];
 
-      // Replace updated entry matching selectedPoint timestamp
       const updatedHistory = history.map((item) => {
         const itemTs = item.dateTime?.toDate 
           ? item.dateTime.toDate().getTime() 
@@ -525,10 +474,8 @@ const DataScreen: React.FC<DataScreenProps> = ({
         return item;
       });
 
-      // Recalculate change percentages
       const newChanges = computeChangePercentages(updatedHistory);
 
-      // Save updated history and recalculated change array
       await updateDoc(profileRef, {
         [metricKey]: updatedHistory,
         [`change_${metricKey}`]: newChanges
@@ -553,7 +500,6 @@ const DataScreen: React.FC<DataScreenProps> = ({
       const profileData = profileSnap.data();
       const history: any[] = profileData[metricKey] || [];
 
-      // Filter out entry matching selectedPoint timestamp
       const updatedHistory = history.filter((item) => {
         const itemTs = item.dateTime?.toDate 
           ? item.dateTime.toDate().getTime() 
@@ -562,10 +508,8 @@ const DataScreen: React.FC<DataScreenProps> = ({
         return itemTs !== selectedPoint.ts;
       });
 
-      // Recalculate change percentages
       const newChanges = computeChangePercentages(updatedHistory);
 
-      // Save updated history and recalculated change array
       await updateDoc(profileRef, {
         [metricKey]: updatedHistory,
         [`change_${metricKey}`]: newChanges
@@ -604,9 +548,9 @@ const DataScreen: React.FC<DataScreenProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-6 flex flex-col gap-8 pb-10">      
       <ActiveAlerts 
-      alerts={notifications} 
-      className="hidden lg:flex" 
-    />
+        alerts={notifications} 
+        className="hidden lg:flex" 
+      />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div className="flex flex-col items-start gap-4 mb-2 w-full">

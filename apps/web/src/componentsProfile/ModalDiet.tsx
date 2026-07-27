@@ -431,8 +431,12 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
       const userRootRef = doc(db, 'users', userId);
       const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
 
-      const rootSnap = await getDoc(userRootRef);
+      const [rootSnap, profileSnap] = await Promise.all([
+        getDoc(userRootRef),
+        getDoc(profileRef)
+      ]);
       const rootData = rootSnap.data() || {};
+      const profileData = profileSnap.data() || {};
       
       const lastBaseUpdate = rootData.last_diet_update?.toDate()?.getTime() || 0;
       const isEligibleForBaseGems = (Date.now() - lastBaseUpdate) > 6 * 60 * 60 * 1000;
@@ -452,6 +456,19 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
       } else if (diffMs >= ONE_DAY_MS) {
         newStreak += 1; streakIncremented = true; streakBonus = newStreak;
       }
+
+      const calculateDayTotal = (dayMap: Record<string, any>): number => {
+        let total = 0;
+        Object.keys(dayMap).forEach(key => {
+          if (!isNaN(Number(key))) {
+            const entry = dayMap[key];
+            if (Array.isArray(entry?.value)) {
+              total += entry.value.reduce((acc: number, val: number) => acc + (Number(val) || 0), 0);
+            }
+          }
+        });
+        return Number(total.toFixed(1));
+      };
 
       const updateData: any = {};
       const newDefs: any[] = [];
@@ -509,12 +526,76 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
           contexts.push("Manual Entry");
         }
 
-        updateData[metric.name] = arrayUnion({
-          value: values,
-          context: contexts,
-          dateTime: nowISO,
-          unit: metric.unit || ''
-        });
+        if (values.length > 0) {
+          // Clone existing array to avoid mutating the read reference directly
+          const metricArray = profileData[metric.name] ? [...profileData[metric.name]] : [];
+          const currentDayStr = new Date(nowISO).toDateString();
+          const lastIdx = metricArray.length - 1;
+          let lastElement = lastIdx >= 0 ? metricArray[lastIdx] : null;
+
+          let matchedDay = false;
+          let isOldFormat = false;
+
+          // Check if the most recent entry shares the exact same calendar day
+          if (lastElement) {
+            if (lastElement["0"] && lastElement["0"].dateTime) {
+              if (new Date(lastElement["0"].dateTime).toDateString() === currentDayStr) {
+                matchedDay = true;
+              }
+            } else if (lastElement.dateTime) {
+              // Backward compatibility check for older flat structure entries
+              isOldFormat = true;
+              if (new Date(lastElement.dateTime).toDateString() === currentDayStr) {
+                matchedDay = true;
+              }
+            }
+          }
+
+          // Construct individual entry
+          const newEntry = {
+            value: values,
+            context: contexts,
+            dateTime: nowISO,
+            unit: metric.unit || ''
+          };
+
+          if (matchedDay && !isOldFormat) {
+            // Find next key index
+            const keys = Object.keys(lastElement).filter(k => !isNaN(Number(k))).map(Number);
+            const nextKey = keys.length > 0 ? Math.max(...keys) + 1 : 0;
+
+            const updatedDayMap = {
+              ...lastElement,
+              [nextKey.toString()]: newEntry
+            };
+            
+            // Calculate total across all entries ("0", "1", "2", ...)
+            updatedDayMap.valueTotal = calculateDayTotal(updatedDayMap);
+            metricArray[lastIdx] = updatedDayMap;
+
+          } else if (matchedDay && isOldFormat) {
+            const updatedDayMap: Record<string, any> = {
+              "0": { ...lastElement },
+              "1": newEntry
+            };
+
+            updatedDayMap.valueTotal = calculateDayTotal(updatedDayMap);
+            metricArray[lastIdx] = updatedDayMap;
+
+          } else {
+            // Brand new day map entry
+            const newDayMap = {
+              "0": newEntry,
+              dateTime: nowISO,
+              unit: metric.unit || '',
+              valueTotal: Number(values.reduce((acc, val) => acc + val, 0).toFixed(1))
+            };
+            
+            metricArray.push(newDayMap);
+          }
+
+          updateData[metric.name] = metricArray;
+        }
       });
 
       // Batch push all individual meal items into diet_history
