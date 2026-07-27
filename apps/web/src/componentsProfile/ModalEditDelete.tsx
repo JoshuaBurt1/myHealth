@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { isStrengthExercise, isSpeedExercise, isYogaExercise } from './profileConstants';
+import { 
+  isStrengthExercise, 
+  isSpeedExercise, 
+  isYogaExercise, 
+  isCmPlyometricsExercise, 
+  isPlyometricExercise 
+} from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalEditDeleteProps {
@@ -21,6 +27,13 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const isStrength = isStrengthExercise(metricKey);
   const isSpeed = isSpeedExercise(metricKey);
   const isYoga = isYogaExercise(metricKey);
+  const isCmPlyo = isCmPlyometricsExercise(metricKey);
+  const isPlyo = isPlyometricExercise(metricKey);
+
+  // Check if item or current context uses 'reps'
+  const targetItem = initialItem?.rawObject || initialItem;
+  const targetUnit = String(targetItem?.unit || '').toLowerCase();
+  const isReps = isPlyo || targetUnit === 'reps';
 
   const [inputValue, setInputValue] = useState('');
   const [unit, setUnit] = useState('');
@@ -30,21 +43,25 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const [hasSets, setHasSets] = useState(false);
 
   useEffect(() => {
-    const targetItem = initialItem?.rawObject || initialItem;
+    const item = initialItem?.rawObject || initialItem;
 
-    if (targetItem && Array.isArray(targetItem.sets) && targetItem.sets.length > 0) {
-      setSets(targetItem.sets);
+    if (item && Array.isArray(item.sets) && item.sets.length > 0) {
+      setSets(item.sets);
       setHasSets(true);
-    } else if (isStrength || isSpeed || isYoga) {
+    } else if (isStrength || isSpeed || isYoga || isCmPlyo || isReps) {
       const legacySet: any = {
         reps: 1,
-        unit: isStrength ? 'KG' : 'SEC',
+        unit: isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : isCmPlyo ? 'CM' : 'REPS',
       };
       
       if (isStrength) {
         legacySet.weightKg = Number(initialValue) || 0;
-      } else {
+      } else if (isSpeed || isYoga) {
         legacySet.timeSec = Number(initialValue) || 0;
+      } else if (isCmPlyo) {
+        legacySet.weightCm = Number(initialValue) || 0;
+      } else {
+        legacySet.reps = Number(initialValue) || 1;
       }
 
       setSets([legacySet]);
@@ -60,10 +77,16 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     } else if (isStrength) {
       setUnit('KG');
       setInputValue(String(initialValue));
+    } else if (isCmPlyo) {
+      setUnit('CM');
+      setInputValue(String(initialValue));
+    } else if (isReps) {
+      setUnit('REPS');
+      setInputValue(String(initialValue));
     } else {
       setInputValue(String(initialValue));
     }
-  }, [initialValue, initialItem, isSpeed, isStrength, isYoga]);
+  }, [initialValue, initialItem, isSpeed, isStrength, isYoga, isCmPlyo, isReps]);
 
   const handleToggleUnit = () => {
     if (isStrength) {
@@ -111,6 +134,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     let totalLoad = 0;
     let totalReps = 0;
     let bestValue = isSpeed ? Infinity : 0;
+    let hasWeight = false;
 
     sets.forEach((s) => {
       const reps = parseFloat(s.reps) || 0;
@@ -141,8 +165,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         setLoad = timeSec * reps;
         setVal = timeSec;
         if (setVal > 0 && setVal < bestValue) bestValue = setVal;
-      }
-      else if (isYoga) {
+      } else if (isYoga) {
         let timeSec = 0;
         if (unit === 'MM:SS') {
           const parts = String(s.timeSec || '').split(':');
@@ -157,6 +180,22 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         setLoad = timeSec * reps;
         setVal = timeSec;
         if (setVal > 0 && setVal > bestValue) bestValue = setVal;
+      } else if (isCmPlyo) {
+        let cmVal = parseFloat(s.weightCm ?? s.weight ?? s.valueCm) || 0;
+        setLoad = cmVal * reps;
+        setVal = cmVal;
+        if (setVal > bestValue) bestValue = setVal;
+      } else if (isReps) {
+        let weight = parseFloat(s.weightKg ?? s.weight) || 0;
+        if (weight > 0) {
+          hasWeight = true;
+          setLoad = weight * reps;
+          setVal = weight;
+        } else {
+          setLoad = reps;
+          setVal = reps;
+        }
+        if (setVal > bestValue) bestValue = setVal;
       }
 
       totalLoad += setLoad;
@@ -165,14 +204,18 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
     if (bestValue === Infinity) bestValue = 0;
 
-    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+    // Calculate average reps per set for unweighted reps exercises,
+    // or average load per rep for weighted/timed exercises.
+    const average = (isReps && !hasWeight)
+      ? (sets.length > 0 ? Number((totalReps / sets.length).toFixed(1)) : 0)
+      : (totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0);
 
     return {
       totalLoad: Number(totalLoad.toFixed(1)),
       value: Number(bestValue.toFixed(1)),
       average
     };
-  }, [sets, hasSets, isStrength, isSpeed, isYoga, unit]);
+  }, [sets, hasSets, isStrength, isSpeed, isYoga, isCmPlyo, isReps, unit]);
 
   if (!isOpen) return null;
 
@@ -188,7 +231,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   };
 
   const handleAddSet = () => {
-    const fallbackUnit = isStrength ? (unit || 'KG') : (isSpeed || isYoga) ? (unit || 'SEC') : '';
+    const fallbackUnit = isStrength ? (unit || 'KG') : (isSpeed || isYoga) ? (unit || 'SEC') : isCmPlyo ? 'CM' : isReps ? 'REPS' : '';
 
     const newSet: any = {
       reps: '',
@@ -199,6 +242,8 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       newSet.weightKg = '';
     } else if (isSpeed || isYoga) {
       newSet.timeSec = '';
+    } else if (isCmPlyo) {
+      newSet.weightCm = '';
     }
 
     setSets([...sets, newSet]);
@@ -229,6 +274,14 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           }
           newSet.timeSec = isNaN(t) ? s.timeSec : Number(t.toFixed(1));
           newSet.unit = 'SEC';
+        } else if (isCmPlyo) {
+          let cm = parseFloat(s.weightCm ?? s.weight ?? s.valueCm);
+          newSet.weightCm = isNaN(cm) ? (s.weightCm ?? s.weight ?? s.valueCm) : Number(cm.toFixed(1));
+          newSet.unit = 'cm';
+        } else if (isReps) {
+          let r = parseFloat(s.reps);
+          newSet.reps = isNaN(r) ? s.reps : Number(r);
+          newSet.unit = 'reps';
         }
         return newSet;
       });
@@ -259,7 +312,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   };
 
-  const dbUnitLabel = isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : unit;
+  const dbUnitLabel = isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : isCmPlyo ? 'CM' : isReps ? 'REPS' : unit;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
@@ -332,6 +385,20 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                         value={setObj.timeSec || ''}
                         placeholder={unit === 'MM:SS' ? "00:00" : ""}
                         onChange={(e) => handleSetChange(index, 'timeSec', e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  )}
+
+                  {isCmPlyo && (
+                    <div className="flex flex-col flex-1">
+                      <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
+                        Height (CM)
+                      </label>
+                      <input
+                        type="number"
+                        value={setObj.weightCm ?? setObj.weight ?? setObj.valueCm ?? ''}
+                        onChange={(e) => handleSetChange(index, 'weightCm', e.target.value)}
                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
                       />
                     </div>

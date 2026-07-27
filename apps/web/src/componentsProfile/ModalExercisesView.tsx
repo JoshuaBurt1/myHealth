@@ -12,7 +12,8 @@ import {
   type ExerciseCategory,
   isStrengthExercise,
   isSpeedExercise,
-  isYogaExercise
+  isYogaExercise,
+  isCmPlyometricsExercise
 } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
@@ -48,8 +49,6 @@ export interface ModalExercisesViewProps {
   updateTrackedSet: (exName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => void;
   removeSetFromTracked: (exName: string, setId: string) => void;
   addSetToTracked: (exName: string) => void;
-  exerciseInputs: Record<string, string>;
-  setExerciseInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setEntries: React.Dispatch<React.SetStateAction<any[]>>;
   updateEntrySet: (exName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => void;
   removeSetFromEntry: (exName: string, setId: string) => void;
@@ -89,8 +88,6 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
   updateTrackedSet,
   removeSetFromTracked,
   addSetToTracked,
-  exerciseInputs,
-  setExerciseInputs,
   setEntries,
   updateEntrySet,
   removeSetFromEntry,
@@ -290,11 +287,14 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                     {/* EXISTING TRACKED EXERCISES */}
                     {existingInCat.map((ex, idx) => {
                       const isStrength = isStrengthExercise(ex.name);
-                      const isSpeed = isSpeedExercise(ex.name);
-                      const isYoga = isYogaExercise(ex.name);
+                      const isPlyometric = isCmPlyometricsExercise(ex.name);
+                      const showReps = isStrength || isSpeedExercise(ex.name) || isYogaExercise(ex.name) || isPlyometric || category === 'Custom';
+                      
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
-                      const setsList = trackedSets[ex.name] || [{ id: '1', weight: '', reps: '' }];
+                      const setsList = (trackedSets[ex.name] && trackedSets[ex.name].length > 0)
+                        ? trackedSets[ex.name]
+                        : [{ id: '1', weight: '', reps: '', time: '' }];
 
                       return (
                         <PrivacyWrapper 
@@ -318,36 +318,47 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                               {ex.label}
                             </span>
                             
-                            {isStrength || isSpeed || isYoga ? (
-                              <div className="space-y-2">
-                                {setsList.map((set, setIdx) => (
-                                  <div key={set.id} className="flex gap-2 items-center w-full">
-                                    <span className="text-[10px] font-bold text-slate-400 w-4">{setIdx + 1}.</span>
-                                    
-                                    {isStrength ? (
-                                      <div className="flex-1">
-                                        <InputField 
-                                          label={`Weight (${stUnit})`} 
-                                          type="number" 
-                                          value={set.weight} 
-                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'weight', v)}
-                                          disabled={!isMe} 
-                                          icon={<Dumbbell size={14} className="text-indigo-400"/>} 
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div className="flex-1">
-                                        <InputField 
-                                          label={`Time (${spUnit})`} 
-                                          type="text" 
-                                          value={set.time || ''} 
-                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
-                                          disabled={!isMe} 
-                                          icon={<RefreshCw size={14} className="text-indigo-400"/>} 
-                                        />
-                                      </div>
-                                    )}
+                            <div className="space-y-2">
+                              {setsList.map((set, setIdx) => (
+                                <div key={set.id} className="flex gap-2 items-center w-full">
+                                  <span className="text-[10px] font-bold text-slate-400 w-4">{setIdx + 1}.</span>
+                                  
+                                  {isStrength ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={`Weight (${stUnit})`} 
+                                        type="number" 
+                                        value={set.weight} 
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'weight', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  ) : isPlyometric ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Height (cm)" 
+                                        type="number" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={ex.unit ? `Value (${ex.unit})` : `Time (${spUnit})`} 
+                                        type="text" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  )}
 
+                                  {showReps && (
                                     <div className="flex-1">
                                       <InputField 
                                         label="Reps" 
@@ -358,40 +369,31 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                    
-                                    {setsList.length > 1 && isMe && (
-                                      <button 
-                                        type="button"
-                                        onClick={() => removeSetFromTracked(ex.name, set.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                        title="Remove set"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                                
-                                {setsList.length < 10 && isMe && (
-                                  <button
-                                    type="button"
-                                    onClick={() => addSetToTracked(ex.name)}
-                                    className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-500 hover:bg-indigo-50 rounded-xl transition-colors border border-dashed border-indigo-200"
-                                  >
-                                    <Plus size={14} /> ADD SET
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <InputField 
-                                label={`Value ${ex.unit ? `(${ex.unit})` : ''}`.trim()} 
-                                type="number" 
-                                value={exerciseInputs[ex.name] || ''} 
-                                onChange={(v: string) => !v.includes('-') && setExerciseInputs(p => ({ ...p, [ex.name]: v }))}
-                                disabled={!isMe} 
-                                icon={<Dumbbell size={16} className="text-indigo-400"/>} 
-                              />
-                            )}
+                                  )}
+                                  
+                                  {setsList.length > 1 && isMe && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => removeSetFromTracked(ex.name, set.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                      title="Remove set"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              {setsList.length < 10 && isMe && (
+                                <button
+                                  type="button"
+                                  onClick={() => addSetToTracked(ex.name)}
+                                  className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-500 hover:bg-indigo-50 rounded-xl transition-colors border border-dashed border-indigo-200"
+                                >
+                                  <Plus size={14} /> ADD SET
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </PrivacyWrapper>
                       );
@@ -400,8 +402,9 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                     {/* NEW UNCOMMITTED EXERCISES */}
                     {newInCat.map((entry) => {
                       const isStrength = isStrengthExercise(entry.name);
-                      const isSpeed = isSpeedExercise(entry.name);
-                      const isYoga = isYogaExercise(entry.name);
+                      const isPlyometric = isCmPlyometricsExercise(entry.name);
+                      const showReps = isStrength || isSpeedExercise(entry.name) || isYogaExercise(entry.name) || isPlyometric || category === 'Custom';
+
                       const stUnit = strengthUnits[entry.name] || 'kg';
                       const spUnit = speedUnits[entry.name] || 'sec';
 
@@ -425,36 +428,47 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                               {entry.label} (NEW)
                             </span>
 
-                            {isStrength || isSpeed || isYoga ? (
-                              <div className="space-y-2">
-                                {entry.sets.map((set: any, setIdx: number) => (
-                                  <div key={set.id} className="flex gap-2 items-center w-full">
-                                    <span className="text-[10px] font-bold text-indigo-400 w-4">{setIdx + 1}.</span>
-                                    
-                                    {isStrength ? (
-                                      <div className="flex-1">
-                                        <InputField 
-                                          label={`Weight (${stUnit})`} 
-                                          type="number" 
-                                          value={set.weight} 
-                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'weight', v)}
-                                          disabled={!isMe} 
-                                          icon={<Dumbbell size={14} className="text-indigo-500"/>} 
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div className="flex-1">
-                                        <InputField 
-                                          label={`Time (${spUnit})`} 
-                                          type="text" 
-                                          value={set.time || ''} 
-                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
-                                          disabled={!isMe} 
-                                          icon={<RefreshCw size={14} className="text-indigo-500"/>} 
-                                        />
-                                      </div>
-                                    )}
+                            <div className="space-y-2">
+                              {entry.sets.map((set: any, setIdx: number) => (
+                                <div key={set.id} className="flex gap-2 items-center w-full">
+                                  <span className="text-[10px] font-bold text-indigo-400 w-4">{setIdx + 1}.</span>
+                                  
+                                  {isStrength ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={`Weight (${stUnit})`} 
+                                        type="number" 
+                                        value={set.weight} 
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'weight', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  ) : isPlyometric ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Height (cm)" 
+                                        type="number" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={entry.unit ? `Value (${entry.unit})` : `Time (${spUnit})`} 
+                                        type="text" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  )}
 
+                                  {showReps && (
                                     <div className="flex-1">
                                       <InputField 
                                         label="Reps" 
@@ -465,39 +479,31 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-500"/>} 
                                       />
                                     </div>
-                                    
-                                    {entry.sets.length > 1 && isMe && (
-                                      <button 
-                                        type="button"
-                                        onClick={() => removeSetFromEntry(entry.name, set.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                        title="Remove set"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                                
-                                {entry.sets.length < 10 && isMe && (
-                                  <button
-                                    type="button"
-                                    onClick={() => addSetToEntry(entry.name)}
-                                    className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-100/50 rounded-xl transition-colors border border-dashed border-indigo-200"
-                                  >
-                                    <Plus size={14} /> ADD SET
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <InputField 
-                                label={`Value ${entry.unit ? `(${entry.unit})` : ''}`.trim()} 
-                                type="number" 
-                                value={entry.value} 
-                                onChange={(v: string) => !v.includes('-') && setEntries(prev => prev.map(e => e.name === entry.name ? { ...e, value: v } : e))} 
-                                icon={<Dumbbell size={16} className="text-indigo-500"/>} 
-                              />
-                            )}
+                                  )}
+                                  
+                                  {entry.sets.length > 1 && isMe && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => removeSetFromEntry(entry.name, set.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                      title="Remove set"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              {entry.sets.length < 10 && isMe && (
+                                <button
+                                  type="button"
+                                  onClick={() => addSetToEntry(entry.name)}
+                                  className="w-full py-2 mt-2 flex items-center justify-center gap-1 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-100/50 rounded-xl transition-colors border border-dashed border-indigo-200"
+                                >
+                                  <Plus size={14} /> ADD SET
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </PrivacyWrapper>
                       );

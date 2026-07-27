@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, isStrengthExercise, isSpeedExercise, isYogaExercise, getStandardUnit } from './profileConstants';
+import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, isStrengthExercise, isSpeedExercise, isCmPlyometricsExercise, isYogaExercise, getStandardUnit } from './profileConstants';
 import { ModalExercisesView } from './ModalExercisesView';
 
 const calculatePercentChange = (oldValue: number, newValue: number): number => {
@@ -63,9 +63,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (isOpen) {
       const initialTrackedSets: Record<string, SetEntry[]> = {};
       trackedExercises.forEach((ex) => {
-        if (isStrengthExercise(ex.name) || isSpeedExercise(ex.name) || isYogaExercise(ex.name)) {
-          initialTrackedSets[ex.name] = [{ id: '1', weight: '', reps: '', time: '' }];
-        }
+        initialTrackedSets[ex.name] = [{ id: '1', weight: '', reps: '', time: '' }];
       });
       setTrackedSets(initialTrackedSets);
     }
@@ -184,10 +182,16 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
   const updateTrackedSet = (exerciseName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => {
     if (val.includes('-')) return;
-    setTrackedSets(prev => ({
-      ...prev,
-      [exerciseName]: (prev[exerciseName] || []).map(s => s.id === setId ? { ...s, [field]: val } : s)
-    }));
+    setTrackedSets(prev => {
+      const currentSets = (prev[exerciseName] && prev[exerciseName].length > 0)
+        ? prev[exerciseName]
+        : [{ id: setId, weight: '', reps: '', time: '' }];
+
+      return {
+        ...prev,
+        [exerciseName]: currentSets.map(s => s.id === setId ? { ...s, [field]: val } : s)
+      };
+    });
   };
 
   const addSetToEntry = (entryName: string) => {
@@ -231,6 +235,42 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }));
   };
 
+ // Helper to compute analytics for reps-only exercises
+  const evaluateRepsSets = (setsList: SetEntry[], _label: string) => {
+    const validSets: { reps: number }[] = [];
+
+    for (const s of setsList) {
+      const rawValue = s.reps || s.weight || s.time;
+      if (rawValue) {
+        const r = Number(rawValue);
+        if (!isNaN(r) && r > 0) {
+          validSets.push({ reps: r });
+        }
+      }
+    }
+
+    if (validSets.length === 0) return null;
+
+    // Find the maximum reps achieved in a single set
+    const maxReps = Math.max(...validSets.map(s => s.reps));
+
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = Number((totalReps / validSets.length).toFixed(1));
+
+    const detailedSets = validSets.map(s => ({
+      reps: s.reps,
+      unit: 'reps'
+    }));
+
+    return {
+      value: maxReps, // Changed from `totalReps` to `maxReps`
+      totalLoad: totalReps,
+      average,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
   // Helper to compute strength set analytics according to rules
   const evaluateStrengthSets = (setsList: SetEntry[], unit: 'kg' | 'lbs', label: string) => {
     const validSets: { weightKg: number; reps: number }[] = [];
@@ -243,7 +283,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         const w = Number(s.weight);
         const r = Number(s.reps);
         if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
-          // Standardize set weight rounding immediately
           const normalizedKg = Number(convertWeightToKg(w, unit).toFixed(1));
           validSets.push({
             weightKg: normalizedKg,
@@ -255,18 +294,15 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
     if (validSets.length === 0) return null;
 
-    // Calculate 1RM using standardized set weights
     const max1RM = Math.max(
       ...validSets.map(s => (s.reps === 1 ? s.weightKg : s.weightKg * (1 + s.reps / 30)))
     );
     const oneRepMax = Number(max1RM.toFixed(1));
 
-    // Compute total load using exact set weights
     const totalLoad = Number(
       validSets.reduce((sum, s) => sum + (s.weightKg * s.reps), 0).toFixed(1)
     );
 
-    // Calculate average weight per rep
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
     const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
 
@@ -306,7 +342,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
     if (validSets.length === 0) return null;
 
-    // Order sets primarily by fastest time (lowest seconds)
     const sortedSets = [...validSets].sort((a, b) => 
       isYoga ? b.timeSec - a.timeSec : a.timeSec - b.timeSec
     );
@@ -315,7 +350,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     const bestTime = bestSet.timeSec;
     const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
 
-    // Calculate average speed/time per rep
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
     const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
 
@@ -327,6 +361,46 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
     return {
       value: bestTime,
+      totalLoad,
+      average,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
+  // Helper to compute plyometric set analytics for cm-based exercises
+  const evaluatePlyometricsSets = (setsList: SetEntry[], label: string) => {
+    const validSets: { valueCm: number; reps: number }[] = [];
+
+    for (const s of setsList) {
+      const val = s.time || s.weight;
+      if ((val && !s.reps) || (!val && s.reps)) {
+        throw new Error(`Missing data: Please complete height/distance and reps for all filled sets in ${label}.`);
+      }
+      if (val && s.reps) {
+        const v = Number(val);
+        const r = Number(s.reps);
+        if (!isNaN(v) && !isNaN(r) && v > 0 && r > 0) {
+          validSets.push({ valueCm: v, reps: r });
+        }
+      }
+    }
+
+    if (validSets.length === 0) return null;
+
+    const bestValue = Math.max(...validSets.map(s => s.valueCm));
+    const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.valueCm * s.reps), 0));
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+
+    const detailedSets = validSets.map(s => ({
+      weightCm: s.valueCm,
+      reps: s.reps,
+      unit: 'cm'
+    }));
+
+    return {
+      value: bestValue,
       totalLoad,
       average,
       totalSets: validSets.length,
@@ -374,8 +448,37 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
+        } else if (isCmPlyometricsExercise(e.name)) {
+          const evalResult = evaluatePlyometricsSets(e.sets, e.label);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'cm'
+              }
+            });
+          }
         } else {
-          if (e.value.trim() !== '' && !isNaN(Number(e.value))) {
+          // Fallback for reps-only dynamic set entries or single values
+          const evalResult = evaluateRepsSets(e.sets, e.label);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: e.unit || 'reps'
+              }
+            });
+          } else if (e.value.trim() !== '' && !isNaN(Number(e.value))) {
             preparedNew.push({
               ...e,
               finalData: { value: Number(e.value), unit: e.unit }
@@ -420,13 +523,48 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else {
-          const val = exerciseInputs[ex.name];
-          if (val?.trim() !== '' && !isNaN(Number(val))) {
+        } else if (isCmPlyometricsExercise(ex.name)) {
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluatePlyometricsSets(setsList, ex.label);
+          if (evalResult) {
             preparedExist.push({
               ...ex,
-              finalData: { value: Number(val), unit: ex.unit || '' }
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: 'cm'
+              }
             });
+          }
+        } else {
+          // Check trackedSets first for reps-only exercises (e.g. Burpees)
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluateRepsSets(setsList, ex.label);
+
+          if (evalResult) {
+            preparedExist.push({
+              ...ex,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: ex.unit || 'reps'
+              }
+            });
+          } else {
+            // Fallback to single value input
+            const val = exerciseInputs[ex.name];
+            if (val?.trim() !== '' && !isNaN(Number(val))) {
+              preparedExist.push({
+                ...ex,
+                finalData: { value: Number(val), unit: ex.unit || '' }
+              });
+            }
           }
         }
       }
@@ -584,8 +722,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       updateTrackedSet={updateTrackedSet}
       removeSetFromTracked={removeSetFromTracked}
       addSetToTracked={addSetToTracked}
-      exerciseInputs={exerciseInputs}
-      setExerciseInputs={setExerciseInputs}
       setEntries={setEntries}
       updateEntrySet={updateEntrySet}
       removeSetFromEntry={removeSetFromEntry}

@@ -210,22 +210,44 @@ export const SPEED_KEY_MAP: Record<string, string> = {
   'Rowing machine 1 mile': 'row1Mile',
   'Rowing machine 10k': 'row10k',
   'Rowing machine Marathon': 'rowMarathon',
-  'Swim 100m': 'swim100m',
-  'Swim 400m': 'swim400m',
-  'Swim 1 mile': 'swim1Mile',
-  'Swim 10k': 'swim10k',
-  'Swim Marathon': 'swimMarathon',
+  
+  // Freestyle Swim
+  'Freestyle 100m': 'swimFree100m',
+  'Freestyle 400m': 'swimFree400m',
+  'Freestyle 1 mile': 'swimFree1Mile',
+  'Freestyle 10k': 'swimFree10k',
+  'Freestyle Marathon': 'swimFreeMarathon',
+
+  // Backstroke Swim
+  'Backstroke 100m': 'swimBack100m',
+  'Backstroke 400m': 'swimBack400m',
+  'Backstroke 1 mile': 'swimBack1Mile',
+  'Backstroke 10k': 'swimBack10k',
+  'Backstroke Marathon': 'swimBackMarathon',
+
+  // Breaststroke Swim
+  'Breaststroke 100m': 'swimBreast100m',
+  'Breaststroke 400m': 'swimBreast400m',
+  'Breaststroke 1 mile': 'swimBreast1Mile',
+  'Breaststroke 10k': 'swimBreast10k',
+  'Breaststroke Marathon': 'swimBreastMarathon',
+
+  // Butterfly Swim
+  'Butterfly 100m': 'swimFly100m',
+  'Butterfly 400m': 'swimFly400m',
+  'Butterfly 1 mile': 'swimFly1Mile',
+  'Butterfly 10k': 'swimFly10k',
+  'Butterfly Marathon': 'swimFlyMarathon',
 };
 
-// These should be kg (because you could add a weighted vest)
-// And what matters more is the amount of mass moved per movement
+// some in cm
 export const PLYO_KEY_MAP: Record<string, string> = {
-  'Box Jump': 'boxJump',
   'Broad Jump': 'broadJump',
-  'Burpees': 'burpees',
+  'Box Jump': 'boxJump',
+  'Vertical Leap': 'verticalLeap',
   'Depth Jumps': 'depthJump',
+  'Burpees': 'burpees',
   'Clap Push-ups': 'clapPushUp',
-  'Vertical Leap': 'verticalLeap'
 };
 
 export const ENDURANCE_KEY_MAP: Record<string, string> = {
@@ -354,6 +376,11 @@ export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
 
 export const isStrengthExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'strength' : false;
 export const isSpeedExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'speed' : false;
+export const isPlyometricExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'plyometrics' : false;
+export const isCmPlyometricsExercise = (key?: string) => {
+  if (!key) return false;
+  return isPlyometricExercise(key) && getStandardUnit(key) === 'cm';
+};
 export const isYogaExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga' : false;
 
 const RAW_SINGLE_GRAPHS = [
@@ -536,19 +563,16 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'dbRow', title: 'DUMBBELL ROW', unit: 'kg', icon: <Dumbbell className="text-stone-600" />, color: '#57534e' },
   { key: 'pendlayRow', title: 'PENDLAY ROW', unit: 'kg', icon: <Dumbbell className="text-stone-700" />, color: '#44403c' },
   { key: 'facePull', title: 'FACE PULL', unit: 'kg', icon: <Activity className="text-stone-800" />, color: '#292524' },
-
   // Olympic / Explosive Lifts
   { key: 'powerClean', title: 'POWER CLEAN', unit: 'kg', icon: <Zap className="text-amber-500" />, color: '#f59e0b' },
   { key: 'cleanAndJerk', title: 'CLEAN AND JERK', unit: 'kg', icon: <Zap className="text-amber-600" />, color: '#d97706' },
   { key: 'snatch', title: 'SNATCH', unit: 'kg', icon: <Zap className="text-amber-700" />, color: '#b45309' },
-
   // Barbell Accessories
   { key: 'bbForwardLunge', title: 'BARBELL FORWARD LUNGE', unit: 'kg', icon: <Dumbbell className="text-indigo-500" />, color: '#6366f1' },
   { key: 'bbReverseLunge', title: 'BARBELL REVERSE LUNGE', unit: 'kg', icon: <Dumbbell className="text-indigo-500" />, color: '#818cf8' },
   { key: 'bbTriExt', title: 'BARBELL TRICEP EXTENSION', unit: 'kg', icon: <Dumbbell className="text-indigo-400" />, color: '#a5b4fc' },
   { key: 'bbBicepCurl', title: 'BARBELL BICEP CURL', unit: 'kg', icon: <Dumbbell className="text-indigo-400" />, color: '#c7d2fe' },
   { key: 'bbReverseCurl', title: 'BARBELL REVERSE CURL', unit: 'kg', icon: <Dumbbell className="text-indigo-300" />, color: '#e0e7ff' },
-
   // Dumbbell Accessories
   { key: 'dbForwardLunge', title: 'DUMBBELL FORWARD LUNGE', unit: 'kg', icon: <Dumbbell className="text-blue-600" />, color: '#2563eb' },
   { key: 'dbReverseLunge', title: 'DUMBBELL REVERSE LUNGE', unit: 'kg', icon: <Dumbbell className="text-blue-600" />, color: '#1d4ed8' },
@@ -576,11 +600,26 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'sec', icon: <Ship className="text-teal-600" />, color: '#0d9488' },
   { key: 'row10k', title: 'ROW 10K', unit: 'sec', icon: <Ship className="text-teal-700" />, color: '#0f766e' },
   { key: 'rowMarathon', title: 'ROW MARATHON', unit: 'sec', icon: <Ship className="text-teal-800" />, color: '#115e59' },
-  { key: 'swim100m', title: 'SWIM 100M', unit: 'sec', icon: <Waves className="text-blue-400" />, color: '#60a5fa' },
-  { key: 'swim400m', title: 'SWIM 400M', unit: 'sec', icon: <Waves className="text-blue-500" />, color: '#3b82f6' },
-  { key: 'swim1Mile', title: 'SWIM 1 MILE', unit: 'sec', icon: <Waves className="text-blue-600" />, color: '#2563eb' },
-  { key: 'swim10k', title: 'SWIM 10K', unit: 'sec', icon: <Waves className="text-blue-700" />, color: '#1d4ed8' },
-  { key: 'swimMarathon', title: 'SWIM MARATHON', unit: 'sec', icon: <Waves className="text-blue-800" />, color: '#1e40af' },
+  { key: 'swimFree100m', title: 'FREESTYLE 100M', unit: 'sec', icon: <Waves className="text-sky-400" />, color: '#38bdf8' },
+  { key: 'swimFree400m', title: 'FREESTYLE 400M', unit: 'sec', icon: <Waves className="text-sky-500" />, color: '#0ea5e9' },
+  { key: 'swimFree1Mile', title: 'FREESTYLE 1 MILE', unit: 'sec', icon: <Waves className="text-sky-600" />, color: '#0284c7' },
+  { key: 'swimFree10k', title: 'FREESTYLE 10K', unit: 'sec', icon: <Waves className="text-sky-700" />, color: '#0369a1' },
+  { key: 'swimFreeMarathon', title: 'FREESTYLE MARATHON', unit: 'sec', icon: <Waves className="text-sky-800" />, color: '#075985' },
+  { key: 'swimBack100m', title: 'BACKSTROKE 100M', unit: 'sec', icon: <Waves className="text-blue-400" />, color: '#60a5fa' },
+  { key: 'swimBack400m', title: 'BACKSTROKE 400M', unit: 'sec', icon: <Waves className="text-blue-500" />, color: '#3b82f6' },
+  { key: 'swimBack1Mile', title: 'BACKSTROKE 1 MILE', unit: 'sec', icon: <Waves className="text-blue-600" />, color: '#2563eb' },
+  { key: 'swimBack10k', title: 'BACKSTROKE 10K', unit: 'sec', icon: <Waves className="text-blue-700" />, color: '#1d4ed8' },
+  { key: 'swimBackMarathon', title: 'BACKSTROKE MARATHON', unit: 'sec', icon: <Waves className="text-blue-800" />, color: '#1e40af' },
+  { key: 'swimBreast100m', title: 'BREASTSTROKE 100M', unit: 'sec', icon: <Waves className="text-cyan-400" />, color: '#22d3ee' },
+  { key: 'swimBreast400m', title: 'BREASTSTROKE 400M', unit: 'sec', icon: <Waves className="text-cyan-500" />, color: '#06b6d4' },
+  { key: 'swimBreast1Mile', title: 'BREASTSTROKE 1 MILE', unit: 'sec', icon: <Waves className="text-cyan-600" />, color: '#0891b2' },
+  { key: 'swimBreast10k', title: 'BREASTSTROKE 10K', unit: 'sec', icon: <Waves className="text-cyan-700" />, color: '#0e7490' },
+  { key: 'swimBreastMarathon', title: 'BREASTSTROKE MARATHON', unit: 'sec', icon: <Waves className="text-cyan-800" />, color: '#155e75' },
+  { key: 'swimFly100m', title: 'BUTTERFLY 100M', unit: 'sec', icon: <Waves className="text-indigo-400" />, color: '#818cf8' },
+  { key: 'swimFly400m', title: 'BUTTERFLY 400M', unit: 'sec', icon: <Waves className="text-indigo-500" />, color: '#6366f1' },
+  { key: 'swimFly1Mile', title: 'BUTTERFLY 1 MILE', unit: 'sec', icon: <Waves className="text-indigo-600" />, color: '#4f46e5' },
+  { key: 'swimFly10k', title: 'BUTTERFLY 10K', unit: 'sec', icon: <Waves className="text-indigo-700" />, color: '#4338ca' },
+  { key: 'swimFlyMarathon', title: 'BUTTERFLY MARATHON', unit: 'sec', icon: <Waves className="text-indigo-800" />, color: '#3730a3' },
 
   // Plyometrics
   { key: 'boxJump', title: 'BOX JUMP', unit: 'cm', icon: <ChevronUp className="text-amber-400" />, color: '#fbbf24' },
