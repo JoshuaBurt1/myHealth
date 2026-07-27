@@ -5,7 +5,8 @@ import {
   isCmPlyometricsExercise, 
   isPlyometricExercise,
   isYogaExercise, 
-  isDiet
+  isDiet,
+  isMicronutrient
 } from './profileConstants';
 import { Trash2, RefreshCw } from 'lucide-react';
 
@@ -30,7 +31,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const isYoga = isYogaExercise(metricKey);
   const isCmPlyo = isCmPlyometricsExercise(metricKey);
   const isPlyo = isPlyometricExercise(metricKey);
-  const isDietMetric = isDiet(metricKey);
+  const isDietMetric = isDiet(metricKey) || isMicronutrient(metricKey);
 
   // Check if item or current context uses 'reps'
   const targetItem = initialItem?.rawObject || initialItem;
@@ -55,10 +56,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       const itemData = initialItem?.rawObject || initialItem;
 
       if (itemData && typeof itemData === 'object' && !Array.isArray(itemData)) {
-        // Filter out root metadata keys like valueTotal, unit, rawObject
+        // Filter out root metadata keys like value, unit, rawObject
         const dateTimeKeys = Object.keys(itemData).filter(
           (key) =>
-            key !== 'valueTotal' &&
+            key !== 'value' &&
             key !== 'unit' &&
             key !== 'rawObject' &&
             typeof itemData[key] === 'object' &&
@@ -366,11 +367,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           return sum + (isNaN(num) ? 0 : num);
         }, 0);
       }, 0);
-      const valueTotal = Number(totalSum.toFixed(1));
+      const value = Number(totalSum.toFixed(1));
 
-      // Root payload structure with preserved key and valueTotal
+      // Root payload structure with preserved key and value
       const updatedDietPayload: Record<string, any> = {
-        valueTotal
+        value
       };
 
       dietGroups.forEach((group) => {
@@ -458,7 +459,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-sm w-full border border-slate-100 animate-in fade-in zoom-in duration-200 overflow-hidden">
+      <div className="relative bg-white rounded-[2.5rem] p-8 shadow-2xl max-w-lg w-full border border-slate-100 animate-in fade-in zoom-in duration-200 overflow-hidden">
         <p className="text-slate-500 text-sm mb-2 font-medium">
           Recorded on {new Date(recordedDate).toLocaleString()}
         </p>

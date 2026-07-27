@@ -46,9 +46,9 @@ const calculatePercentChange = (oldValue: number, newValue: number): number => {
 const computeChangePercentages = (history: any[]): [number, number] => {
   if (!history || history.length < 2) return [0, 0];
 
-  const firstVal = Number(history[0].valueTotal !== undefined ? history[0].valueTotal : history[0].value);
-  const prevVal = Number(history[history.length - 2].valueTotal !== undefined ? history[history.length - 2].valueTotal : history[history.length - 2].value);
-  const lastVal = Number(history[history.length - 1].valueTotal !== undefined ? history[history.length - 1].valueTotal : history[history.length - 1].value);
+  const firstVal = Number(history[0].value !== undefined ? history[0].value : history[0].value);
+  const prevVal = Number(history[history.length - 2].value !== undefined ? history[history.length - 2].value : history[history.length - 2].value);
+  const lastVal = Number(history[history.length - 1].value !== undefined ? history[history.length - 1].value : history[history.length - 1].value);
 
   const last_percent = calculatePercentChange(prevVal, lastVal);
   const total_percent = calculatePercentChange(firstVal, lastVal);
@@ -199,8 +199,8 @@ const DataScreen: React.FC<DataScreenProps> = ({
             const ts = parseDate(entry.dateTime).getTime();
             if (!timelineMap[ts]) timelineMap[ts] = { timestamp: ts };
             
-            // Prioritize valueTotal (precalculated aggregate), fallback to value
-            const rawVal = entry.valueTotal !== undefined ? entry.valueTotal : entry.value;
+            // Prioritize value (precalculated aggregate), fallback to value
+            const rawVal = entry.value !== undefined ? entry.value : entry.value;
             let val = parseFloat(rawVal);
             if (isNaN(val)) return;
             
@@ -443,7 +443,7 @@ const DataScreen: React.FC<DataScreenProps> = ({
 
       setSelectedPoint({ 
         ts: rawTs,
-        val: raw.valueTotal !== undefined ? raw.valueTotal : (raw.value !== undefined ? raw.value : point[dataKey]),
+        val: raw.value !== undefined ? raw.value : (raw.value !== undefined ? raw.value : point[dataKey]),
         fieldName: fieldName,
         rawObject: raw
       });

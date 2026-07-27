@@ -584,6 +584,69 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       );
     }
 
+    // Check metric warning/critical thresholds if no custom label is set
+    if (!customLabelElement && config.thresholds && filteredData && filteredData.length > 0) {
+      // Retrieve the most recent valid data point for this metric
+      const latestPoint = [...filteredData].reverse().find(d => d[config.key] != null);
+      const currentValue = latestPoint ? Number(latestPoint[config.key]) : null;
+
+      if (currentValue !== null && !isNaN(currentValue)) {
+        const { warningHigh, criticalHigh, warningLow, criticalLow } = config.thresholds;
+        let labelText = '';
+        let labelColor = '';
+        let LabelIcon = null;
+
+        // Evaluated in order of severity
+        if (criticalHigh != null && currentValue >= criticalHigh) {
+          labelText = 'critical high';
+          labelColor = 'text-red-500 bg-red-50';
+          LabelIcon = TrendingUp;
+        } else if (criticalLow != null && currentValue <= criticalLow) {
+          labelText = 'critical low';
+          labelColor = 'text-red-500 bg-red-50';
+          LabelIcon = TrendingDown;
+        } else if (warningHigh != null && currentValue >= warningHigh) {
+          labelText = 'warning high';
+          labelColor = 'text-amber-500 bg-amber-50';
+          LabelIcon = TrendingUp;
+        } else if (warningLow != null && currentValue <= warningLow) {
+          labelText = 'warning low';
+          labelColor = 'text-amber-500 bg-amber-50';
+          LabelIcon = TrendingDown;
+        }
+
+        if (labelText) {
+          customLabelElement = (
+            <span className={`flex items-center gap-1 text-[12px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter ${labelColor}`}>
+              {LabelIcon && <LabelIcon size={10} />}
+              {labelText}
+            </span>
+          );
+        }
+      }
+    } else if ((isMacro || isMicro) && dietThresholds && todayData.length > 0) {
+      let labelText = "within diet req";
+      let labelColor = "text-blue-500";
+      let LabelIcon = null;
+
+      if (dietThresholds.min !== undefined && currentAmount < dietThresholds.min) {
+        labelText = "under diet req";
+        labelColor = "text-red-500";
+        LabelIcon = TrendingDown;
+      } else if (dietThresholds.max !== undefined && currentAmount > dietThresholds.max) {
+        labelText = "above diet req";
+        labelColor = "text-emerald-500";
+        LabelIcon = TrendingUp;
+      }
+
+      customLabelElement = (
+        <span className={`flex items-center gap-1 text-[12px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter ${labelColor}`}>
+          {LabelIcon && <LabelIcon size={10} />}
+          {labelText}
+        </span>
+      );
+    }
+
     if (['carbs', 'protein', 'fat'].includes(config.key) && dietThresholds && todayData.length > 0) {
       fractionsDisplay = (
         <div className="flex flex-col gap-0.5 mt-2">

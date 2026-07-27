@@ -383,6 +383,8 @@ export const isCmPlyometricsExercise = (key?: string) => {
 };
 export const isYogaExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga' : false;
 export const isDiet = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'diet' : false;
+export const isMicronutrient = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'micronutrient' : false;
+
 
 
 const RAW_SINGLE_GRAPHS = [
@@ -490,6 +492,7 @@ const RAW_SINGLE_GRAPHS = [
     thresholds: { warningHigh: 4, criticalHigh: 6 } as MetricThresholds 
   },
   
+  // Note that the threshold values may depend on factor like weight. Currently there is no modification.
   // Diet & Nutrition
   { key: 'calories', title: 'CALORIES', unit: 'kcal', icon: <Scale className="text-orange-500" />, color: '#f97316' },
   { key: 'carbs', title: 'CARBOHYDRATES', unit: 'g', icon: <Pizza className="text-yellow-600" />, color: '#ca8a04' },

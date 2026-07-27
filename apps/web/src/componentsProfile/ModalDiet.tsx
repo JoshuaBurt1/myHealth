@@ -571,7 +571,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
             };
             
             // Calculate total across all entries ("0", "1", "2", ...)
-            updatedDayMap.valueTotal = calculateDayTotal(updatedDayMap);
+            updatedDayMap.value = calculateDayTotal(updatedDayMap);
             metricArray[lastIdx] = updatedDayMap;
 
           } else if (matchedDay && isOldFormat) {
@@ -580,7 +580,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
               "1": newEntry
             };
 
-            updatedDayMap.valueTotal = calculateDayTotal(updatedDayMap);
+            updatedDayMap.value = calculateDayTotal(updatedDayMap);
             metricArray[lastIdx] = updatedDayMap;
 
           } else {
@@ -589,7 +589,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
               "0": newEntry,
               dateTime: nowISO,
               unit: metric.unit || '',
-              valueTotal: Number(values.reduce((acc, val) => acc + val, 0).toFixed(1))
+              value: Number(values.reduce((acc, val) => acc + val, 0).toFixed(1))
             };
             
             metricArray.push(newDayMap);
