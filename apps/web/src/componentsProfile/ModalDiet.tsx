@@ -1,4 +1,5 @@
 // ModalDiet.tsx
+// Note: since the entire data structure of diet entries changed, legacy entries are no longer modifiable.
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Apple, CheckCircle, Info, PlusCircle, AlertCircle, ChevronDown, Search, Database, Trash2 } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
