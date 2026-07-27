@@ -4,7 +4,7 @@ import {
   User, Ruler, Scale, Dumbbell, Timer, Footprints,
   ChevronUp, Shield, Accessibility, Anchor, Fingerprint, Target, ArrowLeftRight, Zap, Move,
   Sun, Sword, Moon, TreePine, Bird, Triangle, Bed, Clock, MessageSquare, BatteryLow,
-  Globe, RefreshCw, RotateCcw, ArrowDown, MoveDown, Split, Bug, Repeat,
+  Globe, RefreshCw, RotateCcw, ArrowDown, MoveDown, Split, Bug, Repeat, Ship,
   Pizza, Drumstick, Salad, Waves, GlassWater, Stars, Eye, Volume2, UserRound
 } from 'lucide-react';
 
@@ -210,6 +210,11 @@ export const SPEED_KEY_MAP: Record<string, string> = {
   'Rowing machine 1 mile': 'row1Mile',
   'Rowing machine 10k': 'row10k',
   'Rowing machine Marathon': 'rowMarathon',
+  'Swim 100m': 'swim100m',
+  'Swim 400m': 'swim400m',
+  'Swim 1 mile': 'swim1Mile',
+  'Swim 10k': 'swim10k',
+  'Swim Marathon': 'swimMarathon',
 };
 
 // These should be kg (because you could add a weighted vest)
@@ -561,20 +566,21 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'speed1Mile', title: '1 MILE RUN', unit: 'sec', icon: <Timer className="text-orange-700" />, color: '#c2410c' },
   { key: 'speed10k', title: '10K RUN', unit: 'sec', icon: <Activity className="text-orange-800" />, color: '#9a3412' },
   { key: 'marathon', title: 'MARATHON', unit: 'sec', icon: <Activity className="text-red-900" />, color: '#7f1d1d' },
-
-  // Cycling
   { key: 'bike100m', title: 'BIKE 100M', unit: 'sec', icon: <Zap className="text-lime-400" />, color: '#a3e635' },
   { key: 'bike400m', title: 'BIKE 400M', unit: 'sec', icon: <Zap className="text-lime-500" />, color: '#84cc16' },
   { key: 'bike1Mile', title: 'BIKE 1 MILE', unit: 'sec', icon: <Zap className="text-lime-600" />, color: '#65a30d' },
   { key: 'bike10k', title: 'BIKE 10K', unit: 'sec', icon: <Zap className="text-lime-700" />, color: '#4d7c0f' },
   { key: 'bikeMarathon', title: 'BIKE MARATHON', unit: 'sec', icon: <Zap className="text-lime-800" />, color: '#3f6212' },
-
-  // Rowing
-  { key: 'row100m', title: 'ROW 100M', unit: 'sec', icon: <Anchor className="text-cyan-400" />, color: '#22d3ee' },
-  { key: 'row400m', title: 'ROW 400M', unit: 'sec', icon: <Anchor className="text-blue-500" />, color: '#06b6d4' },
-  { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'sec', icon: <Anchor className="text-blue-600" />, color: '#0891b2' },
-  { key: 'row10k', title: 'ROW 10K', unit: 'sec', icon: <Anchor className="text-cyan-700" />, color: '#0e7490' },
-  { key: 'rowMarathon', title: 'ROW MARATHON', unit: 'sec', icon: <Anchor className="text-cyan-800" />, color: '#155e75' },
+  { key: 'row100m', title: 'ROW 100M', unit: 'sec', icon: <Ship className="text-teal-400" />, color: '#2dd4bf' },
+  { key: 'row400m', title: 'ROW 400M', unit: 'sec', icon: <Ship className="text-teal-500" />, color: '#14b8a6' },
+  { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'sec', icon: <Ship className="text-teal-600" />, color: '#0d9488' },
+  { key: 'row10k', title: 'ROW 10K', unit: 'sec', icon: <Ship className="text-teal-700" />, color: '#0f766e' },
+  { key: 'rowMarathon', title: 'ROW MARATHON', unit: 'sec', icon: <Ship className="text-teal-800" />, color: '#115e59' },
+  { key: 'swim100m', title: 'SWIM 100M', unit: 'sec', icon: <Waves className="text-blue-400" />, color: '#60a5fa' },
+  { key: 'swim400m', title: 'SWIM 400M', unit: 'sec', icon: <Waves className="text-blue-500" />, color: '#3b82f6' },
+  { key: 'swim1Mile', title: 'SWIM 1 MILE', unit: 'sec', icon: <Waves className="text-blue-600" />, color: '#2563eb' },
+  { key: 'swim10k', title: 'SWIM 10K', unit: 'sec', icon: <Waves className="text-blue-700" />, color: '#1d4ed8' },
+  { key: 'swimMarathon', title: 'SWIM MARATHON', unit: 'sec', icon: <Waves className="text-blue-800" />, color: '#1e40af' },
 
   // Plyometrics
   { key: 'boxJump', title: 'BOX JUMP', unit: 'cm', icon: <ChevronUp className="text-amber-400" />, color: '#fbbf24' },

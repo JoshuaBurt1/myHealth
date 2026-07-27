@@ -1,7 +1,7 @@
 // ModalVitals.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, Activity, PlusCircle, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { X, Activity, PlusCircle, RefreshCw, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 import { VITAL_KEY_MAP, BLOODTEST_KEY_MAP, SYMPTOM_KEY_MAP, getStandardUnit } from './profileConstants';
@@ -54,6 +54,9 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<VitalCategory>('Vitals');
   const [selectedItem, setSelectedItem] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const [customName, setCustomName] = useState('');
   const [customUnit, setCustomUnit] = useState('');
   const [entries, setEntries] = useState<VitalEntry[]>([]);
@@ -77,6 +80,17 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
       setSelectedItem(availableVitals[0]);
     }
   }, [availableVitals, selectedItem, selectedCategory]);
+
+  // Handle clicking outside custom dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -299,7 +313,10 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
                   className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${
                     selectedCategory === cat ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:bg-slate-200'
                   }`}
-                  onClick={() => setSelectedCategory(cat)}
+                  onClick={() => {
+                    setSelectedCategory(cat);
+                    setIsDropdownOpen(false);
+                  }}
                 >
                   {cat}
                 </button>
@@ -307,18 +324,46 @@ export const ModalVitals: React.FC<ModalVitalsProps> = ({
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               {selectedCategory !== 'Custom' ? (
-                <select
-                  className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500 disabled:bg-slate-100"
-                  value={selectedItem}
-                  onChange={(e) => setSelectedItem(e.target.value)}
-                  disabled={availableVitals.length === 0}
-                >
-                  {availableVitals.length === 0 ? (
-                    <option>All {selectedCategory.toLowerCase()} tracked</option>
-                  ) : (
-                    availableVitals.map(v => <option key={v} value={v}>{v}</option>)
+                <div className="relative flex-1" ref={dropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                    disabled={availableVitals.length === 0}
+                    className="w-full flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:border-rose-500 disabled:bg-slate-100 disabled:text-slate-400 transition-colors"
+                  >
+                    <span className="truncate">
+                      {availableVitals.length === 0
+                        ? `All ${selectedCategory.toLowerCase()} tracked`
+                        : selectedItem || 'Select item...'}
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      className={`text-slate-400 transition-transform duration-200 ${
+                        isDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isDropdownOpen && availableVitals.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-56 overflow-y-auto py-1">
+                      {availableVitals.map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors hover:bg-rose-50 hover:text-rose-600 ${
+                            selectedItem === v ? 'bg-slate-50 text-rose-600 font-bold' : 'text-slate-700'
+                          }`}
+                          onClick={() => {
+                            setSelectedItem(v);
+                            setIsDropdownOpen(false);
+                          }}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                </select>
+                </div>
               ) : (
                 <>
                   <input

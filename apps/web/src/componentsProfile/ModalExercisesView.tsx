@@ -153,7 +153,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
 
                   {isDropdownOpen && availableExercises.length > 0 && (
                     <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                      <div className="max-h-80 overflow-y-auto">
+                      <div className="max-h-56 overflow-y-auto">
                         {availableExercises.map((ex) => (
                           <button
                             key={ex}

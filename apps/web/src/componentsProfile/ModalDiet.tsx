@@ -628,7 +628,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
                   
                   {/* Search results dropdown */}
                   {isSearchFocused && searchResults.length > 0 && (
-                    <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
                       {searchResults.map((item, idx) => (
                         <button
                           key={`${item.fdc_id}-${idx}`}
@@ -823,7 +823,7 @@ export const ModalDiet: React.FC<ModalDietProps> = ({
 
                     {isDropdownOpen && availableMetrics.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 sm:mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                        <div className="max-h-60 overflow-y-auto">
+                        <div className="max-h-48 overflow-y-auto">
                           {availableMetrics.map((met) => (
                             <button
                               key={met}
