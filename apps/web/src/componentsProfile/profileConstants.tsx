@@ -250,16 +250,6 @@ export const PLYO_KEY_MAP: Record<string, string> = {
   'Clap Push-ups': 'clapPushUp',
 };
 
-export const ENDURANCE_KEY_MAP: Record<string, string> = {
-  'Push-ups': 'pushUp',
-  'Single Leg Squat': 'pistolSquat',
-  'Air Squat': 'airSquat',
-  'Plank': 'plank',
-  'Bear Crawl': 'bearCrawl',
-  'Hollow Body Hold': 'hollowHold',
-  'Farmers Carry': 'farmersCarry',
-};
-
 // These should be sec (with maximum being better)
 export const YOGA_KEY_MAP: Record<string, string> = {
   'Downward Dog': 'downwardDog',
@@ -272,6 +262,15 @@ export const YOGA_KEY_MAP: Record<string, string> = {
   'Triangle Pose': 'trianglePose',
   'Crow Pose': 'crowPose',
   'Savasana': 'savasana'
+};
+
+export const ENDURANCE_KEY_MAP: Record<string, string> = {
+  'Push-ups': 'pushUp',
+  'Single Leg Squat': 'pistolSquat',
+  'Air Squat': 'airSquat',
+  'Hollow Body Hold': 'hollowHold',
+  'Plank': 'plank',
+  'Farmers Carry': 'farmersCarry',
 };
 
 export const MOBILITY_KEY_MAP: Record<string, string> = {
@@ -382,6 +381,15 @@ export const isCmPlyometricsExercise = (key?: string) => {
   return isPlyometricExercise(key) && getStandardUnit(key) === 'cm';
 };
 export const isYogaExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'yoga' : false;
+export const isEnduranceExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'endurance' : false;
+export const isSecEnduranceExercise = (key?: string) => {
+  if (!key) return false;
+  return isEnduranceExercise(key) && getStandardUnit(key) === 'sec';
+};
+export const isKgSecEnduranceExercise = (key?: string) => {
+  if (!key) return false;
+  return isEnduranceExercise(key) && getStandardUnit(key) === 'kg×sec';
+};
 export const isDiet = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'diet' : false;
 export const isMicronutrient = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'micronutrient' : false;
 
@@ -647,15 +655,15 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'savasana', title: 'SAVASANA', unit: 'sec', icon: <Bed className="text-slate-400" />, color: '#94a3b8' },
 
   // ENDURANCE
-  { key: 'steps', title: 'Steps', unit: 'steps', icon: <Footprints className="text-cyan-500" />, color: '#0891b2' },
   { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
   { key: 'pistolSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
-  { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
   { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
-  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
+  { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
+  { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg×sec', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
 
   // Mobility
+  { key: 'steps', title: 'Steps', unit: 'steps', icon: <Footprints className="text-cyan-500" />, color: '#0891b2' },
   { key: 'worldsGreatestStretch', title: "WORLD'S GREATEST STRETCH", unit: 'Reps', icon: <Globe className="text-emerald-600" />, color: '#059669' },
   { key: 'hip9090Switch', title: '90/90 HIP SWITCH', unit: 'Reps', icon: <RefreshCw className="text-emerald-700" />, color: '#047857' },
   { key: 'tSpineRotation', title: 'THORACIC ROTATIONS', unit: 'Reps', icon: <RotateCcw className="text-teal-600" />, color: '#0d9488' },

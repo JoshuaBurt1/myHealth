@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { isStrengthExercise, isSpeedExercise, isYogaExercise, isPlyometricExercise, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
+import { isStrengthExercise, isSpeedExercise, isYogaExercise, isPlyometricExercise, isEnduranceExercise, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
@@ -93,6 +93,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const isStrengthEx = Boolean(dataKey && isStrengthExercise(dataKey));
   const isSpeedEx = Boolean(dataKey && isSpeedExercise(dataKey));
   const isPlyoEx = Boolean(dataKey && isPlyometricExercise(dataKey));
+  const isEnduranceEx = Boolean(dataKey && isEnduranceExercise(dataKey));
 
   // Combined classification flags (including unit fallbacks)
   const isSpeed = isSpeedEx || unitClean === 'sec' || unitClean === 's';
@@ -384,12 +385,10 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   if (validValues.length > 0 && dataKey && dataKey.toLowerCase() !== 'weight') {
     let prType: 'MAX' | 'MIN' | 'NONE' = 'NONE';
 
-    if (isYoga || isStrengthEx || isPlyoEx) {
+    if (isStrength || isYoga || isStrengthEx || isPlyoEx || isEnduranceEx) {
       prType = 'MAX';
     } else if (isSpeed) {
       prType = 'MIN';
-    } else if (isStrength) {
-      prType = 'MAX';
     }
 
     switch (prType) {

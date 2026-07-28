@@ -13,7 +13,9 @@ import {
   isStrengthExercise,
   isSpeedExercise,
   isYogaExercise,
-  isCmPlyometricsExercise
+  isCmPlyometricsExercise,
+  isSecEnduranceExercise, 
+  isKgSecEnduranceExercise
 } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
@@ -46,11 +48,11 @@ export interface ModalExercisesViewProps {
   toggleVisibilityOther?: any;
   handleDeleteField: (label: string, name: string, category: 'vital' | 'diet' | 'exercise') => Promise<void>;
   userId: string;
-  updateTrackedSet: (exName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => void;
+  updateTrackedSet: (exName: string, setId: string, field: 'reps' | 'weight' | 'time' | 'cm', val: string) => void;
   removeSetFromTracked: (exName: string, setId: string) => void;
   addSetToTracked: (exName: string) => void;
   setEntries: React.Dispatch<React.SetStateAction<any[]>>;
-  updateEntrySet: (exName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => void;
+  updateEntrySet: (exName: string, setId: string, field: 'reps' | 'weight' | 'time' | 'cm', val: string) => void;
   removeSetFromEntry: (exName: string, setId: string) => void;
   addSetToEntry: (exName: string) => void;
   handleSaveExercises: () => void;
@@ -284,17 +286,23 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {/* EXISTING TRACKED EXERCISES */}
                     {existingInCat.map((ex, idx) => {
                       const isStrength = isStrengthExercise(ex.name);
-                      const isPlyometric = isCmPlyometricsExercise(ex.name);
-                      const showReps = isStrength || isSpeedExercise(ex.name) || isYogaExercise(ex.name) || isPlyometric || category === 'Custom';
-                      
+                      const isSpeed = isSpeedExercise(ex.name);
+                      const isCmPlyometric = isCmPlyometricsExercise(ex.name);
+                      const isYoga = isYogaExercise(ex.name);
+                      const isSecEndurance = isSecEnduranceExercise(ex.name);
+                      const isKgSecEndurance = isKgSecEnduranceExercise(ex.name);
+
+                      // UPDATE showReps TO INCLUDE BOTH ENDURANCE TYPES:
+                      const showReps = isStrength || isSpeed || isCmPlyometric || isYoga || isSecEndurance || isKgSecEndurance || category === 'Custom';
+
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
+                      const sdUnit = speedUnits[ex.name] || 'cm';
                       const setsList = (trackedSets[ex.name] && trackedSets[ex.name].length > 0)
                         ? trackedSets[ex.name]
-                        : [{ id: '1', weight: '', reps: '', time: '' }];
+                        : [{ id: '1', reps: '', weight: '', time: '', cm: '' }];
 
                       return (
                         <PrivacyWrapper 
@@ -323,7 +331,31 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                 <div key={set.id} className="flex gap-2 items-center w-full">
                                   <span className="text-[10px] font-bold text-slate-400 w-4">{setIdx + 1}.</span>
                                   
-                                  {isStrength ? (
+                                  {/* UPDATE CONDITIONAL INPUT FIELDS */}
+                                  {isKgSecEndurance ? (
+                                    <>
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label="Weight (kg)" 
+                                          type="number" 
+                                          value={set.weight} 
+                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'weight', v)}
+                                          disabled={!isMe}
+                                          icon={null}
+                                        />
+                                      </div>
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label="Time (sec)" 
+                                          type="number" 
+                                          value={set.time || ''} 
+                                          onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                          disabled={!isMe}
+                                          icon={null}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : isStrength ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Weight (${stUnit})`} 
@@ -334,15 +366,48 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<Dumbbell size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                  ) : isPlyometric ? (
+                                  ) : isSpeed ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={`Time (${spUnit})`} 
+                                        type="number" 
+                                        value={set.time || ''}
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  ) : isCmPlyometric ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label="Height (cm)" 
                                         type="number" 
+                                        value={set.cm || ''}
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'cm', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  ) : isYoga ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Hold Time (sec)"
+                                        type="number" 
                                         value={set.time || ''} 
                                         onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
                                         disabled={!isMe} 
-                                        icon={<Dumbbell size={14} className="text-indigo-400"/>} 
+                                        icon={<RefreshCw size={14} className="text-indigo-400"/>} 
+                                      />
+                                    </div>
+                                  ) : isSecEndurance ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Time (sec)" 
+                                        type="number" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
                                   ) : (
@@ -402,8 +467,13 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                     {/* NEW UNCOMMITTED EXERCISES */}
                     {newInCat.map((entry) => {
                       const isStrength = isStrengthExercise(entry.name);
-                      const isPlyometric = isCmPlyometricsExercise(entry.name);
-                      const showReps = isStrength || isSpeedExercise(entry.name) || isYogaExercise(entry.name) || isPlyometric || category === 'Custom';
+                      const isSpeed = isSpeedExercise(entry.name);
+                      const isCmPlyometric = isCmPlyometricsExercise(entry.name);
+                      const isYoga = isYogaExercise(entry.name);
+                      const isSecEndurance = isSecEnduranceExercise(entry.name);
+                      const isKgSecEndurance = isKgSecEnduranceExercise(entry.name);
+
+                      const showReps = isStrength || isSpeed || isYoga || isCmPlyometric || isSecEndurance || isKgSecEndurance || category === 'Custom';
 
                       const stUnit = strengthUnits[entry.name] || 'kg';
                       const spUnit = speedUnits[entry.name] || 'sec';
@@ -433,7 +503,31 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                 <div key={set.id} className="flex gap-2 items-center w-full">
                                   <span className="text-[10px] font-bold text-indigo-400 w-4">{setIdx + 1}.</span>
                                   
-                                  {isStrength ? (
+                                  {/* UPDATE CONDITIONAL INPUT FIELDS */}
+                                  {isKgSecEndurance ? (
+                                    <>
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label="Weight (kg)" 
+                                          type="number" 
+                                          value={set.weight} 
+                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'weight', v)}
+                                          disabled={!isMe} 
+                                          icon={null}
+                                        />
+                                      </div>
+                                      <div className="flex-1">
+                                        <InputField 
+                                          label="Time (sec)" 
+                                          type="number" 
+                                          value={set.time || ''} 
+                                          onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                          disabled={!isMe} 
+                                          icon={null}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : isStrength ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Weight (${stUnit})`} 
@@ -444,15 +538,48 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<Dumbbell size={14} className="text-indigo-500"/>} 
                                       />
                                     </div>
-                                  ) : isPlyometric ? (
+                                  ) : isSpeed ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label={`Time (${spUnit})`} 
+                                        type="number" 
+                                        value={set.time || ''}
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  ) : isCmPlyometric ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label="Height (cm)" 
                                         type="number" 
+                                        value={set.cm || ''}
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'cm', v)}
+                                        disabled={!isMe} 
+                                        icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  ) : isYoga ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Hold Time (sec)"
+                                        type="number" 
                                         value={set.time || ''} 
                                         onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
                                         disabled={!isMe} 
-                                        icon={<Dumbbell size={14} className="text-indigo-500"/>} 
+                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
+                                      />
+                                    </div>
+                                  ) : isSecEndurance ? (
+                                    <div className="flex-1">
+                                      <InputField 
+                                        label="Time (sec)" 
+                                        type="number" 
+                                        value={set.time || ''} 
+                                        onChange={(v: string) => updateEntrySet(entry.name, set.id, 'time', v)}
+                                        disabled={!isMe} 
+                                        icon={<RefreshCw size={14} className="text-indigo-500"/>} 
                                       />
                                     </div>
                                   ) : (

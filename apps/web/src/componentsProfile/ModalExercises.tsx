@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
-import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, isStrengthExercise, isSpeedExercise, isCmPlyometricsExercise, isYogaExercise, getStandardUnit } from './profileConstants';
+import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, 
+  isStrengthExercise, isSpeedExercise, isCmPlyometricsExercise, isYogaExercise, isSecEnduranceExercise, isKgSecEnduranceExercise,
+  getStandardUnit } from './profileConstants';
 import { ModalExercisesView } from './ModalExercisesView';
 
 const calculatePercentChange = (oldValue: number, newValue: number): number => {
@@ -11,9 +13,10 @@ const calculatePercentChange = (oldValue: number, newValue: number): number => {
 
 interface SetEntry {
   id: string;
-  weight: string;
   reps: string;
+  weight: string;
   time: string;
+  cm: string;
 }
 
 interface ModalExercisesProps {
@@ -63,7 +66,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (isOpen) {
       const initialTrackedSets: Record<string, SetEntry[]> = {};
       trackedExercises.forEach((ex) => {
-        initialTrackedSets[ex.name] = [{ id: '1', weight: '', reps: '', time: '' }];
+        initialTrackedSets[ex.name] = [{ id: '1', reps: '', weight: '', time: '', cm: '' }];
       });
       setTrackedSets(initialTrackedSets);
     }
@@ -115,7 +118,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         unit: getStandardUnit(key) || (selectedCategory === 'Strength' ? 'kg' : 'sec'),
         type: selectedCategory.toLowerCase(),
         value: '',
-        sets: [{ id: '1', weight: '', reps: '', time: '' }],
+        sets: [{ id: '1', reps: '', weight: '', time: '', cm: '' }],
         isCustom: false
       }]);
     } else {
@@ -131,7 +134,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         unit: customUnit.trim() || 'reps',
         type: 'custom',
         value: '',
-        sets: [{ id: '1', weight: '', reps: '', time: '' }],
+        sets: [{ id: '1', reps: '', weight: '', time: '', cm: '' }],
         isCustom: true
       }]);
       setCustomName('');
@@ -164,7 +167,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       }
       return {
         ...prev,
-        [exerciseName]: [...current, { id: Date.now().toString(), weight: '', reps: '', time: ''}]
+        [exerciseName]: [...current, { id: Date.now().toString(), reps: '', weight: '', time: '', cm: ''}]
       };
     });
   };
@@ -180,12 +183,12 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     });
   };
 
-  const updateTrackedSet = (exerciseName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => {
+  const updateTrackedSet = (exerciseName: string, setId: string, field: 'reps' | 'weight' | 'time' | 'cm', val: string) => {
     if (val.includes('-')) return;
     setTrackedSets(prev => {
       const currentSets = (prev[exerciseName] && prev[exerciseName].length > 0)
         ? prev[exerciseName]
-        : [{ id: setId, weight: '', reps: '', time: '' }];
+        : [{ id: setId, reps: '', weight: '', time: '', cm: '' }];
 
       return {
         ...prev,
@@ -203,7 +206,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
         }
         return {
           ...e,
-          sets: [...e.sets, { id: Date.now().toString(), weight: '', reps: '', time: '' }]
+          sets: [...e.sets, { id: Date.now().toString(), reps: '', weight: '', time: '', cm: '' }]
         };
       }
       return e;
@@ -222,7 +225,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }));
   };
 
-  const updateEntrySet = (entryName: string, setId: string, field: 'weight' | 'reps' | 'time', val: string) => {
+  const updateEntrySet = (entryName: string, setId: string, field: 'reps' | 'weight' | 'time' | 'cm', val: string) => {
     if (val.includes('-')) return;
     setEntries(prev => prev.map(e => {
       if (e.name === entryName) {
@@ -373,7 +376,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     const validSets: { valueCm: number; reps: number }[] = [];
 
     for (const s of setsList) {
-      const val = s.time || s.weight;
+      const val = s.cm || s.time || s.weight; 
+
       if ((val && !s.reps) || (!val && s.reps)) {
         throw new Error(`Missing data: Please complete height/distance and reps for all filled sets in ${label}.`);
       }
@@ -391,6 +395,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     const bestValue = Math.max(...validSets.map(s => s.valueCm));
     const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.valueCm * s.reps), 0));
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+
+    // Average height/distance per rep
     const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
 
     const detailedSets = validSets.map(s => ({
@@ -398,6 +404,74 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       reps: s.reps,
       unit: 'cm'
     }));
+
+    return {
+      value: bestValue,
+      totalLoad,
+      average,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
+  const evaluateEnduranceSets = (setsList: SetEntry[], label: string, isKgSec: boolean) => {
+    const validSets: { timeSec: number; reps: number; weightKg?: number }[] = [];
+
+    for (const s of setsList) {
+      if (isKgSec) {
+        const hasAny = s.time || s.weight || s.reps;
+        const hasAll = s.time && s.weight && s.reps;
+        
+        if (hasAny && !hasAll) {
+          throw new Error(`Missing data: Please complete weight, time, and reps for all filled sets in ${label}.`);
+        }
+        if (hasAll) {
+          const t = Number(s.time);
+          const w = Number(s.weight);
+          const r = Number(s.reps);
+          if (!isNaN(t) && !isNaN(w) && !isNaN(r) && t > 0 && w > 0 && r > 0) {
+            validSets.push({ timeSec: t, weightKg: w, reps: r });
+          }
+        }
+      } else {
+        const hasAny = s.time || s.reps;
+        const hasAll = s.time && s.reps;
+
+        if (hasAny && !hasAll) {
+          throw new Error(`Missing data: Please complete time and reps for all filled sets in ${label}.`);
+        }
+        if (hasAll) {
+          const t = Number(s.time);
+          const r = Number(s.reps);
+          if (!isNaN(t) && !isNaN(r) && t > 0 && r > 0) {
+            validSets.push({ timeSec: t, reps: r });
+          }
+        }
+      }
+    }
+
+    if (validSets.length === 0) return null;
+
+    let bestValue = 0;
+    let totalLoad = 0;
+
+    if (isKgSec) {
+      bestValue = Math.max(...validSets.map(s => (s.weightKg || 0) * s.timeSec));
+      totalLoad = Math.round(validSets.reduce((sum, s) => sum + ((s.weightKg || 0) * s.timeSec * s.reps), 0));
+    } else {
+      bestValue = Math.max(...validSets.map(s => s.timeSec));
+      totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
+    }
+
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+
+    const detailedSets = validSets.map(s => {
+      if (isKgSec) {
+        return { timeSec: s.timeSec, weightKg: s.weightKg, reps: s.reps, unit: 'kg×sec' };
+      }
+      return { timeSec: s.timeSec, reps: s.reps, unit: 'sec' };
+    });
 
     return {
       value: bestValue,
@@ -460,6 +534,22 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'cm'
+              }
+            });
+          }
+        } else if (isSecEnduranceExercise(e.name) || isKgSecEnduranceExercise(e.name)) {
+          const isKgSec = isKgSecEnduranceExercise(e.name);
+          const evalResult = evaluateEnduranceSets(e.sets, e.label, isKgSec);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: isKgSec ? 'kg×sec' : 'sec'
               }
             });
           }
@@ -536,6 +626,23 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
                 totalSets: evalResult.totalSets,
                 sets: evalResult.sets,
                 unit: 'cm'
+              }
+            });
+          }
+        } else if (isSecEnduranceExercise(ex.name) || isKgSecEnduranceExercise(ex.name)) {
+          const isKgSec = isKgSecEnduranceExercise(ex.name);
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluateEnduranceSets(setsList, ex.label, isKgSec);
+          if (evalResult) {
+            preparedExist.push({
+              ...ex,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: isKgSec ? 'kg×sec' : 'sec'
               }
             });
           }

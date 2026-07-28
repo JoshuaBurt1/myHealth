@@ -5,6 +5,9 @@ import {
   isCmPlyometricsExercise, 
   isPlyometricExercise,
   isYogaExercise, 
+  isEnduranceExercise,
+  isSecEnduranceExercise, 
+  isKgSecEnduranceExercise,
   isDiet,
   isMicronutrient
 } from './profileConstants';
@@ -29,14 +32,20 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const isStrength = isStrengthExercise(metricKey);
   const isSpeed = isSpeedExercise(metricKey);
   const isYoga = isYogaExercise(metricKey);
+  const isEndurance = isEnduranceExercise(metricKey);
+  const isSecEndurance = isSecEnduranceExercise(metricKey);
+  const isKgSecEndurance = isKgSecEnduranceExercise(metricKey);
   const isCmPlyo = isCmPlyometricsExercise(metricKey);
   const isPlyo = isPlyometricExercise(metricKey);
   const isDietMetric = isDiet(metricKey) || isMicronutrient(metricKey);
 
+  // Group all duration/time-based exercises together (isEndurance is reps-only, excluding it here)
+  const isTimeBased = isSpeed || isYoga || isSecEndurance || isKgSecEndurance;
+
   // Check if item or current context uses 'reps'
   const targetItem = initialItem?.rawObject || initialItem;
   const targetUnit = String(targetItem?.unit || '').toLowerCase();
-  const isReps = isPlyo || targetUnit === 'reps';
+  const isReps = isPlyo || isEndurance || targetUnit === 'reps';
 
   const [inputValue, setInputValue] = useState('');
   const [unit, setUnit] = useState('');
@@ -121,16 +130,19 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     } else if (item && Array.isArray(item.sets) && item.sets.length > 0) {
       setSets(item.sets);
       setHasSets(true);
-    } else if (isStrength || isSpeed || isYoga || isCmPlyo || isReps) {
+    } else if (isStrength || isTimeBased || isCmPlyo || isReps) {
       const legacySet: any = {
         reps: 1,
-        unit: isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : isCmPlyo ? 'CM' : 'REPS',
+        unit: isKgSecEndurance ? 'kg*sec' : isStrength ? 'KG' : isTimeBased ? 'SEC' : isCmPlyo ? 'CM' : 'REPS',
       };
       
       if (isStrength) {
         legacySet.weightKg = Number(initialValue) || 0;
-      } else if (isSpeed || isYoga) {
+      } else if (isTimeBased) {
         legacySet.timeSec = Number(initialValue) || 0;
+        if (isKgSecEndurance) {
+          legacySet.weightKg = Number(targetItem?.weightKg) || 0;
+        }
       } else if (isCmPlyo) {
         legacySet.weightCm = Number(initialValue) || 0;
       } else {
@@ -144,7 +156,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       setSets([]);
     }
 
-    if (isSpeed || isYoga) {
+    if (isTimeBased) {
       setUnit('SEC');
       setInputValue(String(initialValue));
     } else if (isStrength) {
@@ -159,7 +171,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     } else {
       setInputValue(String(initialValue));
     }
-  }, [initialValue, initialItem, isSpeed, isStrength, isYoga, isCmPlyo, isReps, isDietMetric]);
+  }, [initialValue, initialItem, isTimeBased, isStrength, isCmPlyo, isReps, isDietMetric, recordedDate]);
 
   const handleToggleUnit = () => {
     if (isStrength) {
@@ -174,7 +186,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       });
       setSets(updatedSets);
       setUnit(nextUnit);
-    } else if (isSpeed || isYoga) {
+    } else if (isTimeBased) {
       const nextUnit = unit === 'SEC' ? 'MM:SS' : 'SEC';
       const updatedSets = sets.map((s) => {
         if (!s.timeSec) return s;
@@ -223,7 +235,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
         setVal = reps === 1 ? weightKg : weightKg * (1 + reps / 30);
         if (setVal > bestValue) bestValue = setVal;
-      } else if (isSpeed) {
+      } else if (isTimeBased) {
         let timeSec = 0;
         if (unit === 'MM:SS') {
           const parts = String(s.timeSec || '').split(':');
@@ -235,26 +247,22 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         } else {
           timeSec = parseFloat(s.timeSec) || 0;
         }
-        setLoad = timeSec * reps;
-        setVal = timeSec;
-        if (setVal > 0 && setVal < bestValue) bestValue = setVal;
-      } else if (isYoga) {
-        let timeSec = 0;
-        if (unit === 'MM:SS') {
-          const parts = String(s.timeSec || '').split(':');
-          if (parts.length === 2) {
-            timeSec = (parseFloat(parts[0]) * 60) + parseFloat(parts[1]);
-          } else {
-            timeSec = parseFloat(parts[0]) || 0;
-          }
+
+        if (isKgSecEndurance) {
+          const weightKg = parseFloat(s.weightKg) || 0;
+          setLoad = reps * weightKg * timeSec;
+          setVal = weightKg * timeSec;
         } else {
-          timeSec = parseFloat(s.timeSec) || 0;
+          setLoad = timeSec * reps;
+          setVal = timeSec;
         }
-        setLoad = timeSec * reps;
-        setVal = timeSec;
-        if (setVal > 0 && setVal > bestValue) bestValue = setVal;
+        if (isSpeed) {
+          if (setVal > 0 && setVal < bestValue) bestValue = setVal;
+        } else {
+          if (setVal > 0 && setVal > bestValue) bestValue = setVal;
+        }
       } else if (isCmPlyo) {
-        let cmVal = parseFloat(s.weightCm ?? s.weight ?? s.valueCm) || 0;
+        let cmVal = parseFloat(s.weightCm || s.cm || s.valueCm || s.weight || s.value) || 0;
         setLoad = cmVal * reps;
         setVal = cmVal;
         if (setVal > bestValue) bestValue = setVal;
@@ -277,16 +285,18 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
     if (bestValue === Infinity) bestValue = 0;
 
-    const average = (isReps && !hasWeight)
-      ? (sets.length > 0 ? Number((totalReps / sets.length).toFixed(1)) : 0)
-      : (totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0);
+    const average = isCmPlyo
+      ? (totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0)
+      : (isReps && !hasWeight)
+        ? (sets.length > 0 ? Number((totalReps / sets.length).toFixed(1)) : 0)
+        : (totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0);
 
     return {
       totalLoad: Number(totalLoad.toFixed(1)),
       value: Number(bestValue.toFixed(1)),
       average
     };
-  }, [sets, hasSets, isStrength, isSpeed, isYoga, isCmPlyo, isReps, unit]);
+  }, [sets, hasSets, isStrength, isSpeed, isTimeBased, isCmPlyo, isReps, unit]);
 
   if (!isOpen) return null;
 
@@ -302,7 +312,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   };
 
   const handleAddSet = () => {
-    const fallbackUnit = isStrength ? (unit || 'KG') : (isSpeed || isYoga) ? (unit || 'SEC') : isCmPlyo ? 'CM' : isReps ? 'REPS' : '';
+    const fallbackUnit = isStrength ? (unit || 'KG') : isTimeBased ? (unit || 'SEC') : isCmPlyo ? 'CM' : isReps ? 'REPS' : '';
 
     const newSet: any = {
       reps: '',
@@ -311,8 +321,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
     if (isStrength) {
       newSet.weightKg = '';
-    } else if (isSpeed || isYoga) {
+    } else if (isTimeBased) {
       newSet.timeSec = '';
+      if (isKgSecEndurance) {
+        newSet.weightKg = '';
+      }
     } else if (isCmPlyo) {
       newSet.weightCm = '';
     }
@@ -402,7 +415,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           }
           newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(1));
           newSet.unit = 'KG';
-        } else if (isSpeed || isYoga) {
+        } else if (isTimeBased) {
           let t = 0;
           if (unit === 'MM:SS') {
             const parts = String(s.timeSec || '').split(':');
@@ -415,10 +428,18 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
             t = parseFloat(s.timeSec) || 0;
           }
           newSet.timeSec = isNaN(t) ? s.timeSec : Number(t.toFixed(1));
-          newSet.unit = 'SEC';
+  
+          if (isKgSecEndurance) {
+            const w = parseFloat(s.weightKg);
+            newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(1));
+            newSet.unit = 'kg*sec';
+          } else {
+            newSet.unit = 'SEC';
+          }
         } else if (isCmPlyo) {
-          let cm = parseFloat(s.weightCm ?? s.weight ?? s.valueCm);
-          newSet.weightCm = isNaN(cm) ? (s.weightCm ?? s.weight ?? s.valueCm) : Number(cm.toFixed(1));
+          let rawCm = s.weightCm || s.cm || s.valueCm || s.weight || s.value;
+          let cm = parseFloat(rawCm);
+          newSet.weightCm = isNaN(cm) ? rawCm : Number(cm.toFixed(1));
           newSet.unit = 'cm';
         } else if (isReps) {
           let r = parseFloat(s.reps);
@@ -440,7 +461,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
       if (isStrength && unit === 'LBS') {
         finalValue = finalValue * 0.45359237; 
-      } else if ((isSpeed || isYoga) && unit === 'MM:SS') {
+      } else if (isTimeBased && unit === 'MM:SS') {
         const parts = inputValue.split(':');
         if (parts.length === 2) {
           finalValue = (parseInt(parts[0]) * 60) + parseFloat(parts[1]);
@@ -454,7 +475,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   };
 
-  const dbUnitLabel = isStrength ? 'KG' : (isSpeed || isYoga) ? 'SEC' : isCmPlyo ? 'CM' : isReps ? 'REPS' : unit;
+  const dbUnitLabel = isKgSecEndurance ? 'kg*sec' : isStrength ? 'KG' : isTimeBased ? 'SEC' : isCmPlyo ? 'CM' : isReps ? 'REPS' : unit;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4 isolate">
@@ -548,7 +569,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           </>
         ) : hasSets ? (
           <>
-            {(isStrength || isSpeed || isYoga) && (
+            {(isStrength || isTimeBased) && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Sets Log
@@ -572,7 +593,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
             <div className="mb-4 max-h-60 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
               {sets.map((setObj, index) => (
                 <div key={index} className="flex gap-2 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <div className="flex flex-col w-18">
+                  <div className="flex flex-col flex-1">
                     <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">Reps</label>
                     <input
                       type="number"
@@ -582,10 +603,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                     />
                   </div>
                   
-                  {isStrength && (
+                  {(isStrength || isKgSecEndurance) && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
-                        Weight ({unit})
+                        Weight ({isStrength ? unit : 'KG'})
                       </label>
                       <input
                         type="number"
@@ -596,7 +617,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                     </div>
                   )}
 
-                  {(isSpeed || isYoga) && (
+                  {isTimeBased && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
                         Time ({unit})
@@ -618,7 +639,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                       </label>
                       <input
                         type="number"
-                        value={setObj.weightCm ?? setObj.weight ?? setObj.valueCm ?? ''}
+                        value={setObj.weightCm || setObj.cm || setObj.valueCm || setObj.weight || setObj.value || ''}
                         onChange={(e) => handleSetChange(index, 'weightCm', e.target.value)}
                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
                       />
@@ -682,11 +703,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder={(isSpeed || isYoga) && unit === 'MM:SS' ? "00:00" : "Value"}
+                placeholder={isTimeBased && unit === 'MM:SS' ? "00:00" : "Value"}
                 className="flex-1 min-w-0 p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
               
-              {(isStrength || isSpeed || isYoga) && (
+              {(isStrength || isTimeBased) && (
                 <select 
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
