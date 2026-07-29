@@ -537,6 +537,16 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       let labelColor = "bg-slate-100 text-slate-500";
       let LabelIcon = null;
 
+      if (tdeeResult) {
+        fractionsDisplay = (
+          <div className="flex flex-col gap-0.5 mt-2">
+            <span className="text-[12px] font-bold text-slate-500">
+              {currentDisplay} / {tdeeResult.toFixed(0)} {config.unit}
+            </span>
+          </div>
+        );
+      }
+
       if (todayData.length > 0) {
         if (tdeeResult) {
           if (tdeeResult > currentAmount) {
@@ -551,14 +561,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
              labelText = "maintaining weight";
              labelColor = "text-blue-500";
           }
-
-          fractionsDisplay = (
-            <div className="flex flex-col gap-0.5 mt-2">
-              <span className="text-[12px] font-bold text-slate-500">
-                {currentDisplay} / {tdeeResult.toFixed(0)} {config.unit}
-              </span>
-            </div>
-          );
         }
       }
 
@@ -652,7 +654,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
       );
     }
 
-    if (['carbs', 'protein', 'fat'].includes(config.key) && dietThresholds && todayData.length > 0) {
+    if (['carbs', 'protein', 'fat'].includes(config.key) && dietThresholds) {
       fractionsDisplay = (
         <div className="flex flex-col gap-0.5 mt-2">
           {dietThresholds.min && (

@@ -287,7 +287,7 @@ export interface TDEECalculatorCardProps {
   autoActivityData: { label: string; factor: number };
   tdeeResult: number;
   isMe: boolean;
-  updateBasicInfo: (key: string, value: string) => void;
+  saveTDEESetting: (key: string, value: any) => void;
   formData: {
     weight: string;
     height: string;
@@ -307,7 +307,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
   autoActivityData,
   tdeeResult,
   isMe,
-  updateBasicInfo,
+  saveTDEESetting,
   formData,
   selectedDiet,
   setSelectedDiet
@@ -340,7 +340,11 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
               <select
                 className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
                 value={tdeeFormula}
-                onChange={(e) => setTdeeFormula(e.target.value as 'mifflin' | 'katch')}
+                onChange={(e) => {
+                  const val = e.target.value as 'mifflin' | 'katch';
+                  setTdeeFormula(val);
+                  saveTDEESetting('formula', val);
+                }}
                 disabled={!isMe}
               >
                 <option value="mifflin">Mifflin-St Jeor</option>
@@ -358,7 +362,7 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
                   value={lbm}
                   onChange={(e) => setLbm(e.target.value)}
                   disabled={!isMe}
-                  onBlur={() => updateBasicInfo('lbm', lbm)}
+                  onBlur={() => saveTDEESetting('lbm', lbm)}
                 />
               </div>
             )}
@@ -369,7 +373,11 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
             <select
               className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
               value={selectedActivityFactor}
-              onChange={(e) => setSelectedActivityFactor(e.target.value === 'auto' ? 'auto' : parseFloat(e.target.value))}
+              onChange={(e) => {
+                const val = e.target.value === 'auto' ? 'auto' : parseFloat(e.target.value);
+                setSelectedActivityFactor(val);
+                saveTDEESetting('activityFactor', val);
+              }}
               disabled={!isMe}
             >
               <option value="auto">Auto: {autoActivityData.label}</option>
@@ -386,7 +394,10 @@ export const TDEECalculatorCard: React.FC<TDEECalculatorCardProps> = ({
             <select
               className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 cursor-pointer disabled:cursor-not-allowed"
               value={selectedDiet}
-              onChange={(e) => setSelectedDiet(e.target.value)}
+              onChange={(e) => {
+                setSelectedDiet(e.target.value);
+                saveTDEESetting('diet', e.target.value);
+              }}
               disabled={!isMe}
             >
               <option value="Food Guide">Food Guide</option>

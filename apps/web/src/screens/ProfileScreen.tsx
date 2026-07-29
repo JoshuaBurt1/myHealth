@@ -200,9 +200,16 @@ const ProfileScreen: React.FC = () => {
 
         if (profData.hiddenOther) setHiddenOther(profData.hiddenOther);
 
-        // 0. TDEE metabolic rate calculation requirement (steps)
-        if (Array.isArray(profData.steps) && profData.steps.length > 0) {
+        if (profData.tdeeSettings) {
+          if (profData.tdeeSettings.formula) setTdeeFormula(profData.tdeeSettings.formula);
+          if (profData.tdeeSettings.lbm !== undefined) setLbm(profData.tdeeSettings.lbm);
+          if (profData.tdeeSettings.activityFactor !== undefined) setSelectedActivityFactor(profData.tdeeSettings.activityFactor);
+          if (profData.tdeeSettings.diet) setSelectedDiet(profData.tdeeSettings.diet);
+        } else if (profData.lbm !== undefined) {
+          setLbm(profData.lbm);
+        }
 
+        if (Array.isArray(profData.steps) && profData.steps.length > 0) {
           // Calculate the sum of values
           const last5Entries = profData.steps.slice(-5);          
           const totalSteps = last5Entries.reduce((sum: number, entry: any) => {
@@ -274,9 +281,9 @@ const ProfileScreen: React.FC = () => {
           { map: STRENGTH_KEY_MAP, type: 'strength' },
           { map: SPEED_KEY_MAP, type: 'speed' },
           { map: PLYO_KEY_MAP, type: 'plyometrics' },
+          { map: YOGA_KEY_MAP, type: 'yoga' },
           { map: ENDURANCE_KEY_MAP, type: 'endurance' },
           { map: PHYSIO_KEY_MAP, type: 'physio' },
-          { map: YOGA_KEY_MAP, type: 'yoga' },
           { map: MOBILITY_KEY_MAP, type: 'mobility' }
         ];
 
@@ -507,6 +514,20 @@ const ProfileScreen: React.FC = () => {
       await setDoc(profileRef, updates, { merge: true });
     } catch (err) {
       console.error(`Error autosaving ${field}:`, err);
+    }
+  };
+
+  const saveTDEESetting = async (key: string, value: any) => {
+    if (!userId || !isMe) return;
+    try {
+      const profileRef = doc(db, 'users', userId, 'profile', 'user_data');
+      await setDoc(profileRef, {
+        tdeeSettings: {
+          [key]: value
+        }
+      }, { merge: true });
+    } catch (err) {
+      console.error(`Error saving TDEE setting ${key}:`, err);
     }
   };
 
@@ -793,7 +814,7 @@ const ProfileScreen: React.FC = () => {
                   autoActivityData={autoActivityData}
                   tdeeResult={tdeeResult}
                   isMe={isMe}
-                  updateBasicInfo={updateBasicInfo}
+                  saveTDEESetting={saveTDEESetting}
                   formData={formData}
                   selectedDiet={selectedDiet}
                   setSelectedDiet={setSelectedDiet}
