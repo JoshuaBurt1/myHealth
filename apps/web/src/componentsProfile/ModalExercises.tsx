@@ -417,7 +417,12 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     };
   };
 
-  const evaluateEnduranceSets = (setsList: SetEntry[], label: string, isKgSec: boolean) => {
+  const evaluateEnduranceSets = (
+    setsList: SetEntry[], 
+    label: string, 
+    isKgSec: boolean, 
+    unit: 'sec' | 'mm:ss' = 'sec'
+  ) => {
     const validSets: { timeSec: number; reps: number; weightKg?: number }[] = [];
 
     for (const s of setsList) {
@@ -429,7 +434,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           throw new Error(`Missing data: Please complete weight, time, and reps for all filled sets in ${label}.`);
         }
         if (hasAll) {
-          const t = Number(s.time);
+          const t = parseSpeedValue(s.time, unit); // <--- Updated
           const w = Number(s.weight);
           const r = Number(s.reps);
           if (!isNaN(t) && !isNaN(w) && !isNaN(r) && t > 0 && w > 0 && r > 0) {
@@ -444,7 +449,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           throw new Error(`Missing data: Please complete time and reps for all filled sets in ${label}.`);
         }
         if (hasAll) {
-          const t = Number(s.time);
+          const t = parseSpeedValue(s.time, unit); // <--- Updated
           const r = Number(s.reps);
           if (!isNaN(t) && !isNaN(r) && t > 0 && r > 0) {
             validSets.push({ timeSec: t, reps: r });
@@ -544,7 +549,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           }
         } else if (isSecEnduranceExercise(e.name) || isKgSecEnduranceExercise(e.name)) {
           const isKgSec = isKgSecEnduranceExercise(e.name);
-          const evalResult = evaluateEnduranceSets(e.sets, e.label, isKgSec);
+          const unit = speedUnits[e.name] || 'sec';
+          const evalResult = evaluateEnduranceSets(e.sets, e.label, isKgSec, unit);
           if (evalResult) {
             preparedNew.push({
               ...e,
@@ -637,8 +643,9 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
           }
         } else if (isSecEnduranceExercise(ex.name) || isKgSecEnduranceExercise(ex.name)) {
           const isKgSec = isKgSecEnduranceExercise(ex.name);
+          const unit = speedUnits[ex.name] || 'sec';
           const setsList = trackedSets[ex.name] || [];
-          const evalResult = evaluateEnduranceSets(setsList, ex.label, isKgSec);
+          const evalResult = evaluateEnduranceSets(setsList, ex.label, isKgSec, unit);
           if (evalResult) {
             preparedExist.push({
               ...ex,

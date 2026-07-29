@@ -1,11 +1,12 @@
+// MetricChartRenderer.tsx
 import React, { useState } from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { 
-  isStrengthExercise, isSpeedExercise, isYogaExercise, isPlyometricExercise, 
-  isEnduranceExercise, isCmPlyometricsExercise, 
+  isStrengthExercise, isSpeedExercise, isPlyometricExercise, isCmPlyometricsExercise, isYogaExercise,
+  isEnduranceExercise, isSecEnduranceExercise, isKgSecEnduranceExercise,
   BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds 
 } from '../profileConstants';
 
@@ -82,7 +83,8 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   tdeeResult,
   selectedDiet
 }) => {
-  const [isConverted, setIsConverted] = useState(false);
+  const [isWeightConverted, setIsWeightConverted] = useState(false);
+  const [isTimeConverted, setIsTimeConverted] = useState(false);
   const [viewMode, setViewMode] = useState<'1rm' | 'load' | 'both'>('both');
 
   if (!graph) return null;
@@ -92,12 +94,13 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const unitClean = rawUnit.toLowerCase();
 
   // Explicit exercise helpers
-  const isYoga = Boolean(dataKey && isYogaExercise(dataKey));
   const isStrengthEx = Boolean(dataKey && isStrengthExercise(dataKey));
   const isSpeedEx = Boolean(dataKey && isSpeedExercise(dataKey));
   const isPlyoEx = Boolean(dataKey && isPlyometricExercise(dataKey));
-  const isEnduranceEx = Boolean(dataKey && isEnduranceExercise(dataKey));
   const isCmPlyoEx = Boolean(dataKey && isCmPlyometricsExercise(dataKey));
+  const isYoga = Boolean(dataKey && isYogaExercise(dataKey));
+  const isEnduranceEx = Boolean(dataKey && isEnduranceExercise(dataKey));
+  const isKgSecEx = Boolean(dataKey && isKgSecEnduranceExercise(dataKey));
 
   // Combined classification flags (including unit fallbacks)
   const isSpeed = isSpeedEx || unitClean === 'sec' || unitClean === 's';
@@ -107,25 +110,71 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
   const hasAverage = dataKey && filteredData?.some(d => d[`${dataKey}_average`] != null);
 
-  const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : isDistance && isConverted ? 'inch' : rawUnit;
+  let displayUnit = rawUnit;
+  if (isKgSecEx) {
+    const wUnit = isWeightConverted ? 'lbs' : 'kg';
+    const tUnit = isTimeConverted ? 'mm:ss' : 'sec';
+    displayUnit = `${wUnit} × ${tUnit}`;
+  } else if (isStrength && isWeightConverted) {
+    displayUnit = 'lbs';
+  } else if (isSpeed && isTimeConverted) {
+    displayUnit = 'mm:ss';
+  } else if (isDistance && isWeightConverted) {
+    displayUnit = 'inch';
+  }
 
+  // Updated formatValue logic
   const formatValue = (val: any) => {
     if (val == null) return val;
     const num = Number(val);
     if (isNaN(num)) return val;
 
-    if (isSpeed && isConverted) {
+    if (isKgSecEx) {
+      const factor = isWeightConverted ? 2.20462 : 1;
+      const scaled = num * factor;
+      return Number.isInteger(scaled) ? scaled.toString() : scaled.toFixed(1);
+    }
+    if (isSpeed && isTimeConverted) {
       const m = Math.floor(num / 60);
       const s = Math.floor(num % 60);
       return `${m}:${s.toString().padStart(2, '0')}`;
     }
-    if (isStrength && isConverted) {
+    if (isStrength && isWeightConverted) {
       return (num * 2.20462).toFixed(1);
     }
-    if (isDistance && isConverted) {
+    if (isDistance && isWeightConverted) {
       return (num / 2.54).toFixed(1);
     }
     return Number.isInteger(num) ? num.toString() : num.toFixed(1);
+  };
+
+  const formatYAxisTick = (val: any) => {
+    if (val == null) return '';
+    const num = Number(val);
+    if (isNaN(num)) return val;
+
+    // Preserve mm:ss time strings
+    if (isSpeed && isTimeConverted) {
+      return formatValue(val);
+    }
+
+    let scaled = num;
+    if (isKgSecEx) {
+      scaled = num * (isWeightConverted ? 2.20462 : 1);
+    } else if (isStrength && isWeightConverted) {
+      scaled = num * 2.20462;
+    } else if (isDistance && isWeightConverted) {
+      scaled = num / 2.54;
+    }
+
+    // Convert values >= 10,000 to compact 'k' format (e.g., 16534 -> 16.5k)
+    if (Math.abs(scaled) >= 10000) {
+      const inK = scaled / 1000;
+      return `${Number.isInteger(inK) ? inK : inK.toFixed(1)}k`;
+    }
+
+    // Round standard numbers to whole integers to save axis space
+    return Math.round(scaled).toLocaleString();
   };
 
   const getAlertType = (key: string) => {
@@ -336,29 +385,47 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   });
 
   const renderToggle = () => {
-    if (!isSpeed && !isStrength && !isDistance && !hasTotalLoad) return null;
-    
-    const label1 = isSpeed ? 'SEC' : isDistance ? 'CM' : 'KG';
-    const label2 = isSpeed ? 'MM:SS' : isDistance ? 'INCH' : 'LBS';
-    
+    const hasUnitToggle = isSpeed || isStrength || isDistance || isKgSecEx;
+    if (!hasUnitToggle && !hasTotalLoad) return null;
+
     return (
       <div className="flex items-center justify-between w-full grow">
-        {/* Far Left: Unit Toggle */}
-        {(isSpeed || isStrength || isDistance) ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); setIsConverted(!isConverted); }}
-            className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto shrink-0"
-          >
-            <span className={`px-2 py-0.5 rounded-full transition-all ${!isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
-              {label1}
-            </span>
-            <span className={`px-2 py-0.5 rounded-full transition-all ${isConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
-              {label2}
-            </span>
-          </button>
+        {/* Far Left: Unit Toggle(s) Container */}
+        {hasUnitToggle ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* 1. Weight / Distance Conversion Toggle (Active for isKgSecEx, isStrength, isDistance) */}
+            {(isKgSecEx || isStrength || isDistance) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsWeightConverted(!isWeightConverted); }}
+                className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto shrink-0"
+              >
+                <span className={`px-2 py-0.5 rounded-full transition-all ${!isWeightConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+                  {isDistance ? 'CM' : 'KG'}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full transition-all ${isWeightConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+                  {isDistance ? 'INCH' : 'LBS'}
+                </span>
+              </button>
+            )}
+
+            {/* 2. Duration / Time Conversion Toggle (Active for isSpeed) */}
+            {isSpeed && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsTimeConverted(!isTimeConverted); }}
+                className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto shrink-0"
+              >
+                <span className={`px-2 py-0.5 rounded-full transition-all ${!isTimeConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+                  SEC
+                </span>
+                <span className={`px-2 py-0.5 rounded-full transition-all ${isTimeConverted ? 'bg-white shadow-sm text-slate-900' : ''}`}>
+                  MM:SS
+                </span>
+              </button>
+            )}
+          </div>
         ) : <div />}
 
-        {/* Far Right: Mode Toggle */}
+        {/* Far Right: Mode Toggle (1RM / LOAD / BOTH) */}
         {hasTotalLoad && (
           <div className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 pointer-events-auto shrink-0 ml-auto">
             <button
@@ -687,9 +754,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
           
-          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={domain} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={domain} axisLine={false} tickLine={false} tickFormatter={formatYAxisTick} width={48} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           {hasTotalLoad && (
-            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatYAxisTick} width={48} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           )}
 
           <Tooltip 

@@ -73,6 +73,7 @@ interface InputFieldProps {
   value: string | number;
   onChange: (v: string) => void;
   onBlur?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   type?: string;
   disabled?: boolean;
   icon?: React.ReactNode;
@@ -80,7 +81,7 @@ interface InputFieldProps {
 }
 
 export const InputField: React.FC<InputFieldProps> = ({ 
-  label, value, onChange, onBlur, type = "text", disabled, icon, placeholder 
+  label, value, onChange, onBlur, onKeyDown, type = "text", disabled, icon, placeholder 
 }) => {
   return (
     <div className="flex flex-col gap-1 flex-1">
@@ -101,6 +102,7 @@ export const InputField: React.FC<InputFieldProps> = ({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
+          onKeyDown={onKeyDown}
           disabled={disabled}
           placeholder={placeholder}
           className={`${SHARED_INPUT_CLASSES} ${icon ? 'pl-8 sm:pl-10' : ''}`}

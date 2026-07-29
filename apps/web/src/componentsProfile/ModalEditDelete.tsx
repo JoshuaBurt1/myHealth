@@ -49,6 +49,13 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
   const [inputValue, setInputValue] = useState('');
   const [unit, setUnit] = useState('');
+  const [weightUnit, setWeightUnit] = useState('KG');
+
+  const handlePreventE = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault();
+    }
+  };
   
   // State for exercise sets
   const [sets, setSets] = useState<any[]>([]);
@@ -58,6 +65,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const [dietGroups, setDietGroups] = useState<{ key?: string; dateTime: string; entries: { context: string; value: any }[] }[]>([]);
 
   useEffect(() => {
+    setWeightUnit('KG');
     const item = initialItem?.rawObject || initialItem;
 
     if (isDietMetric) {
@@ -173,6 +181,20 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     }
   }, [initialValue, initialItem, isTimeBased, isStrength, isCmPlyo, isReps, isDietMetric, recordedDate]);
 
+  const handleToggleWeightUnit = () => {
+    const nextUnit = weightUnit === 'KG' ? 'LBS' : 'KG';
+    const updatedSets = sets.map((s) => {
+      if (s.weightKg === '' || s.weightKg === undefined || s.weightKg === null) return s;
+      const currentW = parseFloat(s.weightKg);
+      if (isNaN(currentW)) return s;
+      
+      const converted = nextUnit === 'LBS' ? currentW / 0.45359237 : currentW * 0.45359237;
+      return { ...s, weightKg: Number(converted.toFixed(1)) };
+    });
+    setSets(updatedSets);
+    setWeightUnit(nextUnit);
+  };
+
   const handleToggleUnit = () => {
     if (isStrength) {
       const nextUnit = unit === 'KG' ? 'LBS' : 'KG';
@@ -207,6 +229,19 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           }
           return { ...s, timeSec: isNaN(secVal) ? '' : Number(secVal.toFixed(1)) };
         }
+      });
+      setSets(updatedSets);
+      setUnit(nextUnit);
+    } else if (isCmPlyo) {
+      const nextUnit = unit === 'CM' ? 'INCH' : 'CM';
+      const updatedSets = sets.map((s) => {
+        const rawVal = s.weightCm || s.cm || s.valueCm || s.weight || s.value;
+        if (rawVal === '' || rawVal === undefined || rawVal === null) return s;
+        const currentVal = parseFloat(rawVal);
+        if (isNaN(currentVal)) return s;
+
+        const converted = nextUnit === 'INCH' ? currentVal / 2.54 : currentVal * 2.54;
+        return { ...s, weightCm: Number(converted.toFixed(1)) };
       });
       setSets(updatedSets);
       setUnit(nextUnit);
@@ -249,7 +284,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         }
 
         if (isKgSecEndurance) {
-          const weightKg = parseFloat(s.weightKg) || 0;
+          let weightKg = parseFloat(s.weightKg) || 0;
+          if (weightUnit === 'LBS') {
+            weightKg = Number((weightKg * 0.45359237).toFixed(1));
+          }
           setLoad = reps * weightKg * timeSec;
           setVal = weightKg * timeSec;
         } else {
@@ -263,6 +301,9 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         }
       } else if (isCmPlyo) {
         let cmVal = parseFloat(s.weightCm || s.cm || s.valueCm || s.weight || s.value) || 0;
+        if (unit === 'INCH') {
+          cmVal = cmVal * 2.54;
+        }
         setLoad = cmVal * reps;
         setVal = cmVal;
         if (setVal > bestValue) bestValue = setVal;
@@ -296,7 +337,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       value: Number(bestValue.toFixed(1)),
       average
     };
-  }, [sets, hasSets, isStrength, isSpeed, isTimeBased, isCmPlyo, isReps, isSecEndurance, isKgSecEndurance, unit]);
+  }, [sets, hasSets, isStrength, isSpeed, isTimeBased, isCmPlyo, isReps, isSecEndurance, isKgSecEndurance, unit, weightUnit]);
 
   if (!isOpen) return null;
 
@@ -430,7 +471,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           newSet.timeSec = isNaN(t) ? s.timeSec : Number(t.toFixed(1));
   
           if (isKgSecEndurance) {
-            const w = parseFloat(s.weightKg);
+            let w = parseFloat(s.weightKg);
+            if (!isNaN(w) && weightUnit === 'LBS') {
+              w = w * 0.45359237;
+            }
             newSet.weightKg = isNaN(w) ? s.weightKg : Number(w.toFixed(1));
             newSet.unit = 'kg*sec';
           } else {
@@ -439,6 +483,9 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         } else if (isCmPlyo) {
           let rawCm = s.weightCm || s.cm || s.valueCm || s.weight || s.value;
           let cm = parseFloat(rawCm);
+          if (!isNaN(cm) && unit === 'INCH') {
+            cm = cm * 2.54;
+          }
           newSet.weightCm = isNaN(cm) ? rawCm : Number(cm.toFixed(1));
           newSet.unit = 'cm';
         } else if (isReps) {
@@ -527,6 +574,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                         </label>
                         <input
                           type="number"
+                          onKeyDown={handlePreventE}
                           value={entry.value}
                           onChange={(e) => handleDietChange(groupIndex, entryIndex, 'value', e.target.value)}
                           placeholder="0"
@@ -569,24 +617,57 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           </>
         ) : hasSets ? (
           <>
-            {(isStrength || isTimeBased) && (
+            {(isStrength || isTimeBased || isCmPlyo) && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Sets Log
                 </span>
-                <button
-                  type="button"
-                  onClick={handleToggleUnit}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group cursor-pointer"
-                >
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
-                    Set Unit:
-                  </span>
-                  <span className="text-[10px] font-black text-indigo-600 group-hover:scale-105 transition-transform">
-                    {unit}
-                  </span>
-                  <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {isKgSecEndurance ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleToggleWeightUnit}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group cursor-pointer"
+                      >
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
+                          Weight Unit:
+                        </span>
+                        <span className="text-[10px] font-black text-indigo-600 group-hover:scale-105 transition-transform">
+                          {weightUnit}
+                        </span>
+                        <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleToggleUnit}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group cursor-pointer"
+                      >
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
+                          Time Unit:
+                        </span>
+                        <span className="text-[10px] font-black text-indigo-600 group-hover:scale-105 transition-transform">
+                          {unit}
+                        </span>
+                        <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleToggleUnit}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group cursor-pointer"
+                    >
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
+                        Set Unit:
+                      </span>
+                      <span className="text-[10px] font-black text-indigo-600 group-hover:scale-105 transition-transform">
+                        {unit}
+                      </span>
+                      <RefreshCw size={10} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -597,6 +678,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                     <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">Reps</label>
                     <input
                       type="number"
+                      onKeyDown={handlePreventE}
                       value={setObj.reps || ''}
                       onChange={(e) => handleSetChange(index, 'reps', e.target.value)}
                       className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -606,10 +688,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                   {(isStrength || isKgSecEndurance) && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
-                        Weight ({isStrength ? unit : 'KG'})
+                        Weight ({isStrength ? unit : weightUnit})
                       </label>
                       <input
                         type="number"
+                        onKeyDown={handlePreventE}
                         value={setObj.weightKg || ''}
                         onChange={(e) => handleSetChange(index, 'weightKg', e.target.value)}
                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -624,6 +707,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                       </label>
                       <input
                         type={unit === 'MM:SS' ? "text" : "number"}
+                        onKeyDown={handlePreventE}
                         value={setObj.timeSec || ''}
                         placeholder={unit === 'MM:SS' ? "00:00" : ""}
                         onChange={(e) => handleSetChange(index, 'timeSec', e.target.value)}
@@ -635,10 +719,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                   {isCmPlyo && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
-                        Distance (CM)
+                        Distance ({unit})
                       </label>
                       <input
                         type="number"
+                        onKeyDown={handlePreventE}
                         value={setObj.weightCm || setObj.cm || setObj.valueCm || setObj.weight || setObj.value || ''}
                         onChange={(e) => handleSetChange(index, 'weightCm', e.target.value)}
                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -701,6 +786,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
             <div className="flex gap-2 w-full items-center">
               <input
                 type="text"
+                onKeyDown={handlePreventE}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder={isTimeBased && unit === 'MM:SS' ? "00:00" : "Value"}
