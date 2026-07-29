@@ -266,7 +266,7 @@ export const YOGA_KEY_MAP: Record<string, string> = {
 
 export const ENDURANCE_KEY_MAP: Record<string, string> = {
   'Push-ups': 'pushUp',
-  'Single Leg Squat': 'pistolSquat',
+  'Single Leg Squat': 'singleLegSquat',
   'Air Squat': 'airSquat',
   'Hollow Body Hold': 'hollowHold',
   'Plank': 'plank',
@@ -656,7 +656,7 @@ const RAW_SINGLE_GRAPHS = [
 
   // ENDURANCE
   { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
-  { key: 'pistolSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
+  { key: 'singleLegSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
   { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
   { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },

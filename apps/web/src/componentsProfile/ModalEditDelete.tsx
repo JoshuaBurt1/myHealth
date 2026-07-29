@@ -285,7 +285,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
 
     if (bestValue === Infinity) bestValue = 0;
 
-    const average = isCmPlyo
+    const average = (isSecEndurance || isKgSecEndurance || isCmPlyo)
       ? (totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0)
       : (isReps && !hasWeight)
         ? (sets.length > 0 ? Number((totalReps / sets.length).toFixed(1)) : 0)
@@ -296,7 +296,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       value: Number(bestValue.toFixed(1)),
       average
     };
-  }, [sets, hasSets, isStrength, isSpeed, isTimeBased, isCmPlyo, isReps, unit]);
+  }, [sets, hasSets, isStrength, isSpeed, isTimeBased, isCmPlyo, isReps, isSecEndurance, isKgSecEndurance, unit]);
 
   if (!isOpen) return null;
 
@@ -635,7 +635,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                   {isCmPlyo && (
                     <div className="flex flex-col flex-1">
                       <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
-                        Height (CM)
+                        Distance (CM)
                       </label>
                       <input
                         type="number"

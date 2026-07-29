@@ -57,6 +57,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [trackedSets, setTrackedSets] = useState<Record<string, SetEntry[]>>({});
   const [strengthUnits, setStrengthUnits] = useState<Record<string, 'kg' | 'lbs'>>({});
+  const [distanceUnits, setDistanceUnits] = useState<Record<string, 'cm' | 'inch'>>({});
   const [speedUnits, setSpeedUnits] = useState<Record<string, 'sec' | 'mm:ss'>>({});
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -372,20 +373,22 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
   };
 
   // Helper to compute plyometric set analytics for cm-based exercises
-  const evaluatePlyometricsSets = (setsList: SetEntry[], label: string) => {
+  const evaluatePlyometricsSets = (setsList: SetEntry[], label: string, unit: 'cm' | 'inch' = 'cm') => {
     const validSets: { valueCm: number; reps: number }[] = [];
 
     for (const s of setsList) {
       const val = s.cm || s.time || s.weight; 
 
       if ((val && !s.reps) || (!val && s.reps)) {
-        throw new Error(`Missing data: Please complete height/distance and reps for all filled sets in ${label}.`);
+        throw new Error(`Missing data: Please complete distance and reps for all filled sets in ${label}.`);
       }
       if (val && s.reps) {
         const v = Number(val);
         const r = Number(s.reps);
         if (!isNaN(v) && !isNaN(r) && v > 0 && r > 0) {
-          validSets.push({ valueCm: v, reps: r });
+          // Convert to cm if input is in inches
+          const normalizedCm = Number((unit === 'inch' ? v * 2.54 : v).toFixed(1));
+          validSets.push({ valueCm: normalizedCm, reps: r });
         }
       }
     }
@@ -396,7 +399,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     const totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.valueCm * s.reps), 0));
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
 
-    // Average height/distance per rep
+    // Average distance per rep
     const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
 
     const detailedSets = validSets.map(s => ({
@@ -453,18 +456,19 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     if (validSets.length === 0) return null;
 
     let bestValue = 0;
-    let totalLoad = 0;
+    let rawTotalLoad = 0;
 
     if (isKgSec) {
       bestValue = Math.max(...validSets.map(s => (s.weightKg || 0) * s.timeSec));
-      totalLoad = Math.round(validSets.reduce((sum, s) => sum + ((s.weightKg || 0) * s.timeSec * s.reps), 0));
+      rawTotalLoad = validSets.reduce((sum, s) => sum + ((s.weightKg || 0) * s.timeSec * s.reps), 0);
     } else {
       bestValue = Math.max(...validSets.map(s => s.timeSec));
-      totalLoad = Math.round(validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0));
+      rawTotalLoad = validSets.reduce((sum, s) => sum + (s.timeSec * s.reps), 0);
     }
 
+    const totalLoad = Math.round(rawTotalLoad);
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
-    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+    const average = totalReps > 0 ? Number((rawTotalLoad / totalReps).toFixed(1)) : 0;
 
     const detailedSets = validSets.map(s => {
       if (isKgSec) {
@@ -523,7 +527,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             });
           }
         } else if (isCmPlyometricsExercise(e.name)) {
-          const evalResult = evaluatePlyometricsSets(e.sets, e.label);
+          const unit = distanceUnits[e.name] || 'cm';
+          const evalResult = evaluatePlyometricsSets(e.sets, e.label, unit);
           if (evalResult) {
             preparedNew.push({
               ...e,
@@ -614,8 +619,9 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
             });
           }
         } else if (isCmPlyometricsExercise(ex.name)) {
+          const unit = distanceUnits[ex.name] || 'cm';
           const setsList = trackedSets[ex.name] || [];
-          const evalResult = evaluatePlyometricsSets(setsList, ex.label);
+          const evalResult = evaluatePlyometricsSets(setsList, ex.label, unit);
           if (evalResult) {
             preparedExist.push({
               ...ex,
@@ -771,7 +777,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       }
       
       await batch.commit();
-
+      
       setEntries([]); 
       const updatedInputs = { ...exerciseInputs };
       preparedExist.forEach(ex => {
@@ -818,6 +824,8 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
       entries={entries}
       strengthUnits={strengthUnits}
       setStrengthUnits={setStrengthUnits}
+      distanceUnits={distanceUnits}
+      setDistanceUnits={setDistanceUnits}
       speedUnits={speedUnits}
       setSpeedUnits={setSpeedUnits}
       trackedSets={trackedSets}

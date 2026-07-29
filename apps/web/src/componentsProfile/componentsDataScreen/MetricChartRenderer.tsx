@@ -1,10 +1,13 @@
-// MetricChartRenderer.tsx
 import React, { useState } from 'react';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { isStrengthExercise, isSpeedExercise, isYogaExercise, isPlyometricExercise, isEnduranceExercise, BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds } from '../profileConstants';
+import { 
+  isStrengthExercise, isSpeedExercise, isYogaExercise, isPlyometricExercise, 
+  isEnduranceExercise, isCmPlyometricsExercise, 
+  BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds 
+} from '../profileConstants';
 
 const CUSTOM_COLORS = ['#ec4899', '#0ea5e9', '#84cc16', '#f59e0b', '#8b5cf6', '#14b8a6', '#f43f5e', '#6366f1'];
 
@@ -94,15 +97,17 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const isSpeedEx = Boolean(dataKey && isSpeedExercise(dataKey));
   const isPlyoEx = Boolean(dataKey && isPlyometricExercise(dataKey));
   const isEnduranceEx = Boolean(dataKey && isEnduranceExercise(dataKey));
+  const isCmPlyoEx = Boolean(dataKey && isCmPlyometricsExercise(dataKey));
 
   // Combined classification flags (including unit fallbacks)
   const isSpeed = isSpeedEx || unitClean === 'sec' || unitClean === 's';
   const isStrength = isStrengthEx || unitClean === 'kg';
+  const isDistance = isCmPlyoEx || unitClean === 'cm';
 
   const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
   const hasAverage = dataKey && filteredData?.some(d => d[`${dataKey}_average`] != null);
 
-  const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : rawUnit;
+  const displayUnit = isStrength && isConverted ? 'lbs' : isSpeed && isConverted ? 'mm:ss' : isDistance && isConverted ? 'inch' : rawUnit;
 
   const formatValue = (val: any) => {
     if (val == null) return val;
@@ -116,6 +121,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     }
     if (isStrength && isConverted) {
       return (num * 2.20462).toFixed(1);
+    }
+    if (isDistance && isConverted) {
+      return (num / 2.54).toFixed(1);
     }
     return Number.isInteger(num) ? num.toString() : num.toFixed(1);
   };
@@ -237,7 +245,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
     const category = METRIC_CATEGORY_MAP.get(keyLower);
 
     if (
-      keyLower === 'weight' || keyLower === 'height' ||
+      keyLower === 'weight' || keyLower === 'distance' ||
       (category && ['vital', 'bloodtest', 'diet', 'micronutrient'].includes(category))
     ) {
       return null;
@@ -328,15 +336,15 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   });
 
   const renderToggle = () => {
-    if (!isSpeed && !isStrength && !hasTotalLoad) return null;
+    if (!isSpeed && !isStrength && !isDistance && !hasTotalLoad) return null;
     
-    const label1 = isSpeed ? 'SEC' : 'KG';
-    const label2 = isSpeed ? 'MM:SS' : 'LBS';
+    const label1 = isSpeed ? 'SEC' : isDistance ? 'CM' : 'KG';
+    const label2 = isSpeed ? 'MM:SS' : isDistance ? 'INCH' : 'LBS';
     
     return (
       <div className="flex items-center justify-between w-full grow">
         {/* Far Left: Unit Toggle */}
-        {(isSpeed || isStrength) ? (
+        {(isSpeed || isStrength || isDistance) ? (
           <button
             onClick={(e) => { e.stopPropagation(); setIsConverted(!isConverted); }}
             className="flex items-center bg-slate-100 rounded-full p-0.5 text-[9px] font-black text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors pointer-events-auto shrink-0"
@@ -385,7 +393,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   if (validValues.length > 0 && dataKey && dataKey.toLowerCase() !== 'weight') {
     let prType: 'MAX' | 'MIN' | 'NONE' = 'NONE';
 
-    if (isStrength || isYoga || isStrengthEx || isPlyoEx || isEnduranceEx) {
+    if (isStrength || isYoga || isStrengthEx || isPlyoEx || isEnduranceEx || isDistance) {
       prType = 'MAX';
     } else if (isSpeed) {
       prType = 'MIN';
@@ -585,7 +593,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
 
     // Check metric warning/critical thresholds if no custom label is set
     if (!customLabelElement && config.thresholds && filteredData && filteredData.length > 0) {
-      // Retrieve the most recent valid data point for this metric
       const latestPoint = [...filteredData].reverse().find(d => d[config.key] != null);
       const currentValue = latestPoint ? Number(latestPoint[config.key]) : null;
 
@@ -595,7 +602,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         let labelColor = '';
         let LabelIcon = null;
 
-        // Evaluated in order of severity
         if (criticalHigh != null && currentValue >= criticalHigh) {
           labelText = 'critical high';
           labelColor = 'text-red-500 bg-red-50';
@@ -757,7 +763,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             />
           )}
 
-          {/* --- ADD BEST VALUE LINE HERE --- */}
           {renderBestValueLine()}
           
           {/* --- AVERAGE LINE (BOTTOM) --- */}
@@ -859,7 +864,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               dataKey={`${m.key}_average`} 
               stroke={customColor} 
               strokeOpacity={0.5}
-              strokeWidth={2} 
+              strokeWidth={2}
               strokeDasharray="4 4"
               connectNulls 
               style={{ pointerEvents: 'none' }} 
@@ -875,7 +880,7 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
               type="monotone" 
               dataKey={`${m.key}_totalLoad`} 
               stroke="#94a3b8" 
-              strokeWidth={3} 
+              strokeWidth={3}
               strokeDasharray="4 4"
               connectNulls 
               style={{ pointerEvents: 'none' }} 

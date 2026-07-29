@@ -40,6 +40,8 @@ export interface ModalExercisesViewProps {
   entries: any[];
   strengthUnits: Record<string, 'kg' | 'lbs'>;
   setStrengthUnits: React.Dispatch<React.SetStateAction<Record<string, 'kg' | 'lbs'>>>;
+  distanceUnits: Record<string, 'cm' | 'inch'>;
+  setDistanceUnits: React.Dispatch<React.SetStateAction<Record<string, 'cm' | 'inch'>>>;
   speedUnits: Record<string, 'sec' | 'mm:ss'>;
   setSpeedUnits: React.Dispatch<React.SetStateAction<Record<string, 'sec' | 'mm:ss'>>>;
   trackedSets: Record<string, any[]>;
@@ -80,6 +82,8 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
   strengthUnits,
   setStrengthUnits,
   speedUnits,
+  setDistanceUnits,
+  distanceUnits,
   setSpeedUnits,
   trackedSets,
   isMe,
@@ -239,28 +243,60 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                 );
               }
 
+              const allCatExercises = [...existingInCat, ...newInCat];
+
               const toggleCategoryUnits = () => {
-                if (category === 'Strength') {
-                  const currentUnit = strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg';
+                // 1. Strength Exercises (kg <-> lbs)
+                const strengthExs = allCatExercises.filter(ex => isStrengthExercise(ex.name));
+                if (strengthExs.length > 0) {
+                  const currentUnit = strengthUnits[strengthExs[0].name] || 'kg';
                   const nextUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
-                  const updatedUnits = { ...strengthUnits };
-                  [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
-                  setStrengthUnits(updatedUnits);
-                } else if (category === 'Speed') {
-                  const currentUnit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
+                  const updated = { ...strengthUnits };
+                  strengthExs.forEach(ex => { updated[ex.name] = nextUnit; });
+                  setStrengthUnits(updated);
+                  return;
+                }
+
+                // 2. Speed & Yoga Exercises (sec <-> mm:ss)
+                const speedExs = allCatExercises.filter(ex => isSpeedExercise(ex.name) || isYogaExercise(ex.name));
+                if (speedExs.length > 0) {
+                  const currentUnit = speedUnits[speedExs[0].name] || 'sec';
                   const nextUnit = currentUnit === 'sec' ? 'mm:ss' : 'sec';
-                  const updatedUnits = { ...speedUnits };
-                  [...existingInCat, ...newInCat].forEach(ex => { updatedUnits[ex.name] = nextUnit; });
-                  setSpeedUnits(updatedUnits);
+                  const updated = { ...speedUnits };
+                  speedExs.forEach(ex => { updated[ex.name] = nextUnit; });
+                  setSpeedUnits(updated);
+                  return;
+                }
+
+                // 3. Distance / Plyometric Exercises (cm <-> inch)
+                const cmExs = allCatExercises.filter(ex => isCmPlyometricsExercise(ex.name));
+                if (cmExs.length > 0) {
+                  const currentUnit = distanceUnits[cmExs[0].name] || 'cm';
+                  const nextUnit = currentUnit === 'cm' ? 'inch' : 'cm';
+                  const updated = { ...distanceUnits };
+                  cmExs.forEach(ex => { updated[ex.name] = nextUnit; });
+                  setDistanceUnits(updated);
+                  return;
                 }
               };
 
               const getCategoryUnitLabel = () => {
-                if (category === 'Strength') return (strengthUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'kg').toUpperCase();
-                if (category === 'Speed') {
-                  const unit = speedUnits[existingInCat[0]?.name || newInCat[0]?.name] || 'sec';
-                  return unit === 'mm:ss' ? 'MM:SS' : 'SEC';
+                const strengthEx = allCatExercises.find(ex => isStrengthExercise(ex.name));
+                if (strengthEx) {
+                  return (strengthUnits[strengthEx.name] || 'kg').toUpperCase();
                 }
+
+                const speedEx = allCatExercises.find(ex => isSpeedExercise(ex.name) || isYogaExercise(ex.name));
+                if (speedEx) {
+                  const u = speedUnits[speedEx.name] || 'sec';
+                  return u === 'mm:ss' ? 'MM:SS' : 'SEC';
+                }
+
+                const cmEx = allCatExercises.find(ex => isCmPlyometricsExercise(ex.name));
+                if (cmEx) {
+                  return (distanceUnits[cmEx.name] || 'cm').toUpperCase();
+                }
+
                 return null;
               };
 
@@ -299,7 +335,6 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
 
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
-                      const sdUnit = speedUnits[ex.name] || 'cm';
                       const setsList = (trackedSets[ex.name] && trackedSets[ex.name].length > 0)
                         ? trackedSets[ex.name]
                         : [{ id: '1', reps: '', weight: '', time: '', cm: '' }];
@@ -380,7 +415,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                   ) : isCmPlyometric ? (
                                     <div className="flex-1">
                                       <InputField 
-                                        label="Height (cm)" 
+                                        label="Distance (cm)" 
                                         type="number" 
                                         value={set.cm || ''}
                                         onChange={(v: string) => updateTrackedSet(ex.name, set.id, 'cm', v)}
@@ -552,7 +587,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                   ) : isCmPlyometric ? (
                                     <div className="flex-1">
                                       <InputField 
-                                        label="Height (cm)" 
+                                        label="Distance (cm)" 
                                         type="number" 
                                         value={set.cm || ''}
                                         onChange={(v: string) => updateEntrySet(entry.name, set.id, 'cm', v)}
