@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, writeBatch, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 import { METRIC_CATEGORY_MAP, type ExerciseCategory, CATEGORY_MAPS, 
-  isStrengthExercise, isSpeedExercise, isCmPlyometricsExercise, isYogaExercise, isSecEnduranceExercise, isKgSecEnduranceExercise,
+  isStrengthExercise, isSpeedExercise, isCmPlyometricsExercise, isYogaExercise, 
+  isSecEnduranceExercise, isKgSecEnduranceExercise, isSecMobilityExercise, isCmMobilityExercise,
   getStandardUnit } from './profileConstants';
 import { ModalExercisesView } from './ModalExercisesView';
 
@@ -531,7 +532,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else if (isCmPlyometricsExercise(e.name)) {
+        } else if (isCmPlyometricsExercise(e.name) || isCmMobilityExercise(e.name)) {
           const unit = distanceUnits[e.name] || 'cm';
           const evalResult = evaluatePlyometricsSets(e.sets, e.label, unit);
           if (evalResult) {
@@ -547,7 +548,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else if (isSecEnduranceExercise(e.name) || isKgSecEnduranceExercise(e.name)) {
+        } else if (isSecEnduranceExercise(e.name) || isKgSecEnduranceExercise(e.name) || isSecMobilityExercise(e.name)) {
           const isKgSec = isKgSecEnduranceExercise(e.name);
           const unit = speedUnits[e.name] || 'sec';
           const evalResult = evaluateEnduranceSets(e.sets, e.label, isKgSec, unit);
@@ -624,7 +625,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else if (isCmPlyometricsExercise(ex.name)) {
+        } else if (isCmPlyometricsExercise(ex.name) || isCmMobilityExercise(ex.name)) {
           const unit = distanceUnits[ex.name] || 'cm';
           const setsList = trackedSets[ex.name] || [];
           const evalResult = evaluatePlyometricsSets(setsList, ex.label, unit);
@@ -641,7 +642,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
               }
             });
           }
-        } else if (isSecEnduranceExercise(ex.name) || isKgSecEnduranceExercise(ex.name)) {
+        } else if (isSecEnduranceExercise(ex.name) || isKgSecEnduranceExercise(ex.name) || isSecMobilityExercise(ex.name)) {
           const isKgSec = isKgSecEnduranceExercise(ex.name);
           const unit = speedUnits[ex.name] || 'sec';
           const setsList = trackedSets[ex.name] || [];

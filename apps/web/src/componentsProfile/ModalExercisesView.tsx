@@ -15,7 +15,9 @@ import {
   isYogaExercise,
   isCmPlyometricsExercise,
   isSecEnduranceExercise, 
-  isKgSecEnduranceExercise
+  isKgSecEnduranceExercise, 
+  isSecMobilityExercise, 
+  isCmMobilityExercise
 } from './profileConstants';
 import { InputField } from './ProfileUI';
 import PrivacyWrapper from './PrivacyWrapper';
@@ -269,7 +271,8 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                   isSpeedExercise(ex.name) || 
                   isYogaExercise(ex.name) || 
                   isSecEnduranceExercise(ex.name) || 
-                  isKgSecEnduranceExercise(ex.name)
+                  isKgSecEnduranceExercise(ex.name) ||
+                  isSecMobilityExercise(ex.name)
                 );
                 if (timeExs.length > 0) {
                   const currentUnit = speedUnits[timeExs[0].name] || 'sec';
@@ -281,7 +284,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
               };
 
               const toggleDistanceUnits = () => {
-                const cmExs = allCatExercises.filter(ex => isCmPlyometricsExercise(ex.name));
+                const cmExs = allCatExercises.filter(ex => isCmPlyometricsExercise(ex.name) || isCmMobilityExercise(ex.name));
                 if (cmExs.length > 0) {
                   const currentUnit = distanceUnits[cmExs[0].name] || 'cm';
                   const nextUnit = currentUnit === 'cm' ? 'inch' : 'cm';
@@ -302,14 +305,15 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                   isSpeedExercise(ex.name) || 
                   isYogaExercise(ex.name) || 
                   isSecEnduranceExercise(ex.name) || 
-                  isKgSecEnduranceExercise(ex.name)
+                  isKgSecEnduranceExercise(ex.name) ||
+                  isSecMobilityExercise(ex.name)
                 );
                 const u = (timeEx && speedUnits[timeEx.name]) || 'sec';
                 return u === 'mm:ss' ? 'MM:SS' : 'SEC';
               };
 
               const getDistanceUnitLabel = () => {
-                const cmEx = allCatExercises.find(ex => isCmPlyometricsExercise(ex.name));
+                const cmEx = allCatExercises.find(ex => isCmPlyometricsExercise(ex.name) || isCmMobilityExercise(ex.name));
                 return ((cmEx && distanceUnits[cmEx.name]) || 'cm').toUpperCase();
               };
 
@@ -338,7 +342,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                         </button>
                       )}
 
-                      {(category === 'Speed' || category === 'Yoga' || category === 'Endurance') && (
+                      {(category === 'Speed' || category === 'Yoga' || category === 'Endurance' || category === 'Mobility') && (
                         <button
                           onClick={toggleTimeUnits}
                           className="flex items-center gap-2 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group"
@@ -354,7 +358,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                         </button>
                       )}
 
-                      {category === 'Plyometrics' && (
+                      {(category === 'Plyometrics' || category === 'Mobility') && (
                         <button
                           onClick={toggleDistanceUnits}
                           className="flex items-center gap-2 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition-colors group"
@@ -379,8 +383,10 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                       const isYoga = isYogaExercise(ex.name);
                       const isSecEndurance = isSecEnduranceExercise(ex.name);
                       const isKgSecEndurance = isKgSecEnduranceExercise(ex.name);
+                      const isCmMobility = isCmMobilityExercise(ex.name);
+                      const isSecMobility = isSecMobilityExercise(ex.name);
 
-                      const showReps = isStrength || isSpeed || isCmPlyometric || isYoga || isSecEndurance || isKgSecEndurance || category === 'Custom';
+                      const showReps = isStrength || isSpeed || isCmPlyometric || isYoga || isSecEndurance || isKgSecEndurance || isCmMobility || isSecMobility || category === 'Custom';
 
                       const stUnit = strengthUnits[ex.name] || 'kg';
                       const spUnit = speedUnits[ex.name] || 'sec';
@@ -465,7 +471,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                  ) : isCmPlyometric ? (
+                                  ) : (isCmPlyometric || isCmMobility) ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Distance (${cmUnit})`}
@@ -489,7 +495,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                  ) : isSecEndurance ? (
+                                  ) : (isSecEndurance || isSecMobility) ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Time (${spUnit})`}
@@ -564,8 +570,10 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                       const isYoga = isYogaExercise(entry.name);
                       const isSecEndurance = isSecEnduranceExercise(entry.name);
                       const isKgSecEndurance = isKgSecEnduranceExercise(entry.name);
+                      const isCmMobility = isCmMobilityExercise(entry.name);
+                      const isSecMobility = isSecMobilityExercise(entry.name);
 
-                      const showReps = isStrength || isSpeed || isYoga || isCmPlyometric || isSecEndurance || isKgSecEndurance || category === 'Custom';
+                      const showReps = isStrength || isSpeed || isYoga || isCmPlyometric || isSecEndurance || isKgSecEndurance || isCmMobility || isSecMobility || category === 'Custom';
 
                       const stUnit = strengthUnits[entry.name] || 'kg';
                       const spUnit = speedUnits[entry.name] || 'sec';
@@ -645,7 +653,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                  ) : isCmPlyometric ? (
+                                  ) : (isCmPlyometric || isCmMobility) ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Distance (${cmUnit})`}
@@ -669,7 +677,7 @@ export const ModalExercisesView: React.FC<ModalExercisesViewProps> = ({
                                         icon={<RefreshCw size={14} className="text-indigo-400"/>} 
                                       />
                                     </div>
-                                  ) : isSecEndurance ? (
+                                  ) : (isSecEndurance || isSecMobility) ? (
                                     <div className="flex-1">
                                       <InputField 
                                         label={`Time (${spUnit})`}

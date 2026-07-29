@@ -6,7 +6,7 @@ import {
 import { Gauge, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { 
   isStrengthExercise, isSpeedExercise, isPlyometricExercise, isCmPlyometricsExercise, isYogaExercise,
-  isEnduranceExercise, isSecEnduranceExercise, isKgSecEnduranceExercise,
+  isEnduranceExercise, isSecEnduranceExercise, isKgSecEnduranceExercise, isMobilityExercise, isSecMobilityExercise, isCmMobilityExercise, isPhysiotherapyExercise,
   BP_THRESHOLDS, DIET_TYPES_MAP, METRIC_CATEGORY_MAP, type MetricThresholds 
 } from '../profileConstants';
 
@@ -100,12 +100,17 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   const isCmPlyoEx = Boolean(dataKey && isCmPlyometricsExercise(dataKey));
   const isYoga = Boolean(dataKey && isYogaExercise(dataKey));
   const isEnduranceEx = Boolean(dataKey && isEnduranceExercise(dataKey));
+  const isSecEnduranceEx = Boolean(dataKey && isSecEnduranceExercise(dataKey));
   const isKgSecEx = Boolean(dataKey && isKgSecEnduranceExercise(dataKey));
+  const isMobilityEx = Boolean(dataKey && isMobilityExercise(dataKey));
+  const isSecMobilityEx = Boolean(dataKey && isSecMobilityExercise(dataKey));
+  const isCmMobilityEx = Boolean(dataKey && isCmMobilityExercise(dataKey));
+  const isPhysio = Boolean(dataKey && isPhysiotherapyExercise(dataKey));
 
   // Combined classification flags (including unit fallbacks)
-  const isSpeed = isSpeedEx || unitClean === 'sec' || unitClean === 's';
+  const isSpeed = isSpeedEx || isSecEnduranceEx || isSecMobilityEx || unitClean === 'sec' || unitClean === 's';
   const isStrength = isStrengthEx || unitClean === 'kg';
-  const isDistance = isCmPlyoEx || unitClean === 'cm';
+  const isDistance = isCmPlyoEx || isCmMobilityEx || unitClean === 'cm';
 
   const hasTotalLoad = dataKey && filteredData?.some(d => d[`${dataKey}_totalLoad`] != null);
   const hasAverage = dataKey && filteredData?.some(d => d[`${dataKey}_average`] != null);
@@ -460,7 +465,19 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
   if (validValues.length > 0 && dataKey && dataKey.toLowerCase() !== 'weight') {
     let prType: 'MAX' | 'MIN' | 'NONE' = 'NONE';
 
-    if (isStrength || isYoga || isStrengthEx || isPlyoEx || isEnduranceEx || isDistance) {
+    if (
+      isStrength || 
+      isYoga || 
+      isStrengthEx || 
+      isPlyoEx || 
+      isEnduranceEx || 
+      isSecEnduranceEx || 
+      isMobilityEx || 
+      isSecMobilityEx || 
+      isCmMobilityEx || 
+      isDistance || 
+      isPhysio
+    ) {
       prType = 'MAX';
     } else if (isSpeed) {
       prType = 'MIN';
@@ -698,27 +715,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
           );
         }
       }
-    } else if ((isMacro || isMicro) && dietThresholds && todayData.length > 0) {
-      let labelText = "within diet req";
-      let labelColor = "text-blue-500";
-      let LabelIcon = null;
-
-      if (dietThresholds.min !== undefined && currentAmount < dietThresholds.min) {
-        labelText = "under diet req";
-        labelColor = "text-red-500";
-        LabelIcon = TrendingDown;
-      } else if (dietThresholds.max !== undefined && currentAmount > dietThresholds.max) {
-        labelText = "above diet req";
-        labelColor = "text-emerald-500";
-        LabelIcon = TrendingUp;
-      }
-
-      customLabelElement = (
-        <span className={`flex items-center gap-1 text-[12px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter ${labelColor}`}>
-          {LabelIcon && <LabelIcon size={10} />}
-          {labelText}
-        </span>
-      );
     }
 
     if (['carbs', 'protein', 'fat'].includes(config.key) && dietThresholds) {
@@ -905,9 +901,9 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
         <LineChart data={filteredData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
           <XAxis {...rotatedXAxisProps} />
           
-          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+          <YAxis yAxisId="left" hide={viewMode === 'load'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatYAxisTick} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           {hasTotalLoad && (
-            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatValue} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
+            <YAxis yAxisId="right" orientation="right" hide={viewMode === '1rm'} domain={['auto', 'auto']} axisLine={false} tickLine={false} tickFormatter={formatYAxisTick} width={40} style={{ fontSize: '11px', fill: '#94a3b8', fontWeight: 'bold' }} />
           )}
 
           <Tooltip 
@@ -925,7 +921,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
 
           {renderBestValueLine()}
           
-          {/* --- AVERAGE LINE (BOTTOM) --- */}
           {hasAverage && (viewMode === '1rm' || viewMode === 'both') && (
             <Line 
               yAxisId="left"
@@ -958,7 +953,6 @@ export const MetricChartRenderer: React.FC<MetricChartRendererProps> = ({
             />
           )}
 
-          {/* --- MAIN VALUE LINE (TOP - SELECTABLE) --- */}
           {(viewMode === '1rm' || viewMode === 'both') && (
             <Line 
               yAxisId="left"

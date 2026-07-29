@@ -270,6 +270,7 @@ export const ENDURANCE_KEY_MAP: Record<string, string> = {
   'Air Squat': 'airSquat',
   'Hollow Body Hold': 'hollowHold',
   'Plank': 'plank',
+  'Copenhagen Plank': 'copenhagenPlank',
   'Farmers Carry': 'farmersCarry',
 };
 
@@ -288,8 +289,7 @@ export const MOBILITY_KEY_MAP: Record<string, string> = {
 export const PHYSIO_KEY_MAP: Record<string, string> = {
   'Shoulder External Rotation': 'shoulderExtRot',
   'Tibialis Raise': 'tibialisRaise',
-  'Copenhagen Plank': 'copenhagenPlank',
-  'Pistol Squat (Assisted)': 'assistedPistolSquat',
+  'Single Leg Squat (Assisted)': 'assistedSLSquat',
   'Single-Leg RDL': 'singleLegRdl',
   'Towel Scrunches': 'towelScrunches',
   'Serratus Punch': 'serratusPunch',
@@ -349,7 +349,7 @@ const CATEGORY_DEFINITIONS = [
   { category: 'endurance', map: ENDURANCE_KEY_MAP },
   { category: 'yoga', map: YOGA_KEY_MAP },
   { category: 'mobility', map: MOBILITY_KEY_MAP },
-  { category: 'physio', map: PHYSIO_KEY_MAP },
+  { category: 'physiotherapy', map: PHYSIO_KEY_MAP },
 ];
 
 // Populate once at runtime initialization
@@ -360,8 +360,8 @@ CATEGORY_DEFINITIONS.forEach(({ category, map }) => {
 });
 
 // Centralized Category Definitions & Helpers
-export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Yoga' | 'Endurance' | 'Mobility' | 'Physio' | 'Custom';
-export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Yoga', 'Endurance', 'Mobility', 'Physio', 'Custom'];
+export type ExerciseCategory = 'Strength' | 'Speed' | 'Plyometrics' | 'Yoga' | 'Endurance' | 'Mobility' | 'Physiotherapy' | 'Custom';
+export const CATEGORIES: ExerciseCategory[] = ['Strength', 'Speed', 'Plyometrics', 'Yoga', 'Endurance', 'Mobility', 'Physiotherapy', 'Custom'];
 
 export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
   Strength: STRENGTH_KEY_MAP,
@@ -370,7 +370,7 @@ export const CATEGORY_MAPS: Record<string, Record<string, string>> = {
   Yoga: YOGA_KEY_MAP,
   Endurance: ENDURANCE_KEY_MAP,  
   Mobility: MOBILITY_KEY_MAP,
-  Physio: PHYSIO_KEY_MAP,
+  Physiotherapy: PHYSIO_KEY_MAP,
 };
 
 export const isStrengthExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'strength' : false;
@@ -390,6 +390,16 @@ export const isKgSecEnduranceExercise = (key?: string) => {
   if (!key) return false;
   return isEnduranceExercise(key) && getStandardUnit(key) === 'kg×sec';
 };
+export const isMobilityExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'mobility' : false;
+export const isSecMobilityExercise = (key?: string) => {
+  if (!key) return false;
+  return isMobilityExercise(key) && getStandardUnit(key) === 'sec';
+};
+export const isCmMobilityExercise = (key?: string) => {
+  if (!key) return false;
+  return isMobilityExercise(key) && getStandardUnit(key) === 'cm';
+};
+export const isPhysiotherapyExercise = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'physiotherapy' : false;
 export const isDiet = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'diet' : false;
 export const isMicronutrient = (key?: string) => key ? METRIC_CATEGORY_MAP.get(key.toLowerCase()) === 'micronutrient' : false;
 
@@ -660,6 +670,7 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
   { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
   { key: 'plank', title: 'PLANK', unit: 'sec', icon: <Timer className="text-slate-600" />, color: '#475569' },
+  { key: 'copenhagenPlank', title: 'COPENHAGEN PLANK', unit: 'sec', icon: <Timer className="text-cyan-700" />, color: '#0e7490' },
   { key: 'farmersCarry', title: 'FARMERS CARRY', unit: 'kg×sec', icon: <Dumbbell className="text-teal-600" />, color: '#0d9488' },
 
   // Mobility
@@ -676,8 +687,7 @@ const RAW_SINGLE_GRAPHS = [
   // Physiotherapy
   { key: 'shoulderExtRot', title: 'SHOULDER EXT. ROTATION', unit: 'Reps', icon: <Activity className="text-cyan-600" />, color: '#0891b2' },
   { key: 'tibialisRaise', title: 'TIBIALIS RAISE', unit: 'Reps', icon: <ChevronUp className="text-cyan-600" />, color: '#0891b2' },
-  { key: 'copenhagenPlank', title: 'COPENHAGEN PLANK', unit: 'sec', icon: <Shield className="text-cyan-700" />, color: '#0e7490' },
-  { key: 'assistedPistolSquat', title: 'ASSISTED PISTOL SQUAT', unit: 'Reps', icon: <Accessibility className="text-cyan-700" />, color: '#0e7490' },
+  { key: 'assistedSLSquat', title: 'ASSISTED SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-cyan-700" />, color: '#0e7490' },
   { key: 'singleLegRdl', title: 'SINGLE-LEG RDL', unit: 'Reps', icon: <Anchor className="text-cyan-800" />, color: '#155e75' },
   { key: 'towelScrunches', title: 'TOWEL SCRUNCHES', unit: 'Reps', icon: <Fingerprint className="text-blue-600" />, color: '#2563eb' },
   { key: 'serratusPunch', title: 'SERRATUS PUNCH', unit: 'Reps', icon: <Target className="text-blue-700" />, color: '#1d4ed8' },
