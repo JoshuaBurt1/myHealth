@@ -177,6 +177,7 @@ export const STRENGTH_KEY_MAP: Record<string, string> = {
 
   // Back & Pulling
   'Pull-ups': 'pull-ups',
+  'Muscle-ups': 'muscle-ups',
   'Lat Pulldown': 'latPulldown',
   'Barbell Row': 'bbRow',
   'Dumbbell Row': 'dbRow',
@@ -579,8 +580,9 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'hipThrust', title: 'HIP THRUST', unit: 'kg', icon: <Dumbbell className="text-rose-700" />, color: '#be123c' },
   { key: 'legCurl', title: 'LEG CURL', unit: 'kg', icon: <Dumbbell className="text-rose-800" />, color: '#9f1239' },
   { key: 'calfRaise', title: 'CALF RAISE', unit: 'kg', icon: <Dumbbell className="text-red-800" />, color: '#881337' },
-  { key: 'pull-ups', title: 'PULL-UPS', unit: 'kg', icon: <Activity className="text-slate-600" />, color: '#475569' },
-  { key: 'dips', title: 'DIPS', unit: 'kg', icon: <Activity className="text-slate-600" />, color: '#334155' },
+  { key: 'pull-ups', title: 'PULL-UPS', unit: 'kg', icon: <Activity className="text-emerald-800" />, color: '#065f46' },
+  { key: 'muscle-ups', title: 'MUSCLE-UPS', unit: 'kg', icon: <Activity className="text-emerald-600" />, color: '#059669' },
+  { key: 'dips', title: 'DIPS', unit: 'kg', icon: <Activity className="text-emerald-500" />, color: '#10b981' },
   { key: 'latPulldown', title: 'LAT PULLDOWN', unit: 'kg', icon: <Activity className="text-slate-700" />, color: '#1e293b' },
   { key: 'bbRow', title: 'BARBELL ROW', unit: 'kg', icon: <Dumbbell className="text-slate-800" />, color: '#0f172a' },
   { key: 'dbRow', title: 'DUMBBELL ROW', unit: 'kg', icon: <Dumbbell className="text-stone-600" />, color: '#57534e' },

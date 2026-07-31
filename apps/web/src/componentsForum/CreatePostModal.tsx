@@ -202,10 +202,10 @@ export const CreatePostModal = ({
             <div className="space-y-1 mb-0.5">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Content</label>
-                <span className="text-[10px] text-slate-400">{newPostContent.length}/1000</span>
+                <span className="text-[10px] text-slate-400">{newPostContent.length}/3000</span>
               </div>
               <textarea 
-                maxLength={1000}
+                maxLength={3000}
                 className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 outline-none min-h-32 resize-none font-normal text-slate-600 leading-relaxed"
                 placeholder={modalMode === 'petition' ? "Describe the goal..." : "What's on your mind?"}
                 value={newPostContent}

@@ -35,6 +35,7 @@ import pillOrganizer from '../assets/storeItems/pillOrganizer.jpg';
 import radonDetector from '../assets/storeItems/radonDetector.jpg';
 import dosimeter from '../assets/storeItems/dosimeter.jpg';
 import waterFilter from '../assets/storeItems/waterFilter.jpg';
+import waterFiltrationSystem from '../assets/storeItems/waterFiltrationSystem.jpg';
 import tdsMeter from '../assets/storeItems/tdsMeter.jpg';
 import indoorAirQualityMonitor from '../assets/storeItems/indoorAirQualityMonitor.jpg';
 import xrfSpectrometer from '../assets/storeItems/xrfSpectrometer.jpg';
@@ -89,11 +90,12 @@ export const storeItems: StoreItem[] = [
 
   // Environmental Safety
   { id: 'e1', name: 'TDS Meter', category: 'Environmental Safety', price: '$14.00', description: 'Tester for Total Dissolved Solids to check drinking water purity.', image: tdsMeter },
-  { id: 'e2', name: 'Water Filter System', category: 'Environmental Safety', price: '$150.00', description: 'Multi-stage filtration system to remove contaminants from tap water.', image: waterFilter },
-  { id: 'e3', name: 'Indoor Air Quality Monitor', category: 'Environmental Safety', price: '$95.00', description: 'Sensors for CO2, VOCs, and particulate matter levels in your home.', image: indoorAirQualityMonitor },
-  { id: 'e4', name: 'Radon Detector', category: 'Environmental Safety', price: '$130.00', description: 'Continuous monitoring device for detecting dangerous radon gas levels.', image: radonDetector },
-  { id: 'e5', name: 'Dosiemeter', category: 'Environmental Safety', price: '$100.00', description: 'Professional-grade instrument for measuring ionizing radiation.', image: dosimeter },
-  { id: 'e6', name: 'XRF Spectrometer', category: 'Environmental Safety', price: '$10,000.00', description: 'Advanced tool for analyzing light spectra and material composition.', image: xrfSpectrometer  },
+  { id: 'e2', name: 'Water Filter', category: 'Environmental Safety', price: '$60.00', description: 'Filtration system to remove contaminants from tap water.', image: waterFilter },
+  { id: 'e3', name: 'Water Filtration System', category: 'Environmental Safety', price: '$300.00', description: 'NSF-Certified 5-Stage Reverse Osmosis (RO) under-sink water filter system.', image: waterFiltrationSystem },
+  { id: 'e4', name: 'Indoor Air Quality Monitor', category: 'Environmental Safety', price: '$95.00', description: 'Sensors for CO2, VOCs, and particulate matter levels in your home.', image: indoorAirQualityMonitor },
+  { id: 'e5', name: 'Radon Detector', category: 'Environmental Safety', price: '$130.00', description: 'Continuous monitoring device for detecting dangerous radon gas levels.', image: radonDetector },
+  { id: 'e6', name: 'Dosiemeter', category: 'Environmental Safety', price: '$100.00', description: 'Professional-grade instrument for measuring ionizing radiation.', image: dosimeter },
+  { id: 'e7', name: 'XRF Spectrometer', category: 'Environmental Safety', price: '$10,000.00', description: 'Advanced tool for analyzing light spectra and material composition.', image: xrfSpectrometer  },
   
   // Personnel
   { id: 'p1', name: 'Robot Healthcare Worker', category: 'Personnel', price: '$12,500.00', description: 'Autonomous AI assistant for patient monitoring and basic care tasks.', image: robotHCWorker },
