@@ -240,12 +240,59 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }));
   };
 
- // Helper to compute analytics for reps-only exercises
+  // Helper to compute analytics for custom exercises
+  const evaluateCustomSets = (setsList: SetEntry[], label: string, unit: string) => {
+    const validSets: { value: number; reps: number }[] = [];
+
+    for (const s of setsList) {
+      const mainVal = s.time || s.weight || s.cm;
+      let val: number | null = null;
+      let reps = 1;
+
+      if (mainVal) {
+        val = Number(mainVal);
+        if (s.reps) {
+          const r = Number(s.reps);
+          if (!isNaN(r) && r > 0) reps = r;
+        }
+      } else if (s.reps) {
+        val = Number(s.reps);
+        reps = 1;
+      }
+
+      if (val !== null && !isNaN(val) && val > 0) {
+        validSets.push({ value: val, reps });
+      }
+    }
+
+    if (validSets.length === 0) return null;
+
+    const maxValue = Math.max(...validSets.map(s => s.value));
+    const totalLoad = validSets.reduce((sum, s) => sum + (s.value * s.reps), 0);
+    const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+    const average = totalReps > 0 ? Number((totalLoad / totalReps).toFixed(1)) : 0;
+
+    const detailedSets = validSets.map(s => ({
+      value: s.value,
+      reps: s.reps,
+      unit: unit || 'value'
+    }));
+
+    return {
+      value: maxValue,
+      totalLoad,
+      average,
+      totalSets: validSets.length,
+      sets: detailedSets
+    };
+  };
+
+  // Helper to compute analytics for reps-only / custom exercises
   const evaluateRepsSets = (setsList: SetEntry[], _label: string) => {
     const validSets: { reps: number }[] = [];
 
     for (const s of setsList) {
-      const rawValue = s.reps || s.weight || s.time;
+      const rawValue = s.time || s.weight || s.cm || s.reps;
       if (rawValue) {
         const r = Number(rawValue);
         if (!isNaN(r) && r > 0) {
@@ -256,7 +303,6 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
     if (validSets.length === 0) return null;
 
-    // Find the maximum reps achieved in a single set
     const maxReps = Math.max(...validSets.map(s => s.reps));
 
     const totalReps = validSets.reduce((sum, s) => sum + s.reps, 0);
@@ -268,7 +314,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     }));
 
     return {
-      value: maxReps, // Changed from `totalReps` to `maxReps`
+      value: maxReps,
       totalLoad: totalReps,
       average,
       totalSets: validSets.length,
@@ -500,7 +546,27 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
     try {
       // Process new dynamic entries
       for (const e of entries) {
-        if (isStrengthExercise(e.name)) {
+        if (e.isCustom) {
+          const evalResult = evaluateCustomSets(e.sets, e.label, e.unit);
+          if (evalResult) {
+            preparedNew.push({
+              ...e,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: e.unit || 'value'
+              }
+            });
+          } else if (e.value.trim() !== '' && !isNaN(Number(e.value))) {
+            preparedNew.push({
+              ...e,
+              finalData: { value: Number(e.value), unit: e.unit }
+            });
+          }
+        } else if (isStrengthExercise(e.name)) {
           const unit = strengthUnits[e.name] || 'kg';
           const evalResult = evaluateStrengthSets(e.sets, unit, e.label);
           if (evalResult) {
@@ -591,7 +657,31 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
 
       // Process existing active exercises
       for (const ex of trackedExercises) {
-        if (isStrengthExercise(ex.name)) {
+        if (ex.isCustom) {
+          const setsList = trackedSets[ex.name] || [];
+          const evalResult = evaluateCustomSets(setsList, ex.label, ex.unit || '');
+          if (evalResult) {
+            preparedExist.push({
+              ...ex,
+              finalData: {
+                value: evalResult.value,
+                totalLoad: evalResult.totalLoad,
+                average: evalResult.average,
+                totalSets: evalResult.totalSets,
+                sets: evalResult.sets,
+                unit: ex.unit || 'value'
+              }
+            });
+          } else {
+            const val = exerciseInputs[ex.name];
+            if (val?.trim() !== '' && !isNaN(Number(val))) {
+              preparedExist.push({
+                ...ex,
+                finalData: { value: Number(val), unit: ex.unit || '' }
+              });
+            }
+          }
+        } else if (isStrengthExercise(ex.name)) {
           const unit = strengthUnits[ex.name] || 'kg';
           const setsList = trackedSets[ex.name] || [];
           const evalResult = evaluateStrengthSets(setsList, unit, ex.label);

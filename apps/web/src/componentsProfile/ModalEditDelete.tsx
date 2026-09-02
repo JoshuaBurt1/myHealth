@@ -46,6 +46,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
   const isCmMobility = isCmMobilityExercise(metricKey);
   const isSecMobility = isSecMobilityExercise(metricKey);
   const isPhysio = isPhysiotherapyExercise(metricKey);
+  const isCustom = !isStrength && !isSpeed && !isPlyo && !isCmPlyo && !isYoga && !isEndurance && !isSecEndurance && !isKgSecEndurance && !isDietMetric && !isMobility && !isCmMobility && !isSecMobility && !isPhysio;
 
   // Group all duration/time-based exercises together (isEndurance is reps-only, excluding it here)
   const isTimeBased = isSpeed || isYoga || isSecEndurance || isKgSecEndurance || isSecMobility;
@@ -146,10 +147,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
     } else if (item && Array.isArray(item.sets) && item.sets.length > 0) {
       setSets(item.sets);
       setHasSets(true);
-    } else if (isStrength || isTimeBased || isCmPlyo || isCmMobility || isReps) {
+    } else if (isStrength || isTimeBased || isCmPlyo || isCmMobility || isReps || isCustom) {
       const legacySet: any = {
         reps: 1,
-        unit: isKgSecEndurance ? 'kg*sec' : isStrength ? 'KG' : isTimeBased ? 'SEC' : (isCmPlyo || isCmMobility) ? 'CM' : 'REPS', 
+        unit: isKgSecEndurance ? 'kg*sec' : isStrength ? 'KG' : isTimeBased ? 'SEC' : (isCmPlyo || isCmMobility) ? 'CM' : isCustom ? (targetUnit.toUpperCase() || 'VALUE') : 'REPS', 
       };
       
       if (isStrength) {
@@ -161,6 +162,9 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
         }
       } else if (isCmPlyo || isCmMobility) {
         legacySet.weightCm = Number(initialValue) || 0;
+      } else if (isCustom) {
+        legacySet.reps = Number(targetItem?.reps) || 1;
+        legacySet.value = Number(initialValue) || 0;
       } else {
         legacySet.reps = Number(initialValue) || 1;
       }
@@ -326,6 +330,11 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           setVal = reps;
         }
         if (setVal > bestValue) bestValue = setVal;
+      } else if (isCustom) {
+        let val = parseFloat(s.value ?? s.val ?? s.weightKg ?? s.weight ?? s.timeSec ?? s.time ?? s.weightCm ?? s.cm) || 0;
+        setLoad = val * reps;
+        setVal = val;
+        if (setVal > bestValue) bestValue = setVal;
       }
 
       totalLoad += setLoad;
@@ -377,8 +386,10 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
       }
     } else if (isCmPlyo || isCmMobility) {
       newSet.weightCm = '';
+    } else if (isCustom) {
+      newSet.reps = 1;
+      newSet.value = '';
     }
-
     setSets([...sets, newSet]);
   };
 
@@ -500,6 +511,12 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           let r = parseFloat(s.reps);
           newSet.reps = isNaN(r) ? s.reps : Number(r);
           newSet.unit = 'reps';
+        } else if (isCustom) {
+          let r = parseFloat(s.reps);
+          let v = parseFloat(s.value ?? s.val ?? s.weightKg ?? s.weight ?? s.timeSec ?? s.time ?? s.weightCm ?? s.cm);
+          newSet.reps = isNaN(r) ? (s.reps || 1) : Number(r);
+          newSet.value = isNaN(v) ? (s.value ?? s.val ?? s.weight ?? s.time ?? s.cm ?? '') : Number(v);
+          newSet.unit = targetUnit || 'value';
         }
         return newSet;
       });
@@ -625,7 +642,7 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
           </>
         ) : hasSets ? (
           <>
-            {(isStrength || isTimeBased || isCmPlyo || isCmMobility) && (
+            {(isStrength || isTimeBased || isCmPlyo || isCmMobility || isCustom) && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Sets Log
@@ -734,6 +751,21 @@ export const ModalEditDelete: React.FC<ModalEditDeleteProps> = ({
                         onKeyDown={handlePreventE}
                         value={setObj.weightCm || setObj.cm || setObj.valueCm || setObj.weight || setObj.value || ''}
                         onChange={(e) => handleSetChange(index, 'weightCm', e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  )}
+
+                  {isCustom && (
+                    <div className="flex flex-col flex-1">
+                      <label className="text-[10px] text-slate-400 font-bold ml-1 mb-1 uppercase">
+                        Value ({targetUnit ? targetUnit.toUpperCase() : 'VALUE'})
+                      </label>
+                      <input
+                        type="number"
+                        onKeyDown={handlePreventE}
+                        value={setObj.value ?? setObj.val ?? setObj.weight ?? setObj.time ?? setObj.cm ?? ''}
+                        onChange={(e) => handleSetChange(index, 'value', e.target.value)}
                         className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
                       />
                     </div>
