@@ -241,7 +241,7 @@ export const ModalExercises: React.FC<ModalExercisesProps> = ({
   };
 
   // Helper to compute analytics for custom exercises
-  const evaluateCustomSets = (setsList: SetEntry[], label: string, unit: string) => {
+  const evaluateCustomSets = (setsList: SetEntry[], _label: string, unit: string) => {
     const validSets: { value: number; reps: number }[] = [];
 
     for (const s of setsList) {

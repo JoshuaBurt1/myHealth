@@ -177,6 +177,7 @@ export const STRENGTH_KEY_MAP: Record<string, string> = {
 
   // Back & Pulling
   'Pull-ups': 'pull-ups',
+  'Chin-ups': 'chin-ups',
   'Muscle-ups': 'muscle-ups',
   'Lat Pulldown': 'latPulldown',
   'Barbell Row': 'bbRow',
@@ -192,6 +193,8 @@ export const STRENGTH_KEY_MAP: Record<string, string> = {
   'Dumbbell Hammer Curl': 'dbHammerCurl',
   'Barbell Tricep Extension': 'bbTriExt',
   'Dumbbell Tricep Extension': 'dbTriExt',
+  'Cable Tricep Extension': 'cableTriExt',
+  'Overhead Cable Tricep Extension': 'ohCableTriExt',
 };
 
 // All in sec
@@ -204,11 +207,15 @@ export const SPEED_KEY_MAP: Record<string, string> = {
   'Bike 100m': 'bike100m',
   'Bike 400m': 'bike400m',
   'Bike 1 mile': 'bike1Mile',
+  'Bike 5k': 'bike5k',
   'Bike 10k': 'bike10k',
   'Bike Marathon': 'bikeMarathon',
   'Rowing machine 100m': 'row100m',
   'Rowing machine 400m': 'row400m',
+  'Rowing machine 800m': 'row800m',
+  'Rowing machine 1200m': 'row1200m',
   'Rowing machine 1 mile': 'row1Mile',
+  'Rowing machine 5k': 'row5k',
   'Rowing machine 10k': 'row10k',
   'Rowing machine Marathon': 'rowMarathon',
   
@@ -267,6 +274,9 @@ export const YOGA_KEY_MAP: Record<string, string> = {
 
 export const ENDURANCE_KEY_MAP: Record<string, string> = {
   'Push-ups': 'pushUp',
+  'Sit-ups': 'sitUp',
+  'Knee Raises': 'kneeRaise',
+  'Leg Raises': 'legRaise',
   'Single Leg Squat': 'singleLegSquat',
   'Air Squat': 'airSquat',
   'Hollow Body Hold': 'hollowHold',
@@ -581,6 +591,7 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'legCurl', title: 'LEG CURL', unit: 'kg', icon: <Dumbbell className="text-rose-800" />, color: '#9f1239' },
   { key: 'calfRaise', title: 'CALF RAISE', unit: 'kg', icon: <Dumbbell className="text-red-800" />, color: '#881337' },
   { key: 'pull-ups', title: 'PULL-UPS', unit: 'kg', icon: <Activity className="text-emerald-800" />, color: '#065f46' },
+  { key: 'chin-ups', title: 'CHIN-UPS', unit: 'kg', icon: <Activity className="text-emerald-700" />, color: '#063f46' },
   { key: 'muscle-ups', title: 'MUSCLE-UPS', unit: 'kg', icon: <Activity className="text-emerald-600" />, color: '#059669' },
   { key: 'dips', title: 'DIPS', unit: 'kg', icon: <Activity className="text-emerald-500" />, color: '#10b981' },
   { key: 'latPulldown', title: 'LAT PULLDOWN', unit: 'kg', icon: <Activity className="text-slate-700" />, color: '#1e293b' },
@@ -608,6 +619,9 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'dbTriExt', title: 'DUMBBELL TRICEP EXTENSION', unit: 'kg', icon: <Dumbbell className="text-blue-400" />, color: '#60a5fa' },
   { key: 'dbBicepCurl', title: 'DUMBBELL BICEP CURL', unit: 'kg', icon: <Dumbbell className="text-blue-400" />, color: '#93c5fd' },
   { key: 'dbHammerCurl', title: 'DUMBBELL HAMMER CURL', unit: 'kg', icon: <Dumbbell className="text-sky-400" />, color: '#38bdf8' },
+  // Cable Accessories
+  { key: 'cableTriExt', title: 'CABLE TRICEP EXTENSION', unit: 'kg', icon: <Dumbbell className="text-violet-400" />, color: '#a78bfa' },
+  { key: 'ohCableTriExt', title: 'OVERHEAD CABLE TRICEP EXTENSION', unit: 'kg', icon: <Dumbbell className="text-violet-500" />, color: '#8b5cf6' },
 
   // SPEED
   { key: 'speed100m', title: '100M SPRINT', unit: 'sec', icon: <Timer className="text-orange-500" />, color: '#f97316' },
@@ -618,11 +632,15 @@ const RAW_SINGLE_GRAPHS = [
   { key: 'bike100m', title: 'BIKE 100M', unit: 'sec', icon: <Zap className="text-lime-400" />, color: '#a3e635' },
   { key: 'bike400m', title: 'BIKE 400M', unit: 'sec', icon: <Zap className="text-lime-500" />, color: '#84cc16' },
   { key: 'bike1Mile', title: 'BIKE 1 MILE', unit: 'sec', icon: <Zap className="text-lime-600" />, color: '#65a30d' },
+  { key: 'bike5k', title: 'BIKE 5K', unit: 'sec', icon: <Zap className="text-lime-600" />, color: '#65a30d' },
   { key: 'bike10k', title: 'BIKE 10K', unit: 'sec', icon: <Zap className="text-lime-700" />, color: '#4d7c0f' },
   { key: 'bikeMarathon', title: 'BIKE MARATHON', unit: 'sec', icon: <Zap className="text-lime-800" />, color: '#3f6212' },
   { key: 'row100m', title: 'ROW 100M', unit: 'sec', icon: <Ship className="text-teal-400" />, color: '#2dd4bf' },
   { key: 'row400m', title: 'ROW 400M', unit: 'sec', icon: <Ship className="text-teal-500" />, color: '#14b8a6' },
+  { key: 'row800m', title: 'ROW 800M', unit: 'sec', icon: <Ship className="text-teal-500" />, color: '#14b8a6' },
+  { key: 'row1200m', title: 'ROW 1200M', unit: 'sec', icon: <Ship className="text-teal-500" />, color: '#14b8a6' },
   { key: 'row1Mile', title: 'ROW 1 MILE', unit: 'sec', icon: <Ship className="text-teal-600" />, color: '#0d9488' },
+  { key: 'row5k', title: 'ROW 5K', unit: 'sec', icon: <Ship className="text-teal-600" />, color: '#0d9488' },
   { key: 'row10k', title: 'ROW 10K', unit: 'sec', icon: <Ship className="text-teal-700" />, color: '#0f766e' },
   { key: 'rowMarathon', title: 'ROW MARATHON', unit: 'sec', icon: <Ship className="text-teal-800" />, color: '#115e59' },
   { key: 'swimFree100m', title: 'FREESTYLE 100M', unit: 'sec', icon: <Waves className="text-sky-400" />, color: '#38bdf8' },
@@ -668,6 +686,9 @@ const RAW_SINGLE_GRAPHS = [
 
   // ENDURANCE
   { key: 'pushUp', title: 'PUSH-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
+  { key: 'sitUp', title: 'SIT-UPS', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
+  { key: 'kneeRaise', title: 'KNEE RAISES', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
+  { key: 'legRaise', title: 'LEG RAISES', unit: 'Reps', icon: <User className="text-rose-500" />, color: '#f43f5e' },
   { key: 'singleLegSquat', title: 'SINGLE LEG SQUAT', unit: 'Reps', icon: <Accessibility className="text-rose-600" />, color: '#e11d48' },
   { key: 'airSquat', title: 'AIR SQUAT', unit: 'Reps', icon: <Move className="text-rose-400" />, color: '#fb7185' },
   { key: 'hollowHold', title: 'HOLLOW BODY HOLD', unit: 'sec', icon: <Target className="text-rose-700" />, color: '#be123c' },
